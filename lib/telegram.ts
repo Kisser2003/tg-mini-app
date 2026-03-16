@@ -20,6 +20,12 @@ type MainButton = {
   offClick: (handler: () => void) => void;
 };
 
+type HapticFeedback = {
+  impactOccurred?: (style: "light" | "medium" | "heavy" | "rigid" | "soft") => void;
+  notificationOccurred?: (type: "error" | "success" | "warning") => void;
+  selectionChanged?: () => void;
+};
+
 type TelegramWebApp = {
   initData?: string;
   initDataUnsafe?: {
@@ -32,11 +38,12 @@ type TelegramWebApp = {
   themeParams?: Record<string, string>;
   isExpanded?: boolean;
   MainButton?: MainButton;
+  HapticFeedback?: HapticFeedback;
   expand?: () => void;
   ready?: () => void;
   setHeaderColor?: (colorKey: "bg_color" | "secondary_bg_color") => void;
   setBackgroundColor?: (color: string) => void;
- };
+};
 
 declare global {
   interface Window {

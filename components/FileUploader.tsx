@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Music2, Image as ImageIcon } from "lucide-react";
+import confetti from "canvas-confetti";
 
 type Props = {
   label: string;
@@ -14,6 +15,7 @@ export function FileUploader({ label, accept, maxSizeMb, type, onFileChange }: P
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [uploadSuccess, setUploadSuccess] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -62,6 +64,9 @@ export function FileUploader({ label, accept, maxSizeMb, type, onFileChange }: P
           setPreviewUrl(objectUrl);
           setFile(selected);
           onFileChange(selected);
+          setUploadSuccess(true);
+          setTimeout(() => setUploadSuccess(false), 1200);
+          confetti({ particleCount: 30, spread: 50, origin: { y: 0.4 } });
         }
       };
       img.onerror = () => {
@@ -74,6 +79,9 @@ export function FileUploader({ label, accept, maxSizeMb, type, onFileChange }: P
 
     setFile(selected);
     onFileChange(selected);
+    setUploadSuccess(true);
+    setTimeout(() => setUploadSuccess(false), 1200);
+    confetti({ particleCount: 30, spread: 50, origin: { y: 0.4 } });
   };
 
   return (
@@ -84,7 +92,13 @@ export function FileUploader({ label, accept, maxSizeMb, type, onFileChange }: P
       <motion.label
         whileHover={{ scale: 1.02 }}
         whileTap={{ scale: 0.98 }}
-        className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border bg-surface/70 px-4 py-5 text-center text-xs text-text-muted shadow-[0_14px_40px_rgba(0,0,0,0.65)] hover:border-primary hover:bg-surface transition-colors"
+        animate={{
+          boxShadow: uploadSuccess
+            ? "0 0 0 3px rgba(34,197,94,0.45)"
+            : "0 14px 40px rgba(0,0,0,0.65)"
+        }}
+        transition={{ duration: 0.25 }}
+        className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border bg-surface/70 px-4 py-5 text-center text-xs text-text-muted hover:border-primary hover:bg-surface transition-colors"
       >
         <input
           type="file"

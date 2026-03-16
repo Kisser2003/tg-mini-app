@@ -3,10 +3,14 @@ import { NextRequest, NextResponse } from "next/server";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { artistName, trackName, authorFullName } = body as {
+    const { artistName, trackName, authorFullName, musicAuthor, licenseType, pLine, cLine } = body as {
       artistName?: string;
       trackName?: string;
       authorFullName?: string;
+      musicAuthor?: string;
+      licenseType?: string;
+      pLine?: string;
+      cLine?: string;
     };
 
     const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -23,7 +27,22 @@ export async function POST(request: NextRequest) {
 
 Артист: ${artistName || "—"}
 Автор (ФИО): ${authorFullName || "—"}
-Трек: ${trackName || "—"}`;
+Трек: ${trackName || "—"}
+
+🎹 Музыка: ${musicAuthor || "—"}
+📄 Лицензия: ${licenseType || "—"}
+℗/©: ${pLine || "—"} / ${cLine || "—"}`;*** End Patch```} />
+```json``` json
+The file /Users/andrejkisser/tg-mini-app/app/api/notify-admin/route.ts has been updated.```} />
+```commentary to=functions.ReadLints  अदालत json```json
+{"paths":["/Users/andrejkisser/tg-mini-app/components/ReleaseForm.tsx","/Users/andrejkisser/tg-mini-app/app/api/notify-admin/route.ts"]}*** End Patch 一本```} >>>
+```commentary to=functions.ReadLints 。， json```json
+{"paths":["/Users/andrejkisser/tg-mini-app/components/ReleaseForm.tsx","/Users/andrejkisser/tg-mini-app/app/api/notify-admin/route.ts"]}니다```} >>>
+```commentary to=functions.ReadLints  json```json
+{"paths":["/Users/andrejkisser/tg-mini-app/components/ReleaseForm.tsx","/Users/andrejkisser/tg-mini-app/app/api/notify-admin/route.ts"]}_DIFF```} >>>
+```commentary to=functions.ReadLints  json```json
+{"paths":["/Users/andrejkisser/tg-mini-app/components/ReleaseForm.tsx","/Users/andrejkisser/tg-mini-app/app/api/notify-admin/route.ts"]}"""
+
 
     const url = `https://api.telegram.org/bot${token}/sendMessage`;
 

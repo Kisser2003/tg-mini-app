@@ -1,6 +1,7 @@
 import "./globals.css";
 import type { Metadata } from "next";
 import Script from "next/script";
+import { Toaster } from "sonner";
 
 export const metadata: Metadata = {
   title: "Release Assistant",
@@ -15,6 +16,7 @@ export default function RootLayout({
   return (
     <html lang="ru" className="dark">
       <body className="min-h-screen bg-background text-text antialiased">
+        <Toaster richColors expand position="top-center" />
         <Script
           src="https://telegram.org/js/telegram-web-app.js"
           strategy="beforeInteractive"

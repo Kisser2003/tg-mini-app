@@ -3,9 +3,12 @@
 import React, { useState } from "react";
 import { useForm } from "react-hook-form";
 import { motion } from "framer-motion";
+import { toast } from "sonner";
 import { FileUploader } from "./FileUploader";
 import { supabase } from "../lib/supabase";
 import { getTelegramUser } from "../lib/telegram";
+
+const LYRICS_MAX = 5000;
 
 type FormValues = {
   artistName: string;
@@ -17,10 +20,14 @@ type FormValues = {
   language: string;
   lyrics?: string;
   explicit: boolean;
+  musicAuthor: string;
+  licenseType: string;
+  pLine: string;
+  cLine: string;
 };
 
 type ReleaseFormProps = {
-  onSubmitted: () => void;
+  onSubmitted: (summary: { artistName: string; trackName: string }) => void;
 };
 
 export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
@@ -40,7 +47,11 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
       mood: "",
       language: "",
       lyrics: "",
-      explicit: false
+      explicit: false,
+      musicAuthor: "",
+      licenseType: "",
+      pLine: "",
+      cLine: ""
     }
   });
 
@@ -61,6 +72,10 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
       setSubmitError("Пожалуйста, загрузите трек и обложку перед отправкой.");
       setInvalidShake(true);
       setTimeout(() => setInvalidShake(false), 250);
+      try {
+        window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred?.("error");
+      } catch {}
+      toast.error("Загрузите трек и обложку");
       return;
     }
 
@@ -131,6 +146,10 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
           language: data.language,
           lyrics: data.lyrics,
           explicit: data.explicit,
+          music_author: data.musicAuthor,
+          license_type: data.licenseType,
+          p_line: data.pLine,
+          c_line: data.cLine,
           audio_url: audioPublic.publicUrl,
           artwork_url: artworkPublic.publicUrl,
           telegram_id: telegramId,
@@ -152,7 +171,11 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
           body: JSON.stringify({
             artistName: data.artistName,
             trackName: data.trackName,
-            authorFullName: data.authorFullName
+            authorFullName: data.authorFullName,
+            musicAuthor: data.musicAuthor,
+            licenseType: data.licenseType,
+            pLine: data.pLine,
+            cLine: data.cLine
           })
         });
       } catch {
@@ -162,12 +185,20 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
       setUploadProgress(100);
 
       setSubmitPhase("done");
-      onSubmitted();
+      try {
+        window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.("light");
+      } catch {}
+      toast.success("Релиз отправлен на проверку");
+      onSubmitted({ artistName: data.artistName, trackName: data.trackName });
     } catch (error: any) {
       setSubmitPhase("idle");
       setSubmitting(false);
       setSubmitError(error?.message || "Произошла ошибка при сохранении релиза.");
       setUploadProgress(0);
+      try {
+        window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred?.("error");
+      } catch {}
+      toast.error(error?.message || "Ошибка при сохранении");
       return;
     }
 
@@ -177,17 +208,21 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
   const onInvalidSubmit = () => {
     setInvalidShake(true);
     setTimeout(() => setInvalidShake(false), 250);
+    try {
+      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred?.("error");
+    } catch {}
+    toast.error("Заполните обязательные поля");
   };
 
   return (
     <div className="min-h-screen bg-background px-4 py-5 pb-10 text-text">
       <div className="mx-auto flex w-full max-w-[440px] flex-col gap-6 font-sans">
-        <header className="space-y-2">
-          <h1 className="text-[32px] font-extrabold tracking-tight leading-tight">
-            Новый релиз
+        <header className="space-y-1">
+          <h1 className="text-[22px] font-semibold tracking-tight leading-tight">
+            Оформление поставки
           </h1>
-          <p className="text-[15px] text-text-muted leading-relaxed">
-            Создай профессиональный пак для дистрибуции
+          <p className="text-[13px] text-text-muted leading-relaxed">
+            Заполните метаданные для официальной отгрузки на стриминги.
           </p>
         </header>
 
@@ -203,7 +238,7 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
                 : { x: 0, opacity: 1, y: 0 }
             }
             transition={{ duration: invalidShake ? 0.25 : 0.2 }}
-            className="rounded-[24px] border border-white/5 bg-surface/80 px-6 py-5 shadow-[0_20px_40px_rgba(0,0,0,0.55)] backdrop-blur-xl focus-within:border-[#007AFF]/50 focus-within:ring-2 focus-within:ring-[#007AFF]/30"
+            className="form-card rounded-[24px] border border-white/5 bg-surface/80 px-6 py-5 shadow-[0_20px_40px_rgba(0,0,0,0.55)] backdrop-blur-xl focus-within:border-[#007AFF]/50 focus-within:ring-2 focus-within:ring-[#007AFF]/30"
           >
             <div className="space-y-4">
               <div className="space-y-2">
@@ -235,7 +270,7 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
 
               <div className="space-y-2">
                 <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-[0.2em] text-text-muted">
-                  ФИО автора / исполнителя
+                  Правообладатель (ФИО)
                 </label>
                 <motion.input
                   {...register("authorFullName", {
@@ -266,7 +301,7 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
 
               <div className="space-y-2">
                 <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-[0.2em] text-text-muted">
-                  Название трека
+                  Наименование произведения
                 </label>
                 <motion.input
                   {...register("trackName", {
@@ -299,7 +334,7 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.05 }}
-            className="rounded-[24px] border border-white/5 bg-surface/80 px-6 py-5 shadow-[0_20px_40px_rgba(0,0,0,0.55)] backdrop-blur-xl focus-within:border-[#007AFF]/50 focus-within:ring-2 focus-within:ring-[#007AFF]/30"
+            className="form-card rounded-[24px] border border-white/5 bg-surface/80 px-6 py-5 shadow-[0_20px_40px_rgba(0,0,0,0.55)] backdrop-blur-xl focus-within:border-[#007AFF]/50 focus-within:ring-2 focus-within:ring-[#007AFF]/30"
           >
             <div className="grid grid-cols-2 gap-x-3 gap-y-4 mb-4">
               <div className="min-w-0 space-y-1.5">
@@ -347,7 +382,7 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
             <div className="grid grid-cols-2 gap-x-3 gap-y-4 mb-4">
               <div className="min-w-0 space-y-1.5">
                 <label className="mb-1.5 block pl-4 text-[11px] font-medium uppercase tracking-[0.2em] text-text-muted">
-                  Настроение / Вайб
+                  Настроение
                 </label>
                 <select
                   {...register("mood", { required: "Выберите настроение" })}
@@ -394,13 +429,25 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
 
             <div className="space-y-2">
               <label className="mb-1.5 block pl-4 text-[11px] font-medium uppercase tracking-[0.2em] text-text-muted">
-                Текст песни (если есть)
+                Лирика (Lyrics)
               </label>
               <textarea
                 {...register("lyrics")}
                 placeholder="Вставьте текст трека, если он готов (опционально)"
+                maxLength={LYRICS_MAX}
                 className="min-h-[120px] w-full resize-none rounded-[16px] border border-white/5 bg-zinc-800/50 p-4 text-[16px] text-white placeholder:text-text-muted outline-none focus:border-primary box-border"
               />
+              <div className="flex justify-end">
+                <span
+                  className={`text-[11px] ${
+                    (values.lyrics?.length ?? 0) >= LYRICS_MAX * 0.9
+                      ? "text-red-400"
+                      : "text-text-muted"
+                  }`}
+                >
+                  {values.lyrics?.length ?? 0} / {LYRICS_MAX}
+                </span>
+              </div>
             </div>
 
             <div className="flex items-center justify-between gap-3 py-3 pt-2 flex-nowrap">
@@ -411,16 +458,105 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
                 type="button"
                 aria-label="Ненормативная лексика"
                 onClick={() => setValue("explicit", !values.explicit)}
-                className={`inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full px-[2px] transition-colors ${
+                className={`inline-flex h-6 w-10 flex-shrink-0 items-center rounded-full px-[2px] transition-colors ${
                   values.explicit ? "bg-[#007AFF]" : "bg-zinc-700"
                 }`}
               >
                 <span
-                  className={`h-[18px] w-[18px] rounded-full bg-white transition-transform ${
-                    values.explicit ? "translate-x-[14px]" : "translate-x-0"
+                  className={`h-4 w-4 rounded-full bg-white transition-transform ${
+                    values.explicit ? "translate-x-[16px]" : "translate-x-0"
                   }`}
                 />
               </button>
+            </div>
+
+            <div className="mt-4 space-y-2">
+              <div className="grid gap-x-3 gap-y-4 sm:grid-cols-2">
+                <div className="min-w-0 space-y-1.5">
+                <label className="mb-1.5 block pl-4 text-[11px] font-medium uppercase tracking-[0.2em] text-text-muted">
+                  Автор музыки
+                </label>
+                  <input
+                    {...register("musicAuthor", {
+                      required: "Укажите автора музыки"
+                    })}
+                    placeholder="Имя битмейкера / продюсера"
+                    className="h-[52px] min-h-[52px] w-full rounded-[16px] border border-transparent bg-[#1d1d20] px-4 text-[16px] text-white placeholder:text-text-muted outline-none focus:border-primary box-border"
+                  />
+                  {errors.musicAuthor && (
+                    <p className="mt-1 text-[11px] text-red-400">
+                      {errors.musicAuthor.message}
+                    </p>
+                  )}
+                </div>
+                <div className="min-w-0 space-y-1.5">
+                  <label className="mb-1.5 block pl-4 text-[11px] font-medium uppercase tracking-[0.2em] text-text-muted">
+                    Тип лицензии
+                  </label>
+                  <select
+                    {...register("licenseType", {
+                      required: "Выберите тип лицензии"
+                    })}
+                    className="h-[52px] min-h-[52px] w-full rounded-[16px] border border-transparent bg-[#1d1d20] px-4 text-[16px] text-white outline-none focus:border-primary appearance-none box-border"
+                  >
+                    <option value="">Выберите тип</option>
+                    <option value="Собственное производство">Собственное производство</option>
+                    <option value="Исключительная лицензия (Exclusive)">
+                      Исключительная лицензия (Exclusive)
+                    </option>
+                    <option value="Неисключительная (Leasing)">Неисключительная (Leasing)</option>
+                  </select>
+                  {errors.licenseType && (
+                    <p className="mt-1 text-[11px] text-red-400">
+                      {errors.licenseType.message}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <p className="text-[11px] text-text-muted pl-1">
+                Укажите ФИО человека, создавшего аранжировку.
+              </p>
+            </div>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.08 }}
+            className="form-card rounded-[24px] border border-white/5 bg-surface/80 px-6 py-5 shadow-[0_20px_40px_rgba(0,0,0,0.55)] backdrop-blur-xl focus-within:border-[#007AFF]/50 focus-within:ring-2 focus-within:ring-[#007AFF]/30"
+          >
+            <p className="mb-2 pl-4 text-[11px] font-medium uppercase tracking-[0.2em] text-text-muted">
+              ℗ Фонограмма / © Авторское право
+            </p>
+            <div className="grid gap-x-3 gap-y-4 sm:grid-cols-2">
+              <div className="min-w-0 space-y-1.5">
+                <input
+                  {...register("pLine", {
+                    required: "Укажите ℗ (фонограмму)"
+                  })}
+                  placeholder="2026 OMF Label"
+                  className="h-[52px] min-h-[52px] w-full rounded-[16px] border border-transparent bg-[#1d1d20] px-4 text-[16px] text-white placeholder:text-text-muted outline-none focus:border-primary box-border"
+                />
+                {errors.pLine && (
+                  <p className="mt-1 text-[11px] text-red-400">
+                    {errors.pLine.message}
+                  </p>
+                )}
+              </div>
+              <div className="min-w-0 space-y-1.5">
+                <input
+                  {...register("cLine", {
+                    required: "Укажите © (авторское право)"
+                  })}
+                  placeholder="2026 Имя артиста"
+                  className="h-[52px] min-h-[52px] w-full rounded-[16px] border border-transparent bg-[#1d1d20] px-4 text-[16px] text-white placeholder:text-text-muted outline-none focus:border-primary box-border"
+                />
+                {errors.cLine && (
+                  <p className="mt-1 text-[11px] text-red-400">
+                    {errors.cLine.message}
+                  </p>
+                )}
+              </div>
             </div>
           </motion.div>
 
@@ -428,7 +564,7 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="rounded-[24px] border border-white/5 bg-surface/80 px-6 py-5 shadow-[0_20px_40px_rgba(0,0,0,0.55)] backdrop-blur-xl space-y-4"
+            className="form-card rounded-[24px] border border-white/5 bg-surface/80 px-6 py-5 shadow-[0_20px_40px_rgba(0,0,0,0.55)] backdrop-blur-xl space-y-4 focus-within:border-[#007AFF]/50 focus-within:ring-2 focus-within:ring-[#007AFF]/30"
           >
             <FileUploader
               label="Трек (WAV)"
@@ -459,9 +595,10 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
 
           <motion.button
             type="submit"
-            whileTap={{ scale: 0.97 }}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
             disabled={submitting || !wavFile || !artworkFile}
-            className="btn-primary mt-2 inline-flex h-[60px] w-full items-center justify-center rounded-[20px] bg-gradient-to-tr from-[#007AFF] to-[#0051FF] text-[17px] font-semibold text-white shadow-[0_10px_30px_rgba(0,122,255,0.45)] transition-all active:scale-[0.97] disabled:opacity-70"
+            className="btn-primary mt-2 inline-flex h-[60px] w-full items-center justify-center rounded-[20px] bg-gradient-to-tr from-[#007AFF] to-[#0051FF] text-[17px] font-semibold text-white shadow-[0_10px_30px_rgba(0,122,255,0.45)] transition-all disabled:opacity-70"
           >
             {submitPhase === "uploading" && "Загружаем файлы..."}
             {submitPhase === "saving" && "Сохраняем релиз..."}
@@ -474,6 +611,10 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
               {submitError}
             </p>
           )}
+
+          <p className="mt-8 text-center text-[10px] uppercase tracking-widest text-white/20">
+            © 2026 OMF DISTRIBUTION. ВСЕ ПРАВА ЗАЩИЩЕНЫ.
+          </p>
         </form>
       </div>
     </div>

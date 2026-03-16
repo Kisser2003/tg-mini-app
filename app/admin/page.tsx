@@ -1,8 +1,9 @@
-"use client";
+\"use client\";
 
-import { useEffect, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { supabase } from "@/lib/supabase";
+import { useEffect, useState } from \"react\";
+import { motion, AnimatePresence } from \"framer-motion\";
+import { supabase } from \"@/lib/supabase\";
+import { getTelegramUserId } from \"@/lib/telegram\";
 
 type ReleaseRow = {
   id: number;
@@ -23,8 +24,17 @@ export default function AdminPage() {
   const [error, setError] = useState<string | null>(null);
   const [expandedLyricsId, setExpandedLyricsId] = useState<number | null>(null);
 
-  // TODO: replace with real auth check later
-  const isAuthorized = true;
+  const [isAuthorized, setIsAuthorized] = useState(false);
+
+  useEffect(() => {
+    const adminId = process.env.NEXT_PUBLIC_ADMIN_TELEGRAM_ID;
+    const currentId = getTelegramUserId();
+    if (adminId && currentId && String(currentId) === String(adminId)) {
+      setIsAuthorized(true);
+    } else {
+      setIsAuthorized(false);
+    }
+  }, []);
 
   useEffect(() => {
     const load = async () => {
@@ -50,8 +60,10 @@ export default function AdminPage() {
       }
     };
 
-    void load();
-  }, []);
+    if (isAuthorized) {
+      void load();
+    }
+  }, [isAuthorized]);
 
   const handleCopyInfo = async (release: ReleaseRow) => {
     const text = `${release.artist_name} — ${release.track_name} — ${

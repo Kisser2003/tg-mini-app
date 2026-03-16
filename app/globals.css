@@ -186,6 +186,20 @@ body {
   box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.3);
 }
 
+/* Breathing focus glow on form cards */
+.form-card:focus-within {
+  animation: focusGlow 2.2s ease-in-out infinite;
+}
+@keyframes focusGlow {
+  0%,
+  100% {
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.55), 0 0 0 2px rgba(0, 122, 255, 0.25);
+  }
+  50% {
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.55), 0 0 0 2px rgba(0, 122, 255, 0.5);
+  }
+}
+
 /* Shimmer animation for primary buttons */
 .btn-primary {
   position: relative;
@@ -206,6 +220,10 @@ body {
   pointer-events: none;
 }
 
+/* Shimmer: every 3s when idle, continuous on hover */
+.btn-primary::after {
+  animation: shimmerOnce 3s ease-in-out infinite;
+}
 .btn-primary:hover::after {
   animation: shimmer 1.4s infinite;
 }
@@ -215,6 +233,17 @@ body {
     transform: translateX(-100%);
   }
   100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes shimmerOnce {
+  0%,
+  90%,
+  100% {
+    transform: translateX(-100%);
+  }
+  95% {
     transform: translateX(100%);
   }
 }
