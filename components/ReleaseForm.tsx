@@ -1,291 +1,299 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
-import { supabaseBrowser } from "@/lib/supabaseClient";
-import {
-  getTelegramUserId,
-  getTelegramWebApp,
-  initTelegramWebApp
-} from "@/lib/telegram";
-import { FileUploader } from "./FileUploader";
+import React, { useState } from "react";
+import { useForm } from "react-hook-form";
 
-type ReleaseFormProps = {
-  onSubmitted: () => void;
-};
-
-type FormState = {
+type FormValues = {
   artistName: string;
-  trackTitle: string;
-  featuring: string;
+  trackName: string;
   genre: string;
   releaseDate: string;
   explicit: boolean;
 };
 
+type ReleaseFormProps = {
+  onSubmitted: () => void;
+};
+
 export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
-  const [form, setForm] = useState<FormState>({
-    artistName: "",
-    trackTitle: "",
-    featuring: "",
-    genre: "",
-    releaseDate: "",
-    explicit: false
+  const {
+    register,
+    handleSubmit,
+    watch,
+    setValue,
+    formState: { errors }
+  } = useForm<FormValues>({
+    defaultValues: {
+      artistName: "",
+      trackName: "",
+      genre: "",
+      releaseDate: "",
+      explicit: false
+    }
   });
-  const [wavFile, setWavFile] = useState<File | null>(null);
-  const [coverFile, setCoverFile] = useState<File | null>(null);
+
+  const values = watch();
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [telegramUserId, setTelegramUserId] = useState<number | null>(null);
 
-  useEffect(() => {
-    initTelegramWebApp();
-    setTelegramUserId(getTelegramUserId());
-  }, []);
-
-  const handleChange = (
-    field: keyof FormState,
-    value: string | boolean
-  ) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const validate = () => {
-    if (!form.artistName.trim()) return "Укажите имя артиста";
-    if (!form.trackTitle.trim()) return "Укажите название трека";
-    if (!form.genre.trim()) return "Укажите жанр";
-    if (!form.releaseDate) return "Укажите дату релиза";
-    if (!wavFile) return "Загрузите WAV файл";
-    if (!coverFile) return "Загрузите обложку";
-    return null;
-  };
-
-  const uploadFile = async (
-    folder: "wav" | "covers",
-    file: File
-  ): Promise<string> => {
-    const fileExt = file.name.split(".").pop();
-    const fileName = `${Date.now()}-${Math.random()
-      .toString(36)
-      .slice(2)}.${fileExt}`;
-    const filePath = `releases/${folder}/${fileName}`;
-
-    const { error: uploadError } = await supabaseBrowser.storage
-      .from("releases")
-      .upload(filePath, file);
-
-    if (uploadError) {
-      throw new Error(uploadError.message);
-    }
-
-    const { data } = supabaseBrowser.storage.from("releases").getPublicUrl(filePath);
-    return data.publicUrl;
-  };
-
-  const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setError(null);
-
-    const validationError = validate();
-    if (validationError) {
-      setError(validationError);
-      return;
-    }
-
-    if (!wavFile || !coverFile) return;
-
-    try {
-      setSubmitting(true);
-
-      const [wavUrl, coverUrl] = await Promise.all([
-        uploadFile("wav", wavFile),
-        uploadFile("covers", coverFile)
-      ]);
-
-      const response = await fetch("/api/releases", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          artist_name: form.artistName,
-          track_title: form.trackTitle,
-          featuring: form.featuring || null,
-          genre: form.genre,
-          release_date: form.releaseDate,
-          explicit: form.explicit,
-          wav_url: wavUrl,
-          cover_url: coverUrl,
-          telegram_user_id: telegramUserId
-        })
-      });
-
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data.message || "Не удалось отправить релиз");
-      }
-
-      onSubmitted();
-    } catch (err: any) {
-      setError(err.message || "Произошла ошибка");
-    } finally {
+  const onSubmit = () => {
+    setSubmitting(true);
+    setTimeout(() => {
       setSubmitting(false);
-    }
+      onSubmitted();
+    }, 800);
   };
-
-  useEffect(() => {
-    const webApp = getTelegramWebApp();
-    const mainButton = webApp?.MainButton;
-    if (!mainButton) return;
-
-    const submitFromTelegram = () => {
-      const formEl = document.getElementById("release-form") as HTMLFormElement | null;
-      formEl?.requestSubmit();
-    };
-
-    mainButton.setText(submitting ? "Отправка..." : "Отправить релиз");
-    if (submitting) {
-      mainButton.show().disable().showProgress();
-    } else {
-      mainButton.show().enable().hideProgress();
-    }
-
-    mainButton.onClick(submitFromTelegram);
-    return () => {
-      mainButton.offClick(submitFromTelegram);
-      mainButton.hide().hideProgress();
-    };
-  }, [submitting]);
 
   return (
-    <motion.form
-      id="release-form"
-      onSubmit={handleSubmit}
-      className="space-y-4"
-      initial={{ opacity: 0, y: 24 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35, ease: "easeOut" }}
+    <div
+      style={{
+        backgroundColor: "#080808",
+        minHeight: "100vh",
+        padding: "20px"
+      }}
     >
-      <div className="space-y-1">
-        <label className="text-xs font-medium text-zinc-300">
-          Artist Name
-        </label>
-        <input
-          className="w-full rounded-2xl border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent/40 transition"
-          value={form.artistName}
-          onChange={(e) => handleChange("artistName", e.target.value)}
-          placeholder="Имя артиста"
-        />
+      <div style={{ maxWidth: "440px", margin: "0 auto", color: "#FFFFFF" }}>
+        <header style={{ marginBottom: "32px" }}>
+          <h1
+            style={{
+              fontSize: "32px",
+              fontWeight: 800,
+              letterSpacing: "-0.8px",
+              margin: 0
+            }}
+          >
+            New Release
+          </h1>
+          <p
+            style={{
+              fontSize: "15px",
+              color: "#8E8E93",
+              marginTop: "4px"
+            }}
+          >
+            Создай профессиональный пак для дистрибуции
+          </p>
+        </header>
+
+        <form onSubmit={handleSubmit(onSubmit)}>
+          {/* Card 1 */}
+          <div
+            style={{
+              backgroundColor: "#141416",
+              borderRadius: "24px",
+              padding: "24px",
+              marginBottom: "16px",
+              border: "1px solid rgba(255,255,255,0.05)"
+            }}
+          >
+            <div style={{ marginBottom: "18px" }}>
+              <label
+                style={{
+                  fontSize: "13px",
+                  fontWeight: 500,
+                  color: "#8E8E93",
+                  marginBottom: "8px",
+                  display: "block"
+                }}
+              >
+                Artist Name
+              </label>
+              <input
+                {...register("artistName", { required: "Укажите имя артиста" })}
+                placeholder="Имя артиста"
+                style={{
+                  backgroundColor: "#1d1d20",
+                  border: "1px solid transparent",
+                  borderRadius: "16px",
+                  padding: "14px 18px",
+                  width: "100%",
+                  color: "#FFFFFF",
+                  fontSize: "16px",
+                  outline: "none"
+                }}
+              />
+              {errors.artistName && (
+                <p
+                  style={{
+                    color: "#fca5a5",
+                    fontSize: "11px",
+                    marginTop: "4px"
+                  }}
+                >
+                  {errors.artistName.message}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label
+                style={{
+                  fontSize: "13px",
+                  fontWeight: 500,
+                  color: "#8E8E93",
+                  marginBottom: "8px",
+                  display: "block"
+                }}
+              >
+                Track Title
+              </label>
+              <input
+                {...register("trackName", {
+                  required: "Укажите название трека"
+                })}
+                placeholder="Название трека"
+                style={{
+                  backgroundColor: "#1d1d20",
+                  border: "1px solid transparent",
+                  borderRadius: "16px",
+                  padding: "14px 18px",
+                  width: "100%",
+                  color: "#FFFFFF",
+                  fontSize: "16px",
+                  outline: "none"
+                }}
+              />
+              {errors.trackName && (
+                <p
+                  style={{
+                    color: "#fca5a5",
+                    fontSize: "11px",
+                    marginTop: "4px"
+                  }}
+                >
+                  {errors.trackName.message}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Card 2 */}
+          <div
+            style={{
+              backgroundColor: "#141416",
+              borderRadius: "24px",
+              padding: "24px",
+              marginBottom: "16px",
+              border: "1px solid rgba(255,255,255,0.05)"
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                gap: "12px",
+                marginBottom: "18px"
+              }}
+            >
+              <div style={{ flex: 1 }}>
+                <label
+                  style={{
+                    fontSize: "13px",
+                    fontWeight: 500,
+                    color: "#8E8E93",
+                    marginBottom: "8px",
+                    display: "block"
+                  }}
+                >
+                  Genre
+                </label>
+                <input
+                  {...register("genre")}
+                  placeholder="Pop"
+                  style={{
+                    backgroundColor: "#1d1d20",
+                    border: "1px solid transparent",
+                    borderRadius: "16px",
+                    padding: "14px 18px",
+                    width: "100%",
+                    color: "#FFFFFF",
+                    fontSize: "16px",
+                    outline: "none"
+                  }}
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label
+                  style={{
+                    fontSize: "13px",
+                    fontWeight: 500,
+                    color: "#8E8E93",
+                    marginBottom: "8px",
+                    display: "block"
+                  }}
+                >
+                  Date
+                </label>
+                <input
+                  type="date"
+                  {...register("releaseDate")}
+                  style={{
+                    backgroundColor: "#1d1d20",
+                    border: "1px solid transparent",
+                    borderRadius: "16px",
+                    padding: "14px 18px",
+                    width: "100%",
+                    color: "#FFFFFF",
+                    fontSize: "16px",
+                    outline: "none"
+                  }}
+                />
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                paddingTop: "4px"
+              }}
+            >
+              <span
+                style={{
+                  fontSize: "15px",
+                  fontWeight: 500
+                }}
+              >
+                Explicit Content
+              </span>
+              <input
+                type="checkbox"
+                checked={values.explicit}
+                onChange={(e) => setValue("explicit", e.target.checked)}
+                style={{
+                  width: 20,
+                  height: 20,
+                  accentColor: "#007AFF",
+                  cursor: "pointer"
+                }}
+              />
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={submitting}
+            style={{
+              width: "100%",
+              padding: "20px",
+              borderRadius: "20px",
+              background:
+                "linear-gradient(135deg, #007AFF 0%, #0051FF 100%)",
+              color: "white",
+              fontSize: "17px",
+              fontWeight: 700,
+              border: "none",
+              cursor: "pointer",
+              boxShadow: "0 10px 25px rgba(0,122,255,0.3)",
+              opacity: submitting ? 0.85 : 1,
+              transform: submitting ? "scale(0.99)" : "scale(1)",
+              transition: "all 0.2s ease-out"
+            }}
+          >
+            {submitting ? "Processing..." : "Generate Release Package"}
+          </button>
+        </form>
       </div>
-
-      <div className="space-y-1">
-        <label className="text-xs font-medium text-zinc-300">
-          Track Title
-        </label>
-        <input
-          className="w-full rounded-2xl border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent/40 transition"
-          value={form.trackTitle}
-          onChange={(e) => handleChange("trackTitle", e.target.value)}
-          placeholder="Название трека"
-        />
-      </div>
-
-      <div className="space-y-1">
-        <label className="text-xs font-medium text-zinc-300">
-          Featuring (если есть)
-        </label>
-        <input
-          className="w-full rounded-2xl border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent/40 transition"
-          value={form.featuring}
-          onChange={(e) => handleChange("featuring", e.target.value)}
-          placeholder="feat. артист"
-        />
-      </div>
-
-      <div className="space-y-1">
-        <label className="text-xs font-medium text-zinc-300">
-          Genre
-        </label>
-        <input
-          className="w-full rounded-2xl border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent/40 transition"
-          value={form.genre}
-          onChange={(e) => handleChange("genre", e.target.value)}
-          placeholder="Жанр (например, Techno)"
-        />
-      </div>
-
-      <div className="space-y-1">
-        <label className="text-xs font-medium text-zinc-300">
-          Release Date
-        </label>
-        <input
-          type="date"
-          className="w-full rounded-2xl border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent/40 transition"
-          value={form.releaseDate}
-          onChange={(e) => handleChange("releaseDate", e.target.value)}
-        />
-      </div>
-
-      <div className="flex items-center justify-between rounded-2xl bg-zinc-900/60 px-3 py-2">
-        <div className="flex flex-col">
-          <span className="text-xs font-medium text-zinc-200">
-            Explicit
-          </span>
-          <span className="text-[11px] text-zinc-500">
-            Контент с ненормативной лексикой
-          </span>
-        </div>
-        <button
-          type="button"
-          onClick={() => handleChange("explicit", !form.explicit)}
-          className={`relative inline-flex h-6 w-10 items-center rounded-full transition-colors ${
-            form.explicit ? "bg-emerald-500" : "bg-zinc-700"
-          }`}
-        >
-          <span
-            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-              form.explicit ? "translate-x-4" : "translate-x-1"
-            }`}
-          />
-        </button>
-      </div>
-
-      <FileUploader
-        label="Upload WAV file"
-        accept=".wav,audio/wav"
-        maxSizeMb={100}
-        type="wav"
-        onFileChange={setWavFile}
-      />
-
-      <FileUploader
-        label="Upload Cover Art"
-        accept="image/jpeg,image/png"
-        maxSizeMb={20}
-        type="cover"
-        onFileChange={setCoverFile}
-      />
-
-      {error && (
-        <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/40 rounded-2xl px-3 py-2">
-          {error}
-        </p>
-      )}
-
-      <motion.button
-        type="submit"
-        whileTap={{ scale: 0.98 }}
-        disabled={submitting}
-        className="mt-2 flex w-full items-center justify-center rounded-full bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-black shadow-lg shadow-emerald-500/30 transition hover:bg-emerald-400 disabled:opacity-60 disabled:hover:bg-emerald-500"
-      >
-        {submitting ? (
-          <span className="flex items-center gap-2">
-            <span className="h-3 w-3 animate-spin rounded-full border-2 border-black/30 border-t-black" />
-            Отправляем…
-          </span>
-        ) : (
-          "Submit Release"
-        )}
-      </motion.button>
-    </motion.form>
+    </div>
   );
 }
 

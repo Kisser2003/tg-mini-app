@@ -2,8 +2,8 @@
 
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
-import { ReleaseForm } from "@/components/ReleaseForm";
-import { SuccessScreen } from "@/components/SuccessScreen";
+import { ReleaseForm } from "../components/ReleaseForm";
+import { SuccessScreen } from "../components/SuccessScreen";
 import {
   getTelegramUserDisplayName,
   initTelegramWebApp,
@@ -25,71 +25,118 @@ export default function HomePage() {
   const handleSubmitted = () => setStep("success");
   const handleReset = () => setStep("form");
 
+  // Общие стили для текста
+  const textMuted = { color: "#8E8E93", fontSize: "12px" };
+  const textWhite = { color: "#FFFFFF" };
+
   return (
-    <div className="space-y-4">
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="space-y-1"
-      >
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">
-            Telegram Mini App
-          </p>
-          <span
-            className={`rounded-full px-2 py-1 text-[10px] font-semibold ${
-              isTelegram
-                ? "bg-emerald-500/20 text-emerald-300"
-                : "bg-amber-500/20 text-amber-200"
-            }`}
-          >
-            {isTelegram ? "Telegram OK" : "Browser Preview"}
-          </span>
-        </div>
-        <h1 className="text-xl font-semibold">
-          Отправить релиз на дистрибуцию
-        </h1>
-        <p className="text-xs text-zinc-400">
-          Загрузите трек и обложку — мы передадим релиз на дистрибуцию и
-          свяжемся с вами.
-        </p>
-        {telegramName && (
-          <p className="text-xs text-zinc-500">Вы вошли как {telegramName}</p>
-        )}
-      </motion.div>
-
-      {step === "welcome" && (
+    <div
+      style={{
+        backgroundColor: "#080808",
+        minHeight: "100vh",
+        padding: "40px 20px",
+        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+      }}
+    >
+      <div style={{ maxWidth: "440px", margin: "0 auto" }}>
+        
+        {/* HEADER */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1, duration: 0.35 }}
-          className="space-y-4 pt-2"
+          style={{ marginBottom: "32px" }}
         >
-          <div className="rounded-2xl border border-zinc-800 bg-gradient-to-br from-emerald-500/10 via-zinc-900 to-indigo-500/10 p-4">
-            <p className="text-sm font-medium text-zinc-50">
-              Отправить релиз на дистрибуцию
-            </p>
-            <p className="mt-1 text-xs text-zinc-400">
-              Минимум полей — максимум скорости. Идеально для Telegram.
-            </p>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div>
+              <p style={{ ...textMuted, textTransform: "uppercase", letterSpacing: "2px", fontSize: "10px", marginBottom: "4px" }}>
+                Telegram Mini App
+              </p>
+              <h1 style={{ ...textWhite, fontSize: "28px", fontWeight: "800", margin: 0 }}>
+                Release Assistant
+              </h1>
+            </div>
+            <div style={{ 
+              padding: "4px 10px", 
+              borderRadius: "100px", 
+              fontSize: "10px", 
+              fontWeight: "bold",
+              border: isTelegram ? "1px solid #007AFF" : "1px solid #f59e0b",
+              color: isTelegram ? "#007AFF" : "#f59e0b",
+              backgroundColor: isTelegram ? "rgba(0,122,255,0.1)" : "rgba(245,158,11,0.1)"
+            }}>
+              {isTelegram ? "TELEGRAM OK" : "BROWSER"}
+            </div>
           </div>
-
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={handleStart}
-            className="flex w-full items-center justify-center rounded-full bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-black shadow-lg shadow-emerald-500/30 hover:bg-emerald-400 transition"
-          >
-            Загрузить релиз
-          </motion.button>
+          <p style={{ ...textMuted, marginTop: "12px", lineHeight: "1.5" }}>
+            Загрузите трек и обложку — мы передадим релиз на дистрибуцию и свяжемся с вами.
+          </p>
+          {telegramName && (
+            <p style={{ color: "#007AFF", fontSize: "12px", marginTop: "8px", fontWeight: "500" }}>
+              Привет, {telegramName}!
+            </p>
+          )}
         </motion.div>
-      )}
 
-      {step === "form" && <ReleaseForm onSubmitted={handleSubmitted} />}
+        {/* WELCOME STEP */}
+        {step === "welcome" && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            style={{ textAlign: "center" }}
+          >
+            <div style={{ 
+              backgroundColor: "#141416", 
+              padding: "30px 20px", 
+              borderRadius: "24px", 
+              border: "1px solid rgba(255,255,255,0.05)",
+              marginBottom: "24px",
+              boxShadow: "0 20px 40px rgba(0,0,0,0.4)"
+            }}>
+              <div style={{ fontSize: "40px", marginBottom: "16px" }}>🚀</div>
+              <h2 style={{ ...textWhite, fontSize: "18px", fontWeight: "700", marginBottom: "8px" }}>
+                Готовы к релизу?
+              </h2>
+              <p style={{ ...textMuted, fontSize: "14px" }}>
+                Минимум полей — максимум скорости. <br/>Загрузка займет всего пару минут.
+              </p>
+            </div>
 
-      {step === "success" && <SuccessScreen onReset={handleReset} />}
+            <motion.button
+              whileTap={{ scale: 0.96 }}
+              onClick={handleStart}
+              style={{
+                width: "100%",
+                padding: "20px",
+                borderRadius: "20px",
+                background: "linear-gradient(135deg, #007AFF 0%, #0051FF 100%)",
+                color: "white",
+                fontSize: "17px",
+                fontWeight: "bold",
+                border: "none",
+                cursor: "pointer",
+                boxShadow: "0 10px 25px rgba(0,122,255,0.3)"
+              }}
+            >
+              Начать загрузку
+            </motion.button>
+          </motion.div>
+        )}
+
+        {/* FORM STEP */}
+        {step === "form" && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            <ReleaseForm onSubmitted={handleSubmitted} />
+          </motion.div>
+        )}
+
+        {/* SUCCESS STEP */}
+        {step === "success" && (
+          <div style={{ textAlign: "center", paddingTop: "40px" }}>
+            <SuccessScreen onReset={handleReset} />
+          </div>
+        )}
+
+      </div>
     </div>
   );
 }
-

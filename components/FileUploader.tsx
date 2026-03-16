@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
+import { Music2, Image as ImageIcon } from "lucide-react";
 
 type Props = {
   label: string;
@@ -77,10 +78,13 @@ export function FileUploader({ label, accept, maxSizeMb, type, onFileChange }: P
 
   return (
     <div className="space-y-2">
-      <label className="text-sm font-medium text-zinc-200">{label}</label>
+      <label className="text-xs font-medium text-text-muted uppercase tracking-[0.16em]">
+        {label}
+      </label>
       <motion.label
-        whileHover={{ scale: 1.01 }}
-        className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-700 bg-zinc-900/40 px-4 py-4 text-center text-xs text-zinc-400 hover:border-accent hover:bg-zinc-900/70 transition-colors"
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
+        className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border bg-surface/70 px-4 py-5 text-center text-xs text-text-muted shadow-[0_14px_40px_rgba(0,0,0,0.65)] hover:border-primary hover:bg-surface transition-colors"
       >
         <input
           type="file"
@@ -88,23 +92,28 @@ export function FileUploader({ label, accept, maxSizeMb, type, onFileChange }: P
           className="hidden"
           onChange={handleChange}
         />
-        <span className="mb-1 font-medium text-zinc-100">
-          Нажмите, чтобы выбрать файл
+        <span className="mb-2 flex items-center gap-2 text-sm font-medium text-text">
+          {type === "wav" ? (
+            <Music2 className="h-4 w-4 text-primary" />
+          ) : (
+            <ImageIcon className="h-4 w-4 text-primary" />
+          )}
+          {type === "wav" ? "WAV файл" : "Обложка релиза"}
         </span>
-        <span className="text-[11px] text-zinc-500">
+        <span className="text-[11px] text-text-muted">
           {type === "wav"
-            ? "WAV, до 100MB"
+            ? `Нажмите, чтобы выбрать WAV (до ${maxSizeMb}MB)`
             : "JPG/PNG, минимум 3000x3000"}
         </span>
         {file && (
-          <div className="mt-2 text-[11px] text-zinc-300 truncate max-w-full">
-            {file.name}
+          <div className="mt-2 text-[11px] text-text truncate max-w-full">
+            ✓ {file.name}
           </div>
         )}
       </motion.label>
 
       {previewUrl && (
-        <div className="mt-2 overflow-hidden rounded-2xl border border-zinc-800">
+        <div className="mt-2 overflow-hidden rounded-2xl border border-border">
           <img
             src={previewUrl}
             alt="Cover preview"
