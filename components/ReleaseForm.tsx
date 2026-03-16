@@ -9,11 +9,13 @@ import { getTelegramUser } from "../lib/telegram";
 
 type FormValues = {
   artistName: string;
+  authorFullName: string;
   trackName: string;
   genre: string;
   releaseDate: string;
   mood: string;
   language: string;
+  lyrics?: string;
   explicit: boolean;
 };
 
@@ -31,11 +33,13 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
   } = useForm<FormValues>({
     defaultValues: {
       artistName: "",
+      authorFullName: "",
       trackName: "",
       genre: "",
       releaseDate: "",
       mood: "",
       language: "",
+      lyrics: "",
       explicit: false
     }
   });
@@ -119,11 +123,13 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
       const { error: insertError } = await supabase.from("releases").insert([
         {
           artist_name: data.artistName,
+          author_full_name: data.authorFullName,
           track_name: data.trackName,
           genre: data.genre,
           release_date: data.releaseDate,
           mood: data.mood,
           language: data.language,
+          lyrics: data.lyrics,
           explicit: data.explicit,
           audio_url: audioPublic.publicUrl,
           artwork_url: artworkPublic.publicUrl,
@@ -145,7 +151,8 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
           },
           body: JSON.stringify({
             artistName: data.artistName,
-            trackName: data.trackName
+            trackName: data.trackName,
+            authorFullName: data.authorFullName
           })
         });
       } catch {
@@ -173,7 +180,7 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
   };
 
   return (
-    <div className="min-h-screen bg-background px-4 py-5 pb-8 text-text">
+    <div className="min-h-screen bg-background px-4 py-5 pb-10 text-text">
       <div className="mx-auto flex w-full max-w-[440px] flex-col gap-6 font-sans">
         <header className="space-y-2">
           <h1 className="text-[32px] font-extrabold tracking-tight leading-tight">
@@ -217,11 +224,42 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
                       : { scale: 1, boxShadow: "0 0 0 0 rgba(0,0,0,0)" }
                   }
                   transition={{ duration: 0.12 }}
-                  className="h-[52px] w-full min-h-[52px] rounded-[16px] border border-transparent bg-[#1d1d20] px-4 text-[15px] text-white placeholder:text-text-muted outline-none focus:border-primary focus:ring-0 box-border"
+                  className="h-[52px] w-full min-h-[52px] rounded-[16px] border border-transparent bg-[#1d1d20] px-4 text-[16px] text-white placeholder:text-text-muted outline-none focus:border-primary focus:ring-0 box-border"
                 />
                 {errors.artistName && (
                   <p className="mt-1 text-[11px] text-red-400">
                     {errors.artistName.message}
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-[11px] font-medium uppercase tracking-[0.2em] text-text-muted">
+                  ФИО автора / исполнителя
+                </label>
+                <motion.input
+                  {...register("authorFullName", {
+                    required: "Укажите ФИО автора / исполнителя"
+                  })}
+                  placeholder="Фамилия Имя Отчество"
+                  onFocus={() => setFocusedField("authorFullName")}
+                  onBlur={() =>
+                    setFocusedField((prev) => (prev === "authorFullName" ? null : prev))
+                  }
+                  animate={
+                    focusedField === "authorFullName"
+                      ? {
+                          scale: 1.01,
+                          boxShadow: "0 0 0 2px rgba(0,122,255,0.2)"
+                        }
+                      : { scale: 1, boxShadow: "0 0 0 0 rgba(0,0,0,0)" }
+                  }
+                  transition={{ duration: 0.12 }}
+                  className="h-[52px] w-full min-h-[52px] rounded-[16px] border border-transparent bg-[#1d1d20] px-4 text-[16px] text-white placeholder:text-text-muted outline-none focus:border-primary focus:ring-0 box-border"
+                />
+                {errors.authorFullName && (
+                  <p className="mt-1 text-[11px] text-red-400">
+                    {errors.authorFullName.message}
                   </p>
                 )}
               </div>
@@ -246,7 +284,7 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
                       : { scale: 1, boxShadow: "0 0 0 0 rgba(0,0,0,0)" }
                   }
                   transition={{ duration: 0.12 }}
-                  className="h-[52px] w-full min-h-[52px] rounded-[16px] border border-transparent bg-[#1d1d20] px-4 text-[15px] text-white placeholder:text-text-muted outline-none focus:border-primary focus:ring-0 box-border"
+                  className="h-[52px] w-full min-h-[52px] rounded-[16px] border border-transparent bg-[#1d1d20] px-4 text-[16px] text-white placeholder:text-text-muted outline-none focus:border-primary focus:ring-0 box-border"
                 />
                 {errors.trackName && (
                   <p className="mt-1 text-[11px] text-red-400">
@@ -270,7 +308,7 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
                 </label>
                 <select
                   {...register("genre", { required: "Выберите жанр" })}
-                  className="h-[52px] w-full min-h-[52px] rounded-[16px] border border-transparent bg-[#1d1d20] px-3 text-[15px] text-white outline-none focus:border-primary appearance-none box-border"
+                  className="h-[52px] w-full min-h-[52px] rounded-[16px] border border-transparent bg-[#1d1d20] px-3 text-[16px] text-white outline-none focus:border-primary appearance-none box-border"
                 >
                   <option value="">Выберите жанр</option>
                   <option value="Techno">Техно</option>
@@ -296,7 +334,7 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
                   {...register("releaseDate", {
                     required: "Укажите дату релиза"
                   })}
-                  className="h-[52px] w-full min-h-[52px] rounded-[16px] border border-transparent bg-[#1d1d20] px-3 text-[15px] text-white outline-none [color-scheme:dark] focus:border-primary appearance-none box-border"
+                  className="h-[52px] w-full min-h-[52px] rounded-[16px] border border-transparent bg-[#1d1d20] px-3 text-[16px] text-white outline-none [color-scheme:dark] focus:border-primary appearance-none box-border"
                 />
                 {errors.releaseDate && (
                   <p className="text-[11px] text-red-400 mt-1">
@@ -313,7 +351,7 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
                 </label>
                 <select
                   {...register("mood", { required: "Выберите настроение" })}
-                  className="h-[52px] w-full min-h-[52px] rounded-[16px] border border-transparent bg-[#1d1d20] px-3 text-[15px] text-white outline-none focus:border-primary appearance-none box-border"
+                  className="h-[52px] w-full min-h-[52px] rounded-[16px] border border-transparent bg-[#1d1d20] px-3 text-[16px] text-white outline-none focus:border-primary appearance-none box-border"
                 >
                   <option value="">Выберите настроение</option>
                   <option value="Peak-time">Пиковое время / фестиваль</option>
@@ -336,7 +374,7 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
                 </label>
                 <select
                   {...register("language", { required: "Укажите язык" })}
-                  className="h-[52px] w-full min-h-[52px] rounded-[16px] border border-transparent bg-[#1d1d20] px-3 text-[15px] text-white outline-none focus:border-primary appearance-none box-border"
+                  className="h-[52px] w-full min-h-[52px] rounded-[16px] border border-transparent bg-[#1d1d20] px-3 text-[16px] text-white outline-none focus:border-primary appearance-none box-border"
                 >
                   <option value="">Выберите язык</option>
                   <option value="Instrumental">Инструментал</option>
@@ -352,6 +390,17 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
                   </p>
                 )}
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-[11px] font-medium uppercase tracking-[0.2em] text-text-muted">
+                Текст песни (если есть)
+              </label>
+              <textarea
+                {...register("lyrics")}
+                placeholder="Вставьте текст трека, если он готов (опционально)"
+                className="min-h-[120px] w-full resize-none rounded-[16px] border border-white/5 bg-zinc-800/50 p-4 text-[16px] text-white placeholder:text-text-muted outline-none focus:border-primary box-border"
+              />
             </div>
 
             <div className="flex items-center justify-between gap-3 py-3 pt-2 flex-nowrap">
@@ -411,7 +460,7 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
           <motion.button
             type="submit"
             whileTap={{ scale: 0.97 }}
-            disabled={submitting}
+            disabled={submitting || !wavFile || !artworkFile}
             className="btn-primary mt-2 inline-flex h-[60px] w-full items-center justify-center rounded-[20px] bg-gradient-to-tr from-[#007AFF] to-[#0051FF] text-[17px] font-semibold text-white shadow-[0_10px_30px_rgba(0,122,255,0.45)] transition-all active:scale-[0.97] disabled:opacity-70"
           >
             {submitPhase === "uploading" && "Загружаем файлы..."}

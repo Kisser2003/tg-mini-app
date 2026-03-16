@@ -3,9 +3,10 @@ import { NextRequest, NextResponse } from "next/server";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { artistName, trackName } = body as {
+    const { artistName, trackName, authorFullName } = body as {
       artistName?: string;
       trackName?: string;
+      authorFullName?: string;
     };
 
     const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -18,9 +19,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, error: "Bot env not configured" }, { status: 200 });
     }
 
-    const text = `🎧 Новый релиз в мини‑аппе\n\nАртист: ${artistName || "—"}\nТрек: ${
-      trackName || "—"
-    }`;
+    const text = `🎧 Новый релиз в мини‑аппе
+
+Артист: ${artistName || "—"}
+Автор (ФИО): ${authorFullName || "—"}
+Трек: ${trackName || "—"}`;
 
     const url = `https://api.telegram.org/bot${token}/sendMessage`;
 

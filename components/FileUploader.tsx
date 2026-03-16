@@ -103,7 +103,7 @@ export function FileUploader({ label, accept, maxSizeMb, type, onFileChange }: P
         <span className="text-[11px] text-text-muted">
           {type === "wav"
             ? `Нажмите, чтобы выбрать WAV (до ${maxSizeMb}MB)`
-            : "JPG/PNG, минимум 3000x3000"}
+            : "Квадратная, минимум 3000×3000 px, без лишних надписей и логотипов"}
         </span>
         {file && (
           <div className="mt-2 text-[11px] text-text truncate max-w-full">
