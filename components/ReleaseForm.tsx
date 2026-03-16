@@ -84,12 +84,9 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
 
       setUploadProgress(35);
 
-      const {
-        data: audioPublic,
-        error: audioPublicError
-      } = supabase.storage.from("audio").getPublicUrl(wavPath);
+      const { data: audioPublic } = supabase.storage.from("audio").getPublicUrl(wavPath);
 
-      if (audioPublicError || !audioPublic?.publicUrl) {
+      if (!audioPublic?.publicUrl) {
         throw new Error("Не удалось получить ссылку на WAV файл.");
       }
 
@@ -107,12 +104,11 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
 
       setUploadProgress(80);
 
-      const {
-        data: artworkPublic,
-        error: artworkPublicError
-      } = supabase.storage.from("artwork").getPublicUrl(artworkPath);
+      const { data: artworkPublic } = supabase.storage
+        .from("artwork")
+        .getPublicUrl(artworkPath);
 
-      if (artworkPublicError || !artworkPublic?.publicUrl) {
+      if (!artworkPublic?.publicUrl) {
         throw new Error("Не удалось получить ссылку на обложку.");
       }
 
@@ -221,7 +217,7 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
                       : { scale: 1, boxShadow: "0 0 0 0 rgba(0,0,0,0)" }
                   }
                   transition={{ duration: 0.12 }}
-                  className="h-14 w-full rounded-[16px] border border-transparent bg-[#1d1d20] px-4 text-[15px] text-white placeholder:text-text-muted outline-none focus:border-primary focus:ring-0"
+                  className="h-[52px] w-full min-h-[52px] rounded-[16px] border border-transparent bg-[#1d1d20] px-4 text-[15px] text-white placeholder:text-text-muted outline-none focus:border-primary focus:ring-0 box-border"
                 />
                 {errors.artistName && (
                   <p className="mt-1 text-[11px] text-red-400">
@@ -250,7 +246,7 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
                       : { scale: 1, boxShadow: "0 0 0 0 rgba(0,0,0,0)" }
                   }
                   transition={{ duration: 0.12 }}
-                  className="h-14 w-full rounded-[16px] border border-transparent bg-[#1d1d20] px-4 text-[15px] text-white placeholder:text-text-muted outline-none focus:border-primary focus:ring-0"
+                  className="h-[52px] w-full min-h-[52px] rounded-[16px] border border-transparent bg-[#1d1d20] px-4 text-[15px] text-white placeholder:text-text-muted outline-none focus:border-primary focus:ring-0 box-border"
                 />
                 {errors.trackName && (
                   <p className="mt-1 text-[11px] text-red-400">
@@ -267,14 +263,14 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
             transition={{ delay: 0.05 }}
             className="rounded-[24px] border border-white/5 bg-surface/80 px-6 py-5 shadow-[0_20px_40px_rgba(0,0,0,0.55)] backdrop-blur-xl"
           >
-            <div className="mb-4 flex gap-3">
-              <div className="flex-1 space-y-2">
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="min-w-0 space-y-1.5">
                 <label className="block text-[11px] font-medium uppercase tracking-[0.2em] text-text-muted">
                   Жанр
                 </label>
                 <select
                   {...register("genre", { required: "Выберите жанр" })}
-                  className="h-14 w-full rounded-[16px] border border-transparent bg-[#1d1d20] px-4 text-[15px] text-white outline-none focus:border-primary"
+                  className="h-[52px] w-full min-h-[52px] rounded-[16px] border border-transparent bg-[#1d1d20] px-3 text-[15px] text-white outline-none focus:border-primary appearance-none box-border"
                 >
                   <option value="">Выберите жанр</option>
                   <option value="Techno">Техно</option>
@@ -291,7 +287,7 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
                 )}
               </div>
 
-              <div className="flex-1 space-y-2">
+              <div className="min-w-0 space-y-1.5">
                 <label className="block text-[11px] font-medium uppercase tracking-[0.2em] text-text-muted">
                   Дата релиза
                 </label>
@@ -300,7 +296,7 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
                   {...register("releaseDate", {
                     required: "Укажите дату релиза"
                   })}
-                  className="h-14 w-full rounded-[16px] border border-transparent bg-[#1d1d20] px-4 text-[15px] text-white outline-none [color-scheme:dark] focus:border-primary"
+                  className="h-[52px] w-full min-h-[52px] rounded-[16px] border border-transparent bg-[#1d1d20] px-3 text-[15px] text-white outline-none [color-scheme:dark] focus:border-primary appearance-none box-border"
                 />
                 {errors.releaseDate && (
                   <p className="text-[11px] text-red-400 mt-1">
@@ -310,14 +306,14 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
               </div>
             </div>
 
-            <div className="mb-4 flex gap-3">
-              <div className="flex-1 space-y-2">
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="min-w-0 space-y-1.5">
                 <label className="block text-[11px] font-medium uppercase tracking-[0.2em] text-text-muted">
                   Настроение / Вайб
                 </label>
                 <select
                   {...register("mood", { required: "Выберите настроение" })}
-                  className="h-14 w-full rounded-[16px] border border-transparent bg-[#1d1d20] px-4 text-[15px] text-white outline-none focus:border-primary"
+                  className="h-[52px] w-full min-h-[52px] rounded-[16px] border border-transparent bg-[#1d1d20] px-3 text-[15px] text-white outline-none focus:border-primary appearance-none box-border"
                 >
                   <option value="">Выберите настроение</option>
                   <option value="Peak-time">Пиковое время / фестиваль</option>
@@ -334,13 +330,13 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
                 )}
               </div>
 
-              <div className="flex-1 space-y-2">
+              <div className="min-w-0 space-y-1.5">
                 <label className="block text-[11px] font-medium uppercase tracking-[0.2em] text-text-muted">
                   Язык
                 </label>
                 <select
                   {...register("language", { required: "Укажите язык" })}
-                  className="h-14 w-full rounded-[16px] border border-transparent bg-[#1d1d20] px-4 text-[15px] text-white outline-none focus:border-primary"
+                  className="h-[52px] w-full min-h-[52px] rounded-[16px] border border-transparent bg-[#1d1d20] px-3 text-[15px] text-white outline-none focus:border-primary appearance-none box-border"
                 >
                   <option value="">Выберите язык</option>
                   <option value="Instrumental">Инструментал</option>
@@ -358,20 +354,21 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
               </div>
             </div>
 
-            <div className="flex items-center justify-between pt-1">
-              <span className="text-[15px] font-medium">
+            <div className="flex items-center justify-between gap-3 py-3 pt-2 flex-nowrap">
+              <span className="text-[15px] font-medium whitespace-nowrap flex-shrink min-w-0">
                 Ненормативная лексика
               </span>
               <button
                 type="button"
+                aria-label="Ненормативная лексика"
                 onClick={() => setValue("explicit", !values.explicit)}
-                className={`relative h-6 w-11 rounded-full transition-colors ${
-                  values.explicit ? "bg-primary" : "bg-zinc-700"
+                className={`inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full px-[2px] transition-colors ${
+                  values.explicit ? "bg-[#007AFF]" : "bg-zinc-700"
                 }`}
               >
                 <span
-                  className={`absolute top-[3px] h-[18px] w-[18px] rounded-full bg-white transition-transform ${
-                    values.explicit ? "translate-x-[22px]" : "translate-x-[3px]"
+                  className={`h-[18px] w-[18px] rounded-full bg-white transition-transform ${
+                    values.explicit ? "translate-x-[14px]" : "translate-x-0"
                   }`}
                 />
               </button>

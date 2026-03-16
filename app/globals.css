@@ -142,6 +142,32 @@ body {
   gap: 1.5rem;
 }
 
+/* Mobile: prevent iOS default styling on selects/date */
+.appearance-none {
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+/* Grid for 2-column rows on mobile */
+.grid {
+  display: grid;
+}
+.gap-3 {
+  gap: 0.75rem;
+}
+.grid-cols-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.min-w-0 {
+  min-width: 0;
+}
+.flex-nowrap {
+  flex-wrap: nowrap;
+}
+.flex-shrink-0 {
+  flex-shrink: 0;
+}
+
 /* Shimmer animation for primary buttons */
 .btn-primary {
   position: relative;
