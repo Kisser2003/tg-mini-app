@@ -4,6 +4,8 @@ import React, { useState } from "react";
 import { useForm } from "react-hook-form";
 import { motion } from "framer-motion";
 import { FileUploader } from "./FileUploader";
+import { supabase } from "../lib/supabase";
+import { getTelegramUser } from "../lib/telegram";
 
 type FormValues = {
   artistName: string;
@@ -40,15 +42,133 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
 
   const values = watch();
   const [submitting, setSubmitting] = useState(false);
+  const [submitPhase, setSubmitPhase] = useState<"idle" | "uploading" | "saving" | "done">("idle");
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [invalidShake, setInvalidShake] = useState(false);
   const [focusedField, setFocusedField] = useState<string | null>(null);
+  const [wavFile, setWavFile] = useState<File | null>(null);
+  const [artworkFile, setArtworkFile] = useState<File | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const onValidSubmit = () => {
+  const onValidSubmit = async (data: FormValues) => {
+    setSubmitError(null);
+
+    if (!wavFile || !artworkFile) {
+      setSubmitError("Пожалуйста, загрузите трек и обложку перед отправкой.");
+      setInvalidShake(true);
+      setTimeout(() => setInvalidShake(false), 250);
+      return;
+    }
+
     setSubmitting(true);
-    setTimeout(() => {
-      setSubmitting(false);
+    setSubmitPhase("uploading");
+    setUploadProgress(0);
+
+    try {
+      // Telegram user info (если есть)
+      const tgUser = getTelegramUser();
+      const telegramId = tgUser?.id ?? null;
+      const telegramUsername = tgUser?.username ?? null;
+
+      const timestamp = Date.now();
+
+      // Upload WAV
+      const wavPath = `${timestamp}-${wavFile.name}`;
+      const { error: audioError } = await supabase.storage
+        .from("audio")
+        .upload(wavPath, wavFile);
+
+      if (audioError) {
+        throw new Error("Не удалось загрузить WAV файл. Попробуйте ещё раз.");
+      }
+
+      setUploadProgress(35);
+
+      const {
+        data: audioPublic,
+        error: audioPublicError
+      } = supabase.storage.from("audio").getPublicUrl(wavPath);
+
+      if (audioPublicError || !audioPublic?.publicUrl) {
+        throw new Error("Не удалось получить ссылку на WAV файл.");
+      }
+
+      setUploadProgress(50);
+
+      // Upload artwork
+      const artworkPath = `${timestamp}-${artworkFile.name}`;
+      const { error: artworkError } = await supabase.storage
+        .from("artwork")
+        .upload(artworkPath, artworkFile);
+
+      if (artworkError) {
+        throw new Error("Не удалось загрузить обложку. Попробуйте ещё раз.");
+      }
+
+      setUploadProgress(80);
+
+      const {
+        data: artworkPublic,
+        error: artworkPublicError
+      } = supabase.storage.from("artwork").getPublicUrl(artworkPath);
+
+      if (artworkPublicError || !artworkPublic?.publicUrl) {
+        throw new Error("Не удалось получить ссылку на обложку.");
+      }
+
+      setUploadProgress(90);
+
+      setSubmitPhase("saving");
+
+      const { error: insertError } = await supabase.from("releases").insert([
+        {
+          artist_name: data.artistName,
+          track_name: data.trackName,
+          genre: data.genre,
+          release_date: data.releaseDate,
+          mood: data.mood,
+          language: data.language,
+          explicit: data.explicit,
+          audio_url: audioPublic.publicUrl,
+          artwork_url: artworkPublic.publicUrl,
+          telegram_id: telegramId,
+          telegram_username: telegramUsername
+        }
+      ]);
+
+      if (insertError) {
+        throw new Error("Не удалось сохранить релиз в базе данных.");
+      }
+
+      // Fire-and-forget admin notification; не блокируем UX
+      try {
+        void fetch("/api/notify-admin", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            artistName: data.artistName,
+            trackName: data.trackName
+          })
+        });
+      } catch {
+        // игнорируем ошибки нотификации
+      }
+
+      setUploadProgress(100);
+
+      setSubmitPhase("done");
       onSubmitted();
-    }, 800);
+    } catch (error: any) {
+      setSubmitPhase("idle");
+      setSubmitting(false);
+      setSubmitError(error?.message || "Произошла ошибка при сохранении релиза.");
+      setUploadProgress(0);
+      return;
+    }
+
+    setSubmitting(false);
   };
 
   const onInvalidSubmit = () => {
@@ -269,16 +389,27 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
               accept=".wav"
               maxSizeMb={200}
               type="wav"
-              onFileChange={() => {}}
+              onFileChange={setWavFile}
             />
             <FileUploader
               label="Обложка релиза"
               accept=".jpg,.jpeg,.png"
               maxSizeMb={20}
               type="cover"
-              onFileChange={() => {}}
+              onFileChange={setArtworkFile}
             />
           </motion.div>
+
+          {submitPhase !== "idle" && (
+            <div className="mb-2 h-1.5 w-full overflow-hidden rounded-[20px] bg-[#1d1d20]">
+              <motion.div
+                className="h-full bg-[#007AFF]"
+                initial={{ width: "0%" }}
+                animate={{ width: `${uploadProgress}%` }}
+                transition={{ duration: 0.2 }}
+              />
+            </div>
+          )}
 
           <motion.button
             type="submit"
@@ -286,8 +417,17 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
             disabled={submitting}
             className="btn-primary mt-2 inline-flex h-[60px] w-full items-center justify-center rounded-[20px] bg-gradient-to-tr from-[#007AFF] to-[#0051FF] text-[17px] font-semibold text-white shadow-[0_10px_30px_rgba(0,122,255,0.45)] transition-all active:scale-[0.97] disabled:opacity-70"
           >
-            {submitting ? "Обрабатываем..." : "Сформировать релиз"}
+            {submitPhase === "uploading" && "Загружаем файлы..."}
+            {submitPhase === "saving" && "Сохраняем релиз..."}
+            {submitPhase === "done" && "Готово!"}
+            {submitPhase === "idle" && !submitting && "Сформировать релиз"}
           </motion.button>
+
+          {submitError && (
+            <p className="mt-2 text-center text-[13px] text-red-400">
+              {submitError}
+            </p>
+          )}
         </form>
       </div>
     </div>
