@@ -203,11 +203,11 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
                 : { x: 0, opacity: 1, y: 0 }
             }
             transition={{ duration: invalidShake ? 0.25 : 0.2 }}
-            className="rounded-[24px] border border-white/5 bg-surface/80 px-6 py-5 shadow-[0_20px_40px_rgba(0,0,0,0.55)] backdrop-blur-xl"
+            className="rounded-[24px] border border-white/5 bg-surface/80 px-6 py-5 shadow-[0_20px_40px_rgba(0,0,0,0.55)] backdrop-blur-xl focus-within:border-[#007AFF]/50 focus-within:ring-2 focus-within:ring-[#007AFF]/30"
           >
             <div className="space-y-4">
               <div className="space-y-2">
-                <label className="block text-[11px] font-medium uppercase tracking-[0.2em] text-text-muted">
+                <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-[0.2em] text-text-muted">
                   Имя артиста
                 </label>
                 <motion.input
@@ -234,7 +234,7 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
               </div>
 
               <div className="space-y-2">
-                <label className="block text-[11px] font-medium uppercase tracking-[0.2em] text-text-muted">
+                <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-[0.2em] text-text-muted">
                   ФИО автора / исполнителя
                 </label>
                 <motion.input
@@ -265,7 +265,7 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
               </div>
 
               <div className="space-y-2">
-                <label className="block text-[11px] font-medium uppercase tracking-[0.2em] text-text-muted">
+                <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-[0.2em] text-text-muted">
                   Название трека
                 </label>
                 <motion.input
@@ -299,16 +299,16 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.05 }}
-            className="rounded-[24px] border border-white/5 bg-surface/80 px-6 py-5 shadow-[0_20px_40px_rgba(0,0,0,0.55)] backdrop-blur-xl"
+            className="rounded-[24px] border border-white/5 bg-surface/80 px-6 py-5 shadow-[0_20px_40px_rgba(0,0,0,0.55)] backdrop-blur-xl focus-within:border-[#007AFF]/50 focus-within:ring-2 focus-within:ring-[#007AFF]/30"
           >
-            <div className="grid grid-cols-2 gap-3 mb-4">
+            <div className="grid grid-cols-2 gap-x-3 gap-y-4 mb-4">
               <div className="min-w-0 space-y-1.5">
-                <label className="block text-[11px] font-medium uppercase tracking-[0.2em] text-text-muted">
+                <label className="mb-1.5 block pl-4 text-[11px] font-medium uppercase tracking-[0.2em] text-text-muted">
                   Жанр
                 </label>
                 <select
                   {...register("genre", { required: "Выберите жанр" })}
-                  className="h-[52px] w-full min-h-[52px] rounded-[16px] border border-transparent bg-[#1d1d20] px-3 text-[16px] text-white outline-none focus:border-primary appearance-none box-border"
+                  className="h-[52px] min-h-[52px] w-full rounded-[16px] border border-transparent bg-[#1d1d20] px-4 text-[16px] text-white outline-none focus:border-primary appearance-none box-border"
                 >
                   <option value="">Выберите жанр</option>
                   <option value="Techno">Техно</option>
@@ -326,7 +326,7 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
               </div>
 
               <div className="min-w-0 space-y-1.5">
-                <label className="block text-[11px] font-medium uppercase tracking-[0.2em] text-text-muted">
+                <label className="mb-1.5 block pl-4 text-[11px] font-medium uppercase tracking-[0.2em] text-text-muted">
                   Дата релиза
                 </label>
                 <input
@@ -334,7 +334,7 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
                   {...register("releaseDate", {
                     required: "Укажите дату релиза"
                   })}
-                  className="h-[52px] w-full min-h-[52px] rounded-[16px] border border-transparent bg-[#1d1d20] px-3 text-[16px] text-white outline-none [color-scheme:dark] focus:border-primary appearance-none box-border"
+                  className="h-[52px] min-h-[52px] w-full rounded-[16px] border border-transparent bg-[#1d1d20] px-4 text-[16px] text-white outline-none [color-scheme:dark] focus:border-primary appearance-none box-border"
                 />
                 {errors.releaseDate && (
                   <p className="text-[11px] text-red-400 mt-1">
@@ -344,14 +344,14 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 mb-4">
+            <div className="grid grid-cols-2 gap-x-3 gap-y-4 mb-4">
               <div className="min-w-0 space-y-1.5">
-                <label className="block text-[11px] font-medium uppercase tracking-[0.2em] text-text-muted">
+                <label className="mb-1.5 block pl-4 text-[11px] font-medium uppercase tracking-[0.2em] text-text-muted">
                   Настроение / Вайб
                 </label>
                 <select
                   {...register("mood", { required: "Выберите настроение" })}
-                  className="h-[52px] w-full min-h-[52px] rounded-[16px] border border-transparent bg-[#1d1d20] px-3 text-[16px] text-white outline-none focus:border-primary appearance-none box-border"
+                  className="h-[52px] min-h-[52px] w-full rounded-[16px] border border-transparent bg-[#1d1d20] px-4 text-[16px] text-white outline-none focus:border-primary appearance-none box-border"
                 >
                   <option value="">Выберите настроение</option>
                   <option value="Peak-time">Пиковое время / фестиваль</option>
@@ -369,12 +369,12 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
               </div>
 
               <div className="min-w-0 space-y-1.5">
-                <label className="block text-[11px] font-medium uppercase tracking-[0.2em] text-text-muted">
+                <label className="mb-1.5 block pl-4 text-[11px] font-medium uppercase tracking-[0.2em] text-text-muted">
                   Язык
                 </label>
                 <select
                   {...register("language", { required: "Укажите язык" })}
-                  className="h-[52px] w-full min-h-[52px] rounded-[16px] border border-transparent bg-[#1d1d20] px-3 text-[16px] text-white outline-none focus:border-primary appearance-none box-border"
+                  className="h-[52px] min-h-[52px] w-full rounded-[16px] border border-transparent bg-[#1d1d20] px-4 text-[16px] text-white outline-none focus:border-primary appearance-none box-border"
                 >
                   <option value="">Выберите язык</option>
                   <option value="Instrumental">Инструментал</option>
@@ -393,7 +393,7 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
             </div>
 
             <div className="space-y-2">
-              <label className="block text-[11px] font-medium uppercase tracking-[0.2em] text-text-muted">
+              <label className="mb-1.5 block pl-4 text-[11px] font-medium uppercase tracking-[0.2em] text-text-muted">
                 Текст песни (если есть)
               </label>
               <textarea

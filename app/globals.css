@@ -173,6 +173,19 @@ body {
   background-color: rgba(39, 39, 42, 0.5);
 }
 
+/* focus-within helpers for card glow when inputs are focused */
+.focus-within\:border-\[\#007AFF\]\/50:focus-within {
+  border-color: rgba(0, 122, 255, 0.5);
+}
+
+.focus-within\:ring-2:focus-within {
+  box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.15);
+}
+
+.focus-within\:ring-\[\#007AFF\]\/30:focus-within {
+  box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.3);
+}
+
 /* Shimmer animation for primary buttons */
 .btn-primary {
   position: relative;
