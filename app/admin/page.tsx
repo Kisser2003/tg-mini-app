@@ -1,9 +1,9 @@
-\"use client\";
+"use client";
 
-import { useEffect, useState } from \"react\";
-import { motion, AnimatePresence } from \"framer-motion\";
-import { supabase } from \"@/lib/supabase\";
-import { getTelegramUserId } from \"@/lib/telegram\";
+import { useEffect, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { supabase } from "@/lib/supabase";
+import { getTelegramUserId } from "@/lib/telegram";
 
 type ReleaseRow = {
   id: number;
