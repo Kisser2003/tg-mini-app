@@ -99,10 +99,10 @@ export default function CreateReleasePage() {
           setEditingRelease(existing);
           setStep("form");
 
-          const initialStepValues = {
-            artists: [{ name: existing.artist_name, role: "main" as const }],
+          const initialStepValues: ReleaseStepOneValues = {
+            artists: [{ name: existing.artist_name, role: "main" }],
             trackName: existing.track_name,
-            releaseType: existing.release_type as "single" | "ep" | "album" | undefined,
+            releaseType: existing.release_type as "single" | "ep" | "album",
             mainGenre: existing.genre,
             releaseDate: existing.release_date,
             rightHolder: existing.right_holder,
