@@ -141,7 +141,7 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
             variants={cardVariants}
             className="rounded-[24px] border border-white/10 bg-white/5 px-4 py-4 shadow-[0_18px_40px_rgba(0,0,0,0.75)] backdrop-blur-2xl"
           >
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <FileUploader
                 label="Audio (WAV)"
                 accept=".wav"
@@ -341,7 +341,7 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
             variants={cardVariants}
             className="rounded-[24px] border border-white/10 bg-white/5 px-5 py-5 shadow-[0_18px_40px_rgba(0,0,0,0.75)] backdrop-blur-2xl"
           >
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <label className="block text-[11px] font-medium uppercase tracking-[0.18em] text-white/60">
                   Основной жанр
