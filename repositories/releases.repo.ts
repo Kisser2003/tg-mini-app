@@ -130,8 +130,8 @@ export async function createDraftRelease(
 ): Promise<ReleaseRecord> {
   const validated = releaseStep1Schema.parse(payload);
 
-  const { data, error } = await withRetry(() =>
-    supabase
+  const { data, error } = await withRetry(async () => {
+    const response = await supabase
       .from("releases")
       .upsert(
         {
@@ -141,8 +141,9 @@ export async function createDraftRelease(
         { onConflict: "client_request_id" }
       )
       .select("*")
-      .single()
-  );
+      .single();
+    return response;
+  });
 
   if (error || !data) {
     // release_id ещё неизвестен, логировать нечего
@@ -189,14 +190,15 @@ export async function updateRelease(
     releaseStep2Schema.partial().parse(base);
   }
 
-  const { data, error } = await withRetry(() =>
-    supabase
+  const { data, error } = await withRetry(async () => {
+    const response = await supabase
       .from("releases")
       .update(payload)
       .eq("id", id)
       .select("*")
-      .single()
-  );
+      .single();
+    return response;
+  });
 
   if (error || !data) {
     throw error ?? new Error("Failed to update release");
@@ -215,9 +217,12 @@ export async function updateRelease(
 export async function submitRelease(id: string): Promise<ReleaseRecord> {
   // используем RPC, внутри БД всё делается транзакционно:
   // проверка client_request_id, финальный статус и логирование
-  const { data, error } = await withRetry(() =>
-    supabase.rpc("finalize_release", { p_release_id: id }).single()
-  );
+  const { data, error } = await withRetry(async () => {
+    const response = await supabase
+      .rpc("finalize_release", { p_release_id: id })
+      .single();
+    return response;
+  });
 
   if (error || !data) {
     await logReleaseEvent({
@@ -245,8 +250,8 @@ export async function createFullRelease(params: {
   artworkUrl: string;
   step2?: ReleaseStep2Payload;
 }): Promise<ReleaseRecord> {
-  const { data, error } = await withRetry(() =>
-    supabase
+  const { data, error } = await withRetry(async () => {
+    const response = await supabase
       .rpc("create_full_release", {
         p_release_id: params.releaseId,
         p_audio_url: params.audioUrl,
@@ -255,8 +260,9 @@ export async function createFullRelease(params: {
         p_authors: params.step2?.authors ?? null,
         p_splits: params.step2?.splits ?? null
       })
-      .single()
-  );
+      .single();
+    return response;
+  });
 
   if (error || !data) {
     await logReleaseEvent({
@@ -306,9 +312,12 @@ export async function uploadReleaseAudio(params: {
   assertAudioFile(params.file, 200);
   const path = `${params.userId}/${params.releaseId}/audio.wav`;
 
-  const { error } = await withRetry(() =>
-    supabase.storage.from("audio").upload(path, params.file, { upsert: true })
-  );
+  const { error } = await withRetry(async () => {
+    const response = await supabase.storage
+      .from("audio")
+      .upload(path, params.file, { upsert: true });
+    return response;
+  });
 
   if (error) {
     throw error;
@@ -329,9 +338,12 @@ export async function uploadReleaseArtwork(params: {
   assertArtworkFile(params.file, 20);
   const path = `${params.userId}/${params.releaseId}/cover.jpg`;
 
-  const { error } = await withRetry(() =>
-    supabase.storage.from("artwork").upload(path, params.file, { upsert: true })
-  );
+  const { error } = await withRetry(async () => {
+    const response = await supabase.storage
+      .from("artwork")
+      .upload(path, params.file, { upsert: true });
+    return response;
+  });
 
   if (error) {
     throw error;
@@ -353,9 +365,12 @@ export async function uploadReleaseTrackAudio(params: {
   assertAudioFile(params.file, 200);
   const path = `${params.userId}/${params.releaseId}/tracks/${params.trackIndex}.wav`;
 
-  const { error } = await withRetry(() =>
-    supabase.storage.from("audio").upload(path, params.file, { upsert: true })
-  );
+  const { error } = await withRetry(async () => {
+    const response = await supabase.storage
+      .from("audio")
+      .upload(path, params.file, { upsert: true });
+    return response;
+  });
 
   if (error) {
     throw error;
@@ -377,8 +392,8 @@ export async function addReleaseTrack(params: {
 }): Promise<void> {
   const validated = trackInsertSchema.parse(params);
 
-  const { error } = await withRetry(() =>
-    supabase
+  const { error } = await withRetry(async () => {
+    const response = await supabase
       .from("release_tracks")
       .upsert(
         {
@@ -389,8 +404,9 @@ export async function addReleaseTrack(params: {
           audio_url: validated.audioUrl
         },
         { onConflict: "release_id,index" }
-      )
-  );
+      );
+    return response;
+  });
 
   if (error) {
     throw error;
@@ -413,21 +429,38 @@ export async function deleteReleaseFiles(params: {
   }
 
   await Promise.all([
-    withRetry(() => audioBucket.remove(audioPaths)),
-    withRetry(() => artworkBucket.remove([`${params.userId}/${params.releaseId}/cover.jpg`]))
+    withRetry(async () => {
+      const response = await audioBucket.remove(audioPaths);
+      return response;
+    }),
+    withRetry(async () => {
+      const response = await artworkBucket.remove([
+        `${params.userId}/${params.releaseId}/cover.jpg`
+      ]);
+      return response;
+    })
   ]);
 }
 
 export async function cleanupReleaseTracks(releaseId: string): Promise<void> {
-  await withRetry(() =>
-    supabase.from("release_tracks").delete().eq("release_id", releaseId)
-  );
+  await withRetry(async () => {
+    const response = await supabase
+      .from("release_tracks")
+      .delete()
+      .eq("release_id", releaseId);
+    return response;
+  });
 }
 
 export async function getReleaseById(id: string): Promise<ReleaseRecord> {
-  const { data, error } = await withRetry(() =>
-    supabase.from("releases").select("*").eq("id", id).single()
-  );
+  const { data, error } = await withRetry(async () => {
+    const response = await supabase
+      .from("releases")
+      .select("*")
+      .eq("id", id)
+      .single();
+    return response;
+  });
 
   if (error || !data) {
     throw error ?? new Error("Failed to load release");
