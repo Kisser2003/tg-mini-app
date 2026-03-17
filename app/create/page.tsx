@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ReleaseForm } from "@/components/ReleaseForm";
+import type { ReleaseStepOneValues } from "@/components/ReleaseForm";
 import { TracksForm, TracksFormValues } from "@/components/TracksForm";
 import { SuccessScreen } from "@/components/SuccessScreen";
 import {
@@ -51,9 +52,9 @@ export default function CreateReleasePage() {
   const [pendingArtistName, setPendingArtistName] = useState<string | null>(null);
   const [isSubmittingRelease, setIsSubmittingRelease] = useState(false);
   const [isSubmittingTracks, setIsSubmittingTracks] = useState(false);
-  const [step1Values, setStep1Values] = useState<
-    import("../components/ReleaseForm").ReleaseStepOneValues | undefined
-  >(undefined);
+  const [step1Values, setStep1Values] = useState<ReleaseStepOneValues | undefined>(
+    undefined
+  );
   const [tracksValues, setTracksValues] = useState<TracksFormValues | undefined>(
     undefined
   );
@@ -72,7 +73,7 @@ export default function CreateReleasePage() {
     userId: number | null;
     pendingRelease: ReleaseRecord | null;
     pendingArtistName: string | null;
-    step1Values?: import("../components/ReleaseForm").ReleaseStepOneValues;
+    step1Values?: ReleaseStepOneValues;
     tracksValues?: TracksFormValues;
   };
 
@@ -222,7 +223,7 @@ export default function CreateReleasePage() {
   };
 
   const handleSubmitRelease = async (args: {
-    form: import("../components/ReleaseForm").ReleaseStepOneValues;
+    form: ReleaseStepOneValues;
     audioFile: File;
     artworkFile: File;
   }): Promise<"success" | "tracks"> => {
