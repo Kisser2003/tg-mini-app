@@ -17,13 +17,11 @@ const artistSchema = z.object({
 const releaseStepOneSchema = z.object({
   artists: z.array(artistSchema).min(1, "Добавьте хотя бы одного артиста"),
   trackName: z.string().min(1, "Укажите название трека"),
-  releaseType: z.enum(["single", "ep", "album"], {
-    required_error: "Выберите тип релиза"
-  }),
+  releaseType: z.enum(["single", "ep", "album"]),
   mainGenre: z.string().min(1, "Выберите жанр"),
-  releaseDate: z.string().min(1, "Укажите дату релиза"),
+  releaseDate: z.string().min(1, "Укажите дату релиса"),
   rightHolder: z.string().min(1, "Укажите правообладателя"),
-  explicit: z.boolean().default(false)
+  explicit: z.boolean()
 });
 
 type ReleaseStepOneValues = z.infer<typeof releaseStepOneSchema>;
@@ -195,7 +193,7 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
                     onClick={() =>
                       appendArtist({
                         name: "",
-                        role: artistRoleEnum.Values.feat
+                        role: "feat"
                       })
                     }
                     className="text-[11px] font-medium text-[#A5B4FC]"
