@@ -1,10 +1,8 @@
 "use client";
 
-export const dynamic = "force-dynamic";
-
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { ReleaseForm } from "@/components/ReleaseForm";
 import type { ReleaseStepOneValues } from "@/components/ReleaseForm";
 import { TracksForm, TracksFormValues } from "@/components/TracksForm";
@@ -44,7 +42,6 @@ type SuccessSummary = {
 
 export default function CreateReleasePage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [step, setStep] = useState<"form" | "tracks" | "success">("form");
   const [telegramName, setTelegramName] = useState<string | null>(null);
   const [successSummary, setSuccessSummary] = useState<SuccessSummary | null>(null);
@@ -61,11 +58,7 @@ export default function CreateReleasePage() {
     undefined
   );
   const [editingRelease, setEditingRelease] = useState<ReleaseRecord | null>(null);
-
-  const editingReleaseId = useMemo(
-    () => searchParams?.get("releaseId"),
-    [searchParams]
-  );
+  const [editingReleaseId, setEditingReleaseId] = useState<string | null>(null);
 
   type PersistedState = {
     step: typeof step;
@@ -90,6 +83,14 @@ export default function CreateReleasePage() {
   const { create, isSaving, error: createError } = useCreateRelease();
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const releaseId = params.get("releaseId");
+      if (releaseId) {
+        setEditingReleaseId(releaseId);
+      }
+    }
+
     initTelegramWebApp();
     setTelegramName(getTelegramUserDisplayName());
     setUserId(getTelegramUserId());
