@@ -9,7 +9,7 @@ import { useTelegramMainButton } from "@/lib/useTelegramMainButton";
 
 const trackSchema = z.object({
   title: z.string().min(1, "Укажите название трека"),
-  explicit: z.boolean().optional().default(false)
+  explicit: z.boolean()
 });
 
 const tracksFormSchema = z.object({
