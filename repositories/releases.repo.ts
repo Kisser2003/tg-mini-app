@@ -80,13 +80,13 @@ const trackInsertSchema = z.object({
   audioUrl: z.string().url()
 });
 
-type NetworkFn<T> = () => Promise<T>;
+type NetworkFn = () => Promise<any>;
 
-async function withRetry<T>(
-  fn: NetworkFn<T>,
+async function withRetry(
+  fn: NetworkFn,
   retries = 2,
   baseDelayMs = 200
-): Promise<T> {
+): Promise<any> {
   let attempt = 0;
   // eslint-disable-next-line no-constant-condition
   while (true) {
