@@ -3,16 +3,20 @@ import {
   ReleaseRecord,
   ReleaseStep1Payload,
   ReleaseStep2Payload,
+  cleanupReleaseTracks,
   createDraftRelease,
-  submitRelease,
-  updateRelease
+  createFullRelease,
+  deleteReleaseFiles,
+  updateRelease,
+  uploadReleaseAudio,
+  uploadReleaseArtwork
 } from "../../../repositories/releases.repo";
 
 type CreateReleaseArgs = {
   step1: ReleaseStep1Payload;
   step2?: ReleaseStep2Payload;
-  audioUrl: string;
-  artworkUrl: string;
+  audioFile: File;
+  artworkFile: File;
 };
 
 export function useCreateRelease() {
@@ -23,22 +27,55 @@ export function useCreateRelease() {
     setIsSaving(true);
     setError(null);
 
-    try {
-      // 1. Создаем draft, если еще нет
-      const draft = await createDraftRelease(args.step1);
+    let draft: ReleaseRecord | null = null;
 
-      // 2. Обновляем всеми данными и ссылками на файлы
-      const updated = await updateRelease(draft.id, {
-        ...(args.step2 ?? {}),
-        audio_url: args.audioUrl,
-        artwork_url: args.artworkUrl
+    try {
+      // 1. Создаем или переиспользуем draft (идемпотентно по client_request_id)
+      draft = await createDraftRelease(args.step1);
+
+      await updateRelease(draft.id, { status: "processing" });
+
+      // 2. Загружаем файлы в storage, используя user_id и id черновика
+      const [audioUrl, artworkUrl] = await Promise.all([
+        uploadReleaseAudio({
+          userId: draft.user_id,
+          releaseId: draft.id,
+          file: args.audioFile
+        }),
+        uploadReleaseArtwork({
+          userId: draft.user_id,
+          releaseId: draft.id,
+          file: args.artworkFile
+        })
+      ]);
+
+      // 3. Завершаем релиз через RPC в одной транзакции (URLs + step2 + статус)
+      const full = await createFullRelease({
+        releaseId: draft.id,
+        audioUrl,
+        artworkUrl,
+        step2: args.step2
       });
 
-      // 3. Сабмитим
-      const submitted = await submitRelease(updated.id);
-
-      return submitted;
+      return full;
     } catch (e: any) {
+      if (draft) {
+        try {
+          await Promise.all([
+            updateRelease(draft.id, {
+              status: "failed",
+              error_message: e?.message ?? "Failed to create release"
+            }),
+            cleanupReleaseTracks(draft.id),
+            deleteReleaseFiles({
+              userId: draft.user_id,
+              releaseId: draft.id
+            })
+          ]);
+        } catch {
+          // best‑effort cleanup
+        }
+      }
       setError(e?.message ?? "Failed to create release");
       throw e;
     } finally {
@@ -52,4 +89,3 @@ export function useCreateRelease() {
     error
   };
 }
-

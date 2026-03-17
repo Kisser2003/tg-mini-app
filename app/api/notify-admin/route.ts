@@ -1,18 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 
-type NotifyBody = {
-  artistName?: string;
-  trackName?: string;
-  authorFullName?: string;
-  musicAuthor?: string;
-  licenseType?: string;
-  pLine?: string;
-  cLine?: string;
-};
+const notifyBodySchema = z.object({
+  artistName: z.string().trim().min(1).max(256).optional(),
+  trackName: z.string().trim().min(1).max(256).optional(),
+  authorFullName: z.string().trim().min(1).max(256).optional(),
+  musicAuthor: z.string().trim().min(1).max(256).optional(),
+  licenseType: z.string().trim().min(1).max(128).optional(),
+  pLine: z.string().trim().min(1).max(256).optional(),
+  cLine: z.string().trim().min(1).max(256).optional()
+});
 
 export async function POST(request: NextRequest) {
   try {
-    const body = (await request.json()) as NotifyBody;
+    const json = await request.json();
     const {
       artistName,
       trackName,
@@ -21,7 +22,7 @@ export async function POST(request: NextRequest) {
       licenseType,
       pLine,
       cLine
-    } = body;
+    } = notifyBodySchema.parse(json);
 
     const token = process.env.TELEGRAM_BOT_TOKEN;
     const chatId = process.env.ADMIN_CHAT_ID;
@@ -36,8 +37,8 @@ export async function POST(request: NextRequest) {
     const text = `🎧 Новый релиз в мини‑аппе
 
 Артист: ${artistName || "—"}
-Автор (ФИО): ${authorFullName || "—"}
 Трек: ${trackName || "—"}
+Автор (ФИО): ${authorFullName || "—"}
 
 🎹 Музыка: ${musicAuthor || "—"}
 📄 Лицензия: ${licenseType || "—"}

@@ -9,7 +9,7 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
     <select
       ref={ref}
       className={cn(
-        "flex h-[48px] w-full rounded-[12px] border border-transparent bg-[#262628] px-3.5 py-3 text-[15px] text-text shadow-sm transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary focus-visible:border-primary",
+        "flex h-[48px] w-full rounded-[12px] border border-transparent bg-[#262628] px-3.5 py-3 text-[14px] sm:text-[15px] text-text shadow-sm transition placeholder:text-white/30 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary focus-visible:border-primary",
         className
       )}
       {...props}

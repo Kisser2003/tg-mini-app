@@ -65,12 +65,24 @@ export function FileUploader({ label, accept, maxSizeMb, type, onFileChange }: P
     const sizeMb = selected.size / (1024 * 1024);
     if (sizeMb > maxSizeMb) {
       setError(`Максимальный размер файла ${maxSizeMb}MB`);
+      setFile(null);
+      onFileChange(null);
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+        setPreviewUrl(null);
+      }
       setIsUploading(false);
       return;
     }
 
     if (type === "wav" && !selected.name.toLowerCase().endsWith(".wav")) {
       setError("Допустим только формат .wav");
+      setFile(null);
+      onFileChange(null);
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+        setPreviewUrl(null);
+      }
       setIsUploading(false);
       return;
     }
@@ -82,8 +94,19 @@ export function FileUploader({ label, accept, maxSizeMb, type, onFileChange }: P
         selected.type === "image/png";
       if (!isJpgOrPng) {
         setError("Допустимы только JPG или PNG");
+        setFile(null);
+        onFileChange(null);
+        if (previewUrl) {
+          URL.revokeObjectURL(previewUrl);
+          setPreviewUrl(null);
+        }
         setIsUploading(false);
         return;
+      }
+
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+        setPreviewUrl(null);
       }
 
       const objectUrl = URL.createObjectURL(selected);
@@ -172,63 +195,57 @@ export function FileUploader({ label, accept, maxSizeMb, type, onFileChange }: P
             )}
             {type === "wav" ? "WAV файл" : "Обложка релиза"}
           </span>
-          <span className="text-[11px] text-text-muted leading-snug">
-            {type === "wav"
-              ? `Нажмите, чтобы выбрать WAV (до ${maxSizeMb}MB)`
-              : "Квадратная, минимум 3000×3000 px,\nбез лишних надписей и логотипов"}
-          </span>
+          {type === "wav" ? (
+            <span className="text-[11px] text-text-muted leading-snug">
+              Нажмите, чтобы выбрать WAV (до {maxSizeMb}
+              MB)
+            </span>
+          ) : (
+            <span className="text-[11px] text-text-muted leading-snug text-center">
+              Квадратная, минимум 3000×3000 px,
+              <br />
+              без лишних надписей и логотипов
+            </span>
+          )}
           {file && (
             <div className="mt-1 w-full max-w-full space-y-1 text-[11px] text-text">
-              <div className="truncate">✓ {file.name}</div>
-              <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-black/30">
-                <motion.div
-                  initial={{ width: "0%" }}
-                  animate={{ width: isUploading ? "90%" : "100%" }}
-                  transition={{
-                    duration: 1.1,
-                    ease: "easeOut"
-                  }}
-                  className="relative h-full rounded-full bg-gradient-to-r from-emerald-400 via-white to-emerald-400"
-                >
-                  <motion.span
-                    aria-hidden
-                    className="absolute -right-1 top-1/2 h-3 w-3 -translate-y-1/2 rounded-full bg-white"
-                    style={{
-                      boxShadow: "0 0 14px rgba(52,211,153,0.9)"
-                    }}
-                    animate={{
-                      opacity: [0.7, 1, 0.7]
-                    }}
-                    transition={{
-                      repeat: Infinity,
-                      duration: 0.8,
-                      ease: "easeInOut"
-                    }}
-                  />
-                </motion.div>
+              <div className="flex items-center justify-center gap-1 text-emerald-400">
+                <span className="text-base leading-none">✓</span>
+                <span>Файл выбран</span>
               </div>
+              {isUploading && (
+                <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-black/30">
+                  <motion.div
+                    initial={{ width: "0%" }}
+                    animate={{ width: "100%" }}
+                    transition={{
+                      duration: 1.1,
+                      ease: "easeOut"
+                    }}
+                    className="relative h-full rounded-full bg-gradient-to-r from-emerald-400 via-white to-emerald-400"
+                  >
+                    <motion.span
+                      aria-hidden
+                      className="absolute -right-1 top-1/2 h-3 w-3 -translate-y-1/2 rounded-full bg-white"
+                      style={{
+                        boxShadow: "0 0 14px rgba(52,211,153,0.9)"
+                      }}
+                      animate={{
+                        opacity: [0.7, 1, 0.7]
+                      }}
+                      transition={{
+                        repeat: Infinity,
+                        duration: 0.8,
+                        ease: "easeInOut"
+                      }}
+                    />
+                  </motion.div>
+                </div>
+              )}
             </div>
           )}
         </div>
       </motion.label>
-
-      {previewUrl && (
-        <motion.div
-          className="mt-2 overflow-hidden rounded-2xl border border-border"
-          animate={{ y: [0, -3, 0, 3, 0] }}
-          transition={{
-            duration: 5,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-        >
-          <img
-            src={previewUrl}
-            alt="Cover preview"
-            className="h-32 w-full object-cover"
-          />
-        </motion.div>
-      )}
 
       {error && <p className="text-xs text-red-400">{error}</p>}
     </div>

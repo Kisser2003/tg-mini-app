@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { getTelegramUserId } from "@/lib/telegram";
 
 type ReleaseRow = {
-  id: number;
+  id: string;
   artist_name: string;
   author_full_name: string | null;
   track_name: string;
@@ -22,7 +22,7 @@ export default function AdminPage() {
   const [releases, setReleases] = useState<ReleaseRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [expandedLyricsId, setExpandedLyricsId] = useState<number | null>(null);
+  const [expandedLyricsId, setExpandedLyricsId] = useState<string | null>(null);
 
   const [isAuthorized, setIsAuthorized] = useState(false);
 
@@ -44,8 +44,9 @@ export default function AdminPage() {
         const { data, error: dbError } = await supabase
           .from("releases")
           .select(
-            "id, artist_name, author_full_name, track_name, genre, mood, lyrics, audio_url, artwork_url, created_at"
+            "id, artist_name, author_full_name, track_name, genre, mood, lyrics, audio_url, artwork_url, created_at, status"
           )
+          .eq("status", "ready")
           .order("created_at", { ascending: false });
 
         if (dbError) {

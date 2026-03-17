@@ -1,11 +1,13 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import { useForm, useFieldArray } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FileUploader } from "./FileUploader";
+import { getTelegramWebApp } from "@/lib/telegram";
+import { useTelegramMainButton } from "@/lib/useTelegramMainButton";
 
 const artistRoleEnum = z.enum(["main", "feat", "remixer"]);
 
@@ -19,18 +21,48 @@ const releaseStepOneSchema = z.object({
   trackName: z.string().min(1, "Укажите название трека"),
   releaseType: z.enum(["single", "ep", "album"]),
   mainGenre: z.string().min(1, "Выберите жанр"),
-  releaseDate: z.string().min(1, "Укажите дату релиса"),
+  releaseDate: z
+    .string()
+    .min(1, "Укажите дату релиса")
+    .refine((value) => {
+      if (!value) return false;
+      const selected = new Date(`${value}T00:00:00`);
+      if (Number.isNaN(selected.getTime())) return false;
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const minDate = new Date(today);
+      minDate.setDate(minDate.getDate() + 5);
+
+      return selected >= minDate;
+    }, "Дата релиза должна быть не раньше чем через 5 дней от сегодняшней даты"),
   rightHolder: z.string().min(1, "Укажите правообладателя"),
   explicit: z.boolean()
 });
 
-type ReleaseStepOneValues = z.infer<typeof releaseStepOneSchema>;
+export type ReleaseStepOneValues = z.infer<typeof releaseStepOneSchema>;
 
 type ReleaseFormProps = {
   onSubmitted: (summary: { artistName: string; trackName: string }) => void;
+  onSubmitRelease: (args: {
+    form: ReleaseStepOneValues;
+    audioFile: File;
+    artworkFile: File;
+  }) => Promise<"success" | "tracks">;
+  isSubmitting?: boolean;
+  submitError?: string | null;
+  initialValues?: Partial<ReleaseStepOneValues>;
+  onChangeValues?: (values: ReleaseStepOneValues) => void;
 };
 
-export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
+export function ReleaseForm({
+  onSubmitted,
+  onSubmitRelease,
+  isSubmitting,
+  submitError,
+  initialValues,
+  onChangeValues
+}: ReleaseFormProps) {
   const {
     register,
     control,
@@ -42,13 +74,13 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
     resolver: zodResolver(releaseStepOneSchema),
     mode: "onChange",
     defaultValues: {
-      artists: [{ name: "", role: "main" }],
-      trackName: "",
-      releaseType: undefined,
-      mainGenre: "",
-      releaseDate: "",
-      rightHolder: "",
-      explicit: false
+      artists: initialValues?.artists ?? [{ name: "", role: "main" }],
+      trackName: initialValues?.trackName ?? "",
+      releaseType: initialValues?.releaseType,
+      mainGenre: initialValues?.mainGenre ?? "",
+      releaseDate: initialValues?.releaseDate ?? "",
+      rightHolder: initialValues?.rightHolder ?? "",
+      explicit: initialValues?.explicit ?? false
     }
   });
 
@@ -62,6 +94,18 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
   const [artworkFile, setArtworkFile] = useState<File | null>(null);
   const [invalidShake, setInvalidShake] = useState(false);
   const [rightHolderTouched, setRightHolderTouched] = useState(false);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+
+  const minReleaseDate = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const min = new Date(today);
+    min.setDate(min.getDate() + 5);
+    const year = min.getFullYear();
+    const month = String(min.getMonth() + 1).padStart(2, "0");
+    const day = String(min.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }, []);
 
   useEffect(() => {
     const mainArtistName = values.artists?.[0]?.name;
@@ -70,18 +114,45 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
     }
   }, [values.artists, values.rightHolder, rightHolderTouched, setValue]);
 
-  const onValidSubmit = (data: ReleaseStepOneValues) => {
+  // синхронизируем значения формы наружу для персиста
+  useEffect(() => {
+    if (onChangeValues) {
+      onChangeValues(values);
+    }
+  }, [values, onChangeValues]);
+
+  const onValidSubmit = async (data: ReleaseStepOneValues) => {
+    setSubmitAttempted(true);
+
     if (!audioFile || !artworkFile) {
       setInvalidShake(true);
       setTimeout(() => setInvalidShake(false), 220);
       try {
-        window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred?.("error");
+        getTelegramWebApp()?.HapticFeedback?.notificationOccurred?.("error");
       } catch {}
       return;
     }
 
+    let result: "success" | "tracks";
+
     try {
-      window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.("light");
+      result = await onSubmitRelease({
+        form: data,
+        audioFile,
+        artworkFile
+      });
+    } catch {
+      // ошибка уже отображается выше по дереву
+      return;
+    }
+
+    if (result === "tracks") {
+      // дальнейшая навигация обрабатывается на уровне родителя
+      return;
+    }
+
+    try {
+      getTelegramWebApp()?.HapticFeedback?.impactOccurred?.("light");
     } catch {}
 
     onSubmitted({
@@ -91,14 +162,15 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
   };
 
   const onInvalidSubmit = () => {
+    setSubmitAttempted(true);
     setInvalidShake(true);
     setTimeout(() => setInvalidShake(false), 220);
     try {
-      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred?.("error");
+      getTelegramWebApp()?.HapticFeedback?.notificationOccurred?.("error");
     } catch {}
   };
 
-  const isNextEnabled = isValid && Boolean(audioFile) && Boolean(artworkFile);
+  const isNextEnabled = !isSubmitting;
 
   const cardVariants = {
     hidden: {
@@ -117,6 +189,18 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
       }
     })
   };
+
+  const handleMainButtonClick = useCallback(() => {
+    // программно триггерим сабмит формы
+    void handleSubmit(onValidSubmit, onInvalidSubmit)();
+  }, [handleSubmit, onValidSubmit, onInvalidSubmit]);
+
+  useTelegramMainButton({
+    text: isSubmitting ? "Отправка..." : "Далее",
+    enabled: isValid && !isSubmitting,
+    loading: Boolean(isSubmitting),
+    onClick: handleMainButtonClick
+  });
 
   return (
     <div className="min-h-screen bg-black px-4 py-5 pb-10 text-white">
@@ -156,6 +240,15 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
                 type="cover"
                 onFileChange={setArtworkFile}
               />
+            </div>
+
+            <div className="mt-2 grid grid-cols-1 gap-2 text-[11px]">
+              {submitAttempted && !audioFile && (
+                <p className="text-red-400">Добавьте WAV-файл релиза.</p>
+              )}
+              {submitAttempted && !artworkFile && (
+                <p className="text-red-400">Загрузите обложку (JPG/PNG).</p>
+              )}
             </div>
           </motion.div>
 
@@ -206,32 +299,34 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
                   {artistFields.map((field, index) => (
                     <div
                       key={field.id}
-                      className="flex items-center gap-2 rounded-[16px] bg-black/60 px-3 py-2.5 border border-white/10"
+                      className="flex flex-col gap-2 rounded-[16px] bg-black/60 px-3 py-2.5 border border-white/10 sm:flex-row sm:items-center"
                     >
                       <input
                         {...register(`artists.${index}.name` as const)}
                         placeholder={
                           index === 0 ? "Основной артист" : "Feat / Remixer"
                         }
-                        className="flex-1 bg-transparent text-[14px] text-white placeholder:text-white/40 outline-none"
+                        className="w-full flex-1 bg-transparent text-[14px] text-white placeholder:text-white/30 outline-none"
                       />
-                      <select
-                        {...register(`artists.${index}.role` as const)}
-                        className="h-8 rounded-[999px] bg-white/10 px-2 text-[11px] text-white outline-none"
-                      >
-                        <option value="main">Main</option>
-                        <option value="feat">Feat.</option>
-                        <option value="remixer">Remixer</option>
-                      </select>
-                      {index > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => removeArtist(index)}
-                          className="text-[11px] text-white/40"
+                      <div className="flex w-full items-center gap-2 sm:w-auto sm:justify-end">
+                        <select
+                          {...register(`artists.${index}.role` as const)}
+                          className="h-8 w-full max-w-[120px] rounded-[999px] border border-white/15 bg-white/5 px-3 text-[11px] text-white/80 outline-none transition-colors focus:border-[#4F46E5] focus:bg-white/10 sm:w-auto"
                         >
-                          ✕
-                        </button>
-                      )}
+                          <option value="main">Main</option>
+                          <option value="feat">Feat.</option>
+                          <option value="remixer">Remixer</option>
+                        </select>
+                        {index > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => removeArtist(index)}
+                            className="text-[11px] text-white/40 self-end sm:self-auto"
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -245,33 +340,33 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
 
               <div className="space-y-1.5">
                 <label className="block text-[11px] font-medium uppercase tracking-[0.18em] text-white/60">
-                  Правообладатель (ФИО / Лейбл)
+                  Название трека
                 </label>
                 <input
-                  {...register("rightHolder")}
-                  placeholder="Фамилия Имя Отчество или название компании"
-                  onBlur={() => setRightHolderTouched(true)}
-                  className="h-[56px] w-full rounded-[18px] border border-white/10 bg-black/60 px-4 text-[16px] text-white placeholder:text-white/40 outline-none focus:border-[#4F46E5]"
+                  {...register("trackName")}
+                  placeholder="Основное название без лишних символов"
+                  className="h-[56px] w-full rounded-[18px] border border-white/10 bg-black/60 px-4 text-[15px] sm:text-[16px] text-white placeholder:text-white/30 outline-none focus:border-[#4F46E5]"
                 />
-                {errors.rightHolder && (
+                {errors.trackName && (
                   <p className="mt-0.5 text-[11px] text-red-400">
-                    {errors.rightHolder.message}
+                    {errors.trackName.message}
                   </p>
                 )}
               </div>
 
               <div className="space-y-1.5">
                 <label className="block text-[11px] font-medium uppercase tracking-[0.18em] text-white/60">
-                  Название трека
+                  Правообладатель (ФИО / Лейбл)
                 </label>
                 <input
-                  {...register("trackName")}
-                  placeholder="Основное название без лишних символов"
-                  className="h-[56px] w-full rounded-[18px] border border-white/10 bg-black/60 px-4 text-[16px] text-white placeholder:text-white/40 outline-none focus:border-[#4F46E5]"
+                  {...register("rightHolder")}
+                  placeholder="Фамилия Имя Отчество или название компании"
+                  onBlur={() => setRightHolderTouched(true)}
+                  className="h-[56px] w-full rounded-[18px] border border-white/10 bg-black/60 px-4 text-[15px] sm:text-[16px] text-white placeholder:text-white/30 outline-none focus:border-[#4F46E5]"
                 />
-                {errors.trackName && (
+                {errors.rightHolder && (
                   <p className="mt-0.5 text-[11px] text-red-400">
-                    {errors.trackName.message}
+                    {errors.rightHolder.message}
                   </p>
                 )}
               </div>
@@ -311,7 +406,7 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
                             shouldValidate: true
                           });
                           try {
-                            window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.(
+                            getTelegramWebApp()?.HapticFeedback?.impactOccurred?.(
                               "light"
                             );
                           } catch {}
@@ -351,7 +446,7 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
                   onChange={(e) => {
                     register("mainGenre").onChange(e);
                     try {
-                      window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.("light");
+                      getTelegramWebApp()?.HapticFeedback?.impactOccurred?.("light");
                     } catch {}
                   }}
                   className="h-[56px] w-full rounded-[18px] border border-white/10 bg-black/60 px-4 text-[15px] text-white outline-none [color-scheme:dark] focus:border-[#4F46E5]"
@@ -381,9 +476,10 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
                   onChange={(e) => {
                     register("releaseDate").onChange(e);
                     try {
-                      window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.("light");
+                      getTelegramWebApp()?.HapticFeedback?.impactOccurred?.("light");
                     } catch {}
                   }}
+                  min={minReleaseDate}
                   className="h-[56px] w-full rounded-[18px] border border-white/10 bg-black/60 px-4 text-[15px] text-white outline-none [color-scheme:dark] focus:border-[#4F46E5]"
                 />
                 {errors.releaseDate && (
@@ -415,7 +511,7 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
                 onClick={() => {
                   setValue("explicit", !values.explicit, { shouldValidate: true });
                   try {
-                    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.("light");
+                    getTelegramWebApp()?.HapticFeedback?.impactOccurred?.("light");
                   } catch {}
                 }}
                 className={`inline-flex h-7 w-12 flex-shrink-0 items-center rounded-full px-[3px] transition-colors ${
@@ -453,8 +549,12 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
             disabled={!isNextEnabled}
             className="mt-3 inline-flex h-[60px] w-full items-center justify-center rounded-[20px] bg-gradient-to-tr from-[#4F46E5] to-[#7C3AED] text-[17px] font-semibold text-white shadow-[0_14px_40px_rgba(88,80,236,0.6)] transition-all disabled:opacity-60 disabled:shadow-none"
           >
-            Далее
+            {isSubmitting ? "Отправка..." : "Далее"}
           </motion.button>
+
+          {submitError && (
+            <p className="mt-2 text-center text-[11px] text-red-400">{submitError}</p>
+          )}
 
           <p className="mt-6 text-center text-[10px] uppercase tracking-[0.22em] text-white/25">
             © 2026 OMF DISTRIBUTION
