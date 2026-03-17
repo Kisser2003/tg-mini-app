@@ -11,7 +11,6 @@ export type ReleaseStep1Payload = {
   release_type: "single" | "ep" | "album";
   genre: string;
   release_date: string;
-  right_holder: string;
   explicit: boolean;
 };
 
@@ -30,7 +29,6 @@ export type ReleaseRecord = {
   release_type: string;
   genre: string;
   release_date: string;
-  right_holder: string;
   explicit: boolean;
   audio_url: string | null;
   artwork_url: string | null;
@@ -47,7 +45,6 @@ const releaseStep1Schema = z.object({
   release_type: z.enum(["single", "ep", "album"]),
   genre: z.string().min(1).max(128).trim(),
   release_date: z.string().min(1),
-  right_holder: z.string().min(1).max(256).trim(),
   explicit: z.boolean()
 });
 
@@ -176,7 +173,6 @@ export async function updateRelease(
   if (payload.release_type !== undefined) base.release_type = payload.release_type;
   if (payload.genre !== undefined) base.genre = payload.genre;
   if (payload.release_date !== undefined) base.release_date = payload.release_date;
-  if (payload.right_holder !== undefined) base.right_holder = payload.right_holder;
   if (payload.explicit !== undefined) base.explicit = payload.explicit;
   if (payload.isrc !== undefined) base.isrc = payload.isrc;
   if (payload.authors !== undefined) base.authors = payload.authors;

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { getTelegramWebApp, isTelegramMiniApp } from "./telegram";
 
 type UseTelegramMainButtonArgs = {
@@ -14,6 +14,8 @@ export function useTelegramMainButton({
   loading,
   onClick
 }: UseTelegramMainButtonArgs) {
+  const isVisibleRef = useRef(false);
+
   useEffect(() => {
     if (!isTelegramMiniApp()) return;
     const webApp = getTelegramWebApp();
@@ -29,7 +31,11 @@ export function useTelegramMainButton({
 
     try {
       mainButton.setText(text);
-      mainButton.show();
+
+      if (!isVisibleRef.current) {
+        mainButton.show();
+        isVisibleRef.current = true;
+      }
 
       if (enabled) {
         mainButton.enable();
@@ -53,8 +59,6 @@ export function useTelegramMainButton({
       isMounted = false;
       try {
         mainButton?.offClick(handleClick);
-        mainButton?.hide();
-        mainButton?.hideProgress();
       } catch {
         // ignore
       }

@@ -108,7 +108,7 @@ export default function CreateReleasePage() {
             releaseType: existing.release_type as "single" | "ep" | "album",
             mainGenre: existing.genre,
             releaseDate: existing.release_date,
-            rightHolder: existing.right_holder,
+            rightHolder: "",
             explicit: existing.explicit
           };
           setStep1Values(initialStepValues);
@@ -195,8 +195,11 @@ export default function CreateReleasePage() {
           latest.status === "draft"
         ) {
           if (step !== "tracks") {
-            setPendingRelease(latest);
             setStep("tracks");
+          }
+
+          if (!pendingRelease || pendingRelease.status !== latest.status) {
+            setPendingRelease(latest);
           }
         } else if (latest.status === "failed") {
           setSubmitError(
@@ -260,7 +263,6 @@ export default function CreateReleasePage() {
       release_type: args.form.releaseType,
       genre: args.form.mainGenre,
       release_date: args.form.releaseDate,
-      right_holder: args.form.rightHolder,
       explicit: args.form.explicit
     };
 

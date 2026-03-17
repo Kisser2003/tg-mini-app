@@ -69,7 +69,7 @@ export function ReleaseForm({
     handleSubmit,
     watch,
     setValue,
-    formState: { errors, isValid }
+    formState: { errors, isValid, isDirty }
   } = useForm<ReleaseStepOneValues>({
     resolver: zodResolver(releaseStepOneSchema),
     mode: "onChange",
@@ -114,61 +114,70 @@ export function ReleaseForm({
     }
   }, [values.artists, values.rightHolder, rightHolderTouched, setValue]);
 
-  // синхронизируем значения формы наружу для персиста
+  // синхронизируем значения формы наружу для персиста (дебаунс + только при изменениях)
   useEffect(() => {
-    if (onChangeValues) {
+    if (!onChangeValues || !isDirty) return;
+
+    const timeoutId = window.setTimeout(() => {
       onChangeValues(values);
-    }
-  }, [values, onChangeValues]);
+    }, 200);
 
-  const onValidSubmit = async (data: ReleaseStepOneValues) => {
-    setSubmitAttempted(true);
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [values, onChangeValues, isDirty]);
 
-    if (!audioFile || !artworkFile) {
-      setInvalidShake(true);
-      setTimeout(() => setInvalidShake(false), 220);
+  const onValidSubmit = useCallback(
+    async (data: ReleaseStepOneValues) => {
+      setSubmitAttempted(true);
+
+      if (!audioFile || !artworkFile) {
+        setInvalidShake(true);
+        setTimeout(() => setInvalidShake(false), 220);
+        try {
+          getTelegramWebApp()?.HapticFeedback?.notificationOccurred?.("error");
+        } catch {}
+        return;
+      }
+
+      let result: "success" | "tracks";
+
       try {
-        getTelegramWebApp()?.HapticFeedback?.notificationOccurred?.("error");
+        result = await onSubmitRelease({
+          form: data,
+          audioFile,
+          artworkFile
+        });
+      } catch {
+        // ошибка уже отображается выше по дереву
+        return;
+      }
+
+      if (result === "tracks") {
+        // дальнейшая навигация обрабатывается на уровне родителя
+        return;
+      }
+
+      try {
+        getTelegramWebApp()?.HapticFeedback?.impactOccurred?.("light");
       } catch {}
-      return;
-    }
 
-    let result: "success" | "tracks";
-
-    try {
-      result = await onSubmitRelease({
-        form: data,
-        audioFile,
-        artworkFile
+      onSubmitted({
+        artistName: data.artists[0]?.name ?? "",
+        trackName: data.trackName
       });
-    } catch {
-      // ошибка уже отображается выше по дереву
-      return;
-    }
+    },
+    [audioFile, artworkFile, onSubmitRelease, onSubmitted]
+  );
 
-    if (result === "tracks") {
-      // дальнейшая навигация обрабатывается на уровне родителя
-      return;
-    }
-
-    try {
-      getTelegramWebApp()?.HapticFeedback?.impactOccurred?.("light");
-    } catch {}
-
-    onSubmitted({
-      artistName: data.artists[0]?.name ?? "",
-      trackName: data.trackName
-    });
-  };
-
-  const onInvalidSubmit = () => {
+  const onInvalidSubmit = useCallback(() => {
     setSubmitAttempted(true);
     setInvalidShake(true);
     setTimeout(() => setInvalidShake(false), 220);
     try {
       getTelegramWebApp()?.HapticFeedback?.notificationOccurred?.("error");
     } catch {}
-  };
+  }, []);
 
   const isNextEnabled = !isSubmitting;
 
