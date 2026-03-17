@@ -109,14 +109,20 @@ async function logReleaseEvent(params: {
   status: ReleaseStatus;
   errorMessage?: string | null;
 }) {
-  await withRetry(() =>
-    supabase.from("release_logs").insert({
+  await withRetry(async () => {
+    const { error } = await supabase.from("release_logs").insert({
       release_id: params.releaseId,
       stage: params.stage,
       status: params.status,
       error_message: params.errorMessage ?? null
-    })
-  );
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    return null;
+  });
 }
 
 export async function createDraftRelease(
