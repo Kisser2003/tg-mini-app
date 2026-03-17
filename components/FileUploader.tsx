@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { motion, useMotionValue, useSpring } from "framer-motion";
 import { Music2, Image as ImageIcon } from "lucide-react";
 import confetti from "canvas-confetti";
+import { getTelegramWebApp } from "../lib/telegram";
 
 type Props = {
   label: string;
@@ -16,6 +17,33 @@ export function FileUploader({ label, accept, maxSizeMb, type, onFileChange }: P
   const [error, setError] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+
+  const cursorX = useMotionValue(0);
+  const cursorY = useMotionValue(0);
+  const magneticX = useSpring(cursorX, { stiffness: 300, damping: 30 });
+  const magneticY = useSpring(cursorY, { stiffness: 300, damping: 30 });
+
+  const handleMouseMove = (event: React.MouseEvent<HTMLLabelElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = event.clientX - (rect.left + rect.width / 2);
+    const y = event.clientY - (rect.top + rect.height / 2);
+    const distance = Math.sqrt(x * x + y * y);
+    const radius = 14;
+
+    if (distance < radius) {
+      cursorX.set(x * 0.25);
+      cursorY.set(y * 0.25);
+    } else {
+      cursorX.set(0);
+      cursorY.set(0);
+    }
+  };
+
+  const handleMouseLeave = () => {
+    cursorX.set(0);
+    cursorY.set(0);
+  };
 
   useEffect(() => {
     return () => {
@@ -29,6 +57,7 @@ export function FileUploader({ label, accept, maxSizeMb, type, onFileChange }: P
 
     if (!selected) {
       setFile(null);
+      setIsUploading(false);
       onFileChange(null);
       return;
     }
@@ -36,11 +65,13 @@ export function FileUploader({ label, accept, maxSizeMb, type, onFileChange }: P
     const sizeMb = selected.size / (1024 * 1024);
     if (sizeMb > maxSizeMb) {
       setError(`Максимальный размер файла ${maxSizeMb}MB`);
+      setIsUploading(false);
       return;
     }
 
     if (type === "wav" && !selected.name.toLowerCase().endsWith(".wav")) {
       setError("Допустим только формат .wav");
+      setIsUploading(false);
       return;
     }
 
@@ -51,6 +82,7 @@ export function FileUploader({ label, accept, maxSizeMb, type, onFileChange }: P
         selected.type === "image/png";
       if (!isJpgOrPng) {
         setError("Допустимы только JPG или PNG");
+        setIsUploading(false);
         return;
       }
 
@@ -64,14 +96,22 @@ export function FileUploader({ label, accept, maxSizeMb, type, onFileChange }: P
           setPreviewUrl(objectUrl);
           setFile(selected);
           onFileChange(selected);
+          setIsUploading(true);
           setUploadSuccess(true);
-          setTimeout(() => setUploadSuccess(false), 1200);
+          setTimeout(() => {
+            setIsUploading(false);
+            setUploadSuccess(false);
+          }, 1200);
           confetti({ particleCount: 30, spread: 50, origin: { y: 0.4 } });
+          try {
+            getTelegramWebApp()?.HapticFeedback?.impactOccurred?.("light");
+          } catch {}
         }
       };
       img.onerror = () => {
         setError("Не удалось прочитать изображение");
         URL.revokeObjectURL(objectUrl);
+        setIsUploading(false);
       };
       img.src = objectUrl;
       return;
@@ -79,9 +119,16 @@ export function FileUploader({ label, accept, maxSizeMb, type, onFileChange }: P
 
     setFile(selected);
     onFileChange(selected);
+    setIsUploading(true);
     setUploadSuccess(true);
-    setTimeout(() => setUploadSuccess(false), 1200);
+    setTimeout(() => {
+      setIsUploading(false);
+      setUploadSuccess(false);
+    }, 1200);
     confetti({ particleCount: 30, spread: 50, origin: { y: 0.4 } });
+    try {
+      getTelegramWebApp()?.HapticFeedback?.impactOccurred?.("light");
+    } catch {}
   };
 
   return (
@@ -91,14 +138,24 @@ export function FileUploader({ label, accept, maxSizeMb, type, onFileChange }: P
       </label>
       <motion.label
         whileHover={{ scale: 1.02 }}
-        whileTap={{ scale: 0.98 }}
+        whileTap={{ scale: 0.96 }}
         animate={{
           boxShadow: uploadSuccess
             ? "0 0 0 3px rgba(34,197,94,0.45)"
             : "0 14px 40px rgba(0,0,0,0.65)"
         }}
-        transition={{ duration: 0.25 }}
-        className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border bg-surface/70 px-4 py-5 text-center text-xs text-text-muted hover:border-primary hover:bg-surface transition-colors"
+        transition={{
+          type: "spring",
+          stiffness: 400,
+          damping: 30
+        }}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
+        style={{
+          x: magneticX,
+          y: magneticY
+        }}
+        className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border bg-surface/70 px-4 py-5 text-center text-xs text-text-muted hover:border-primary hover:bg-surface transition-colors min-h-[140px]"
       >
         <input
           type="file"
@@ -106,34 +163,71 @@ export function FileUploader({ label, accept, maxSizeMb, type, onFileChange }: P
           className="hidden"
           onChange={handleChange}
         />
-        <span className="mb-2 flex items-center gap-2 text-sm font-medium text-text">
-          {type === "wav" ? (
-            <Music2 className="h-4 w-4 text-primary" />
-          ) : (
-            <ImageIcon className="h-4 w-4 text-primary" />
+        <div className="flex h-full flex-col items-center justify-center gap-2">
+          <span className="flex items-center gap-2 text-sm font-medium text-text">
+            {type === "wav" ? (
+              <Music2 className="h-4 w-4 text-primary" />
+            ) : (
+              <ImageIcon className="h-4 w-4 text-primary" />
+            )}
+            {type === "wav" ? "WAV файл" : "Обложка релиза"}
+          </span>
+          <span className="text-[11px] text-text-muted leading-snug">
+            {type === "wav"
+              ? `Нажмите, чтобы выбрать WAV (до ${maxSizeMb}MB)`
+              : "Квадратная, минимум 3000×3000 px,\nбез лишних надписей и логотипов"}
+          </span>
+          {file && (
+            <div className="mt-1 w-full max-w-full space-y-1 text-[11px] text-text">
+              <div className="truncate">✓ {file.name}</div>
+              <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-black/30">
+                <motion.div
+                  initial={{ width: "0%" }}
+                  animate={{ width: isUploading ? "90%" : "100%" }}
+                  transition={{
+                    duration: 1.1,
+                    ease: "easeOut"
+                  }}
+                  className="relative h-full rounded-full bg-gradient-to-r from-emerald-400 via-white to-emerald-400"
+                >
+                  <motion.span
+                    aria-hidden
+                    className="absolute -right-1 top-1/2 h-3 w-3 -translate-y-1/2 rounded-full bg-white"
+                    style={{
+                      boxShadow: "0 0 14px rgba(52,211,153,0.9)"
+                    }}
+                    animate={{
+                      opacity: [0.7, 1, 0.7]
+                    }}
+                    transition={{
+                      repeat: Infinity,
+                      duration: 0.8,
+                      ease: "easeInOut"
+                    }}
+                  />
+                </motion.div>
+              </div>
+            </div>
           )}
-          {type === "wav" ? "WAV файл" : "Обложка релиза"}
-        </span>
-        <span className="text-[11px] text-text-muted">
-          {type === "wav"
-            ? `Нажмите, чтобы выбрать WAV (до ${maxSizeMb}MB)`
-            : "Квадратная, минимум 3000×3000 px, без лишних надписей и логотипов"}
-        </span>
-        {file && (
-          <div className="mt-2 text-[11px] text-text truncate max-w-full">
-            ✓ {file.name}
-          </div>
-        )}
+        </div>
       </motion.label>
 
       {previewUrl && (
-        <div className="mt-2 overflow-hidden rounded-2xl border border-border">
+        <motion.div
+          className="mt-2 overflow-hidden rounded-2xl border border-border"
+          animate={{ y: [0, -3, 0, 3, 0] }}
+          transition={{
+            duration: 5,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+        >
           <img
             src={previewUrl}
             alt="Cover preview"
             className="h-32 w-full object-cover"
           />
-        </div>
+        </motion.div>
       )}
 
       {error && <p className="text-xs text-red-400">{error}</p>}

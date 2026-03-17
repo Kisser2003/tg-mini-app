@@ -104,8 +104,43 @@ export default function AdminPage() {
         </header>
 
         {loading && (
-          <div className="rounded-[24px] border border-white/5 bg-surface/80 px-6 py-5 text-[14px] text-text-muted shadow-[0_20px_40px_rgba(0,0,0,0.55)] backdrop-blur-xl">
-            Загружаем релизы...
+          <div className="space-y-3">
+            {[0, 1, 2].map((i) => (
+              <motion.div
+                // glass intake + shimmer skeleton
+                key={i}
+                initial={{
+                  opacity: 0,
+                  scale: 0.9,
+                  filter: "blur(10px)"
+                }}
+                animate={{
+                  opacity: 1,
+                  scale: 1,
+                  filter: "blur(0px)"
+                }}
+                transition={{ duration: 0.35, delay: i * 0.06, ease: "easeOut" }}
+                className="relative overflow-hidden rounded-[24px] border border-white/5 bg-surface/80 px-6 py-5 shadow-[0_20px_40px_rgba(0,0,0,0.55)] backdrop-blur-xl"
+              >
+                <div className="space-y-3">
+                  <div className="h-3 w-24 rounded-full bg-white/5" />
+                  <div className="h-4 w-40 rounded-full bg-white/8" />
+                  <div className="h-3 w-32 rounded-full bg-white/4" />
+                  <div className="mt-3 h-2 w-full rounded-full bg-white/5" />
+                </div>
+                <motion.div
+                  aria-hidden
+                  className="pointer-events-none absolute inset-0 bg-[linear-gradient(120deg,transparent,rgba(255,255,255,0.12),transparent)]"
+                  initial={{ x: "-120%" }}
+                  animate={{ x: "120%" }}
+                  transition={{
+                    duration: 1.4,
+                    repeat: Infinity,
+                    ease: "linear"
+                  }}
+                />
+              </motion.div>
+            ))}
           </div>
         )}
 
@@ -117,13 +152,25 @@ export default function AdminPage() {
 
         <div className="space-y-4">
           <AnimatePresence>
-            {releases.map((release) => (
+            {releases.map((release, index) => (
               <motion.div
                 key={release.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.18 }}
+                initial={{
+                  opacity: 0,
+                  scale: 0.9,
+                  filter: "blur(10px)"
+                }}
+                animate={{
+                  opacity: 1,
+                  scale: 1,
+                  filter: "blur(0px)"
+                }}
+                exit={{ opacity: 0, y: -10, filter: "blur(6px)" }}
+                transition={{
+                  duration: 0.3,
+                  ease: "easeOut",
+                  delay: index * 0.05
+                }}
                 className="rounded-[24px] border border-white/5 bg-surface/80 px-5 py-4 shadow-[0_18px_40px_rgba(0,0,0,0.6)] backdrop-blur-xl"
               >
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">

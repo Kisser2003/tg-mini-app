@@ -1,30 +1,32 @@
 "use client";
 
-import React, { useState } from "react";
-import { useForm } from "react-hook-form";
+import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { toast } from "sonner";
+import { useForm, useFieldArray } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { FileUploader } from "./FileUploader";
-import { supabase } from "../lib/supabase";
-import { getTelegramUser } from "../lib/telegram";
 
-const LYRICS_MAX = 5000;
+const artistRoleEnum = z.enum(["main", "feat", "remixer"]);
 
-type FormValues = {
-  artistName: string;
-  authorFullName: string;
-  trackName: string;
-  genre: string;
-  releaseDate: string;
-  mood: string;
-  language: string;
-  lyrics?: string;
-  explicit: boolean;
-  musicAuthor: string;
-  licenseType: string;
-  pLine: string;
-  cLine: string;
-};
+const artistSchema = z.object({
+  name: z.string().min(1, "Укажите имя артиста"),
+  role: artistRoleEnum
+});
+
+const releaseStepOneSchema = z.object({
+  artists: z.array(artistSchema).min(1, "Добавьте хотя бы одного артиста"),
+  trackName: z.string().min(1, "Укажите название трека"),
+  releaseType: z.enum(["single", "ep", "album"], {
+    required_error: "Выберите тип релиза"
+  }),
+  mainGenre: z.string().min(1, "Выберите жанр"),
+  releaseDate: z.string().min(1, "Укажите дату релиза"),
+  rightHolder: z.string().min(1, "Укажите правообладателя"),
+  explicit: z.boolean().default(false)
+});
+
+type ReleaseStepOneValues = z.infer<typeof releaseStepOneSchema>;
 
 type ReleaseFormProps = {
   onSubmitted: (summary: { artistName: string; trackName: string }) => void;
@@ -33,196 +35,100 @@ type ReleaseFormProps = {
 export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
   const {
     register,
+    control,
     handleSubmit,
     watch,
     setValue,
-    formState: { errors }
-  } = useForm<FormValues>({
+    formState: { errors, isValid }
+  } = useForm<ReleaseStepOneValues>({
+    resolver: zodResolver(releaseStepOneSchema),
+    mode: "onChange",
     defaultValues: {
-      artistName: "",
-      authorFullName: "",
+      artists: [{ name: "", role: "main" }],
       trackName: "",
-      genre: "",
+      releaseType: undefined,
+      mainGenre: "",
       releaseDate: "",
-      mood: "",
-      language: "",
-      lyrics: "",
-      explicit: false,
-      musicAuthor: "",
-      licenseType: "",
-      pLine: "",
-      cLine: ""
+      rightHolder: "",
+      explicit: false
     }
   });
 
+  const { fields: artistFields, append: appendArtist, remove: removeArtist } = useFieldArray({
+    control,
+    name: "artists"
+  });
+
   const values = watch();
-  const [submitting, setSubmitting] = useState(false);
-  const [submitPhase, setSubmitPhase] = useState<"idle" | "uploading" | "saving" | "done">("idle");
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [invalidShake, setInvalidShake] = useState(false);
-  const [focusedField, setFocusedField] = useState<string | null>(null);
-  const [wavFile, setWavFile] = useState<File | null>(null);
+  const [audioFile, setAudioFile] = useState<File | null>(null);
   const [artworkFile, setArtworkFile] = useState<File | null>(null);
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [invalidShake, setInvalidShake] = useState(false);
+  const [rightHolderTouched, setRightHolderTouched] = useState(false);
 
-  const onValidSubmit = async (data: FormValues) => {
-    setSubmitError(null);
+  useEffect(() => {
+    const mainArtistName = values.artists?.[0]?.name;
+    if (!rightHolderTouched && mainArtistName && !values.rightHolder) {
+      setValue("rightHolder", mainArtistName, { shouldValidate: true });
+    }
+  }, [values.artists, values.rightHolder, rightHolderTouched, setValue]);
 
-    if (!wavFile || !artworkFile) {
-      setSubmitError("Пожалуйста, загрузите трек и обложку перед отправкой.");
+  const onValidSubmit = (data: ReleaseStepOneValues) => {
+    if (!audioFile || !artworkFile) {
       setInvalidShake(true);
-      setTimeout(() => setInvalidShake(false), 250);
+      setTimeout(() => setInvalidShake(false), 220);
       try {
         window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred?.("error");
       } catch {}
-      toast.error("Загрузите трек и обложку");
       return;
     }
-
-    setSubmitting(true);
-    setSubmitPhase("uploading");
-    setUploadProgress(0);
 
     try {
-      // Telegram user info (если есть)
-      const tgUser = getTelegramUser();
-      const telegramId = tgUser?.id ?? null;
-      const telegramUsername = tgUser?.username ?? null;
+      window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.("light");
+    } catch {}
 
-      const timestamp = Date.now();
-
-      // Upload WAV
-      const wavPath = `${timestamp}-${wavFile.name}`;
-      const { error: audioError } = await supabase.storage
-        .from("audio")
-        .upload(wavPath, wavFile);
-
-      if (audioError) {
-        throw new Error("Не удалось загрузить WAV файл. Попробуйте ещё раз.");
-      }
-
-      setUploadProgress(35);
-
-      const { data: audioPublic } = supabase.storage.from("audio").getPublicUrl(wavPath);
-
-      if (!audioPublic?.publicUrl) {
-        throw new Error("Не удалось получить ссылку на WAV файл.");
-      }
-
-      setUploadProgress(50);
-
-      // Upload artwork
-      const artworkPath = `${timestamp}-${artworkFile.name}`;
-      const { error: artworkError } = await supabase.storage
-        .from("artwork")
-        .upload(artworkPath, artworkFile);
-
-      if (artworkError) {
-        throw new Error("Не удалось загрузить обложку. Попробуйте ещё раз.");
-      }
-
-      setUploadProgress(80);
-
-      const { data: artworkPublic } = supabase.storage
-        .from("artwork")
-        .getPublicUrl(artworkPath);
-
-      if (!artworkPublic?.publicUrl) {
-        throw new Error("Не удалось получить ссылку на обложку.");
-      }
-
-      setUploadProgress(90);
-
-      setSubmitPhase("saving");
-
-      const { error: insertError } = await supabase.from("releases").insert([
-        {
-          artist_name: data.artistName,
-          author_full_name: data.authorFullName,
-          track_name: data.trackName,
-          genre: data.genre,
-          release_date: data.releaseDate,
-          mood: data.mood,
-          language: data.language,
-          lyrics: data.lyrics,
-          explicit: data.explicit,
-          music_author: data.musicAuthor,
-          license_type: data.licenseType,
-          p_line: data.pLine,
-          c_line: data.cLine,
-          audio_url: audioPublic.publicUrl,
-          artwork_url: artworkPublic.publicUrl,
-          telegram_id: telegramId,
-          telegram_username: telegramUsername
-        }
-      ]);
-
-      if (insertError) {
-        throw new Error("Не удалось сохранить релиз в базе данных.");
-      }
-
-      // Fire-and-forget admin notification; не блокируем UX
-      try {
-        void fetch("/api/notify-admin", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            artistName: data.artistName,
-            trackName: data.trackName,
-            authorFullName: data.authorFullName,
-            musicAuthor: data.musicAuthor,
-            licenseType: data.licenseType,
-            pLine: data.pLine,
-            cLine: data.cLine
-          })
-        });
-      } catch {
-        // игнорируем ошибки нотификации
-      }
-
-      setUploadProgress(100);
-
-      setSubmitPhase("done");
-      try {
-        window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.("light");
-      } catch {}
-      toast.success("Релиз отправлен на проверку");
-      onSubmitted({ artistName: data.artistName, trackName: data.trackName });
-    } catch (error: any) {
-      setSubmitPhase("idle");
-      setSubmitting(false);
-      setSubmitError(error?.message || "Произошла ошибка при сохранении релиза.");
-      setUploadProgress(0);
-      try {
-        window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred?.("error");
-      } catch {}
-      toast.error(error?.message || "Ошибка при сохранении");
-      return;
-    }
-
-    setSubmitting(false);
+    onSubmitted({
+      artistName: data.artists[0]?.name ?? "",
+      trackName: data.trackName
+    });
   };
 
   const onInvalidSubmit = () => {
     setInvalidShake(true);
-    setTimeout(() => setInvalidShake(false), 250);
+    setTimeout(() => setInvalidShake(false), 220);
     try {
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred?.("error");
     } catch {}
-    toast.error("Заполните обязательные поля");
+  };
+
+  const isNextEnabled = isValid && Boolean(audioFile) && Boolean(artworkFile);
+
+  const cardVariants = {
+    hidden: {
+      opacity: 0,
+      scale: 0.9,
+      filter: "blur(10px)"
+    },
+    visible: (index: number) => ({
+      opacity: 1,
+      scale: 1,
+      filter: "blur(0px)",
+      transition: {
+        delay: 0.05 * index,
+        duration: 0.4,
+        ease: "easeOut"
+      }
+    })
   };
 
   return (
-    <div className="min-h-screen bg-background px-4 py-5 pb-10 text-text">
-      <div className="mx-auto flex w-full max-w-[440px] flex-col gap-6 font-sans">
+    <div className="min-h-screen bg-black px-4 py-5 pb-10 text-white">
+      <div className="mx-auto flex w-full max-w-[440px] flex-col gap-5 font-sans">
         <header className="space-y-1">
-          <h1 className="text-[22px] font-semibold tracking-tight leading-tight">
-            Оформление поставки
+          <h1 className="text-[22px] font-semibold leading-tight tracking-tight">
+            Релиз · Шаг 1
           </h1>
-          <p className="text-[13px] text-text-muted leading-relaxed">
-            Заполните метаданные для официальной отгрузки на стриминги.
+          <p className="text-[13px] text-white/60 leading-relaxed">
+            Минимальный набор данных, чтобы начать оформление релиза.
           </p>
         </header>
 
@@ -231,99 +137,199 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
           className="flex flex-col gap-4"
         >
           <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={
-              invalidShake
-                ? { x: [0, -6, 6, -4, 4, 0] }
-                : { x: 0, opacity: 1, y: 0 }
-            }
-            transition={{ duration: invalidShake ? 0.25 : 0.2 }}
-            className="form-card rounded-[24px] border border-white/5 bg-surface/80 px-6 py-5 shadow-[0_20px_40px_rgba(0,0,0,0.55)] backdrop-blur-xl focus-within:border-[#007AFF]/50 focus-within:ring-2 focus-within:ring-[#007AFF]/30"
+            custom={0}
+            initial="hidden"
+            animate="visible"
+            variants={cardVariants}
+            className="rounded-[24px] border border-white/10 bg-white/5 px-4 py-4 shadow-[0_18px_40px_rgba(0,0,0,0.75)] backdrop-blur-2xl"
+          >
+            <div className="grid grid-cols-2 gap-3">
+              <FileUploader
+                label="Audio (WAV)"
+                accept=".wav"
+                maxSizeMb={200}
+                type="wav"
+                onFileChange={setAudioFile}
+              />
+              <FileUploader
+                label="Artwork (JPG/PNG)"
+                accept=".jpg,.jpeg,.png"
+                maxSizeMb={20}
+                type="cover"
+                onFileChange={setArtworkFile}
+              />
+            </div>
+          </motion.div>
+
+          <motion.div
+            custom={1}
+            initial="hidden"
+            animate={invalidShake ? "invalid" : "visible"}
+            variants={{
+              ...cardVariants,
+              invalid: {
+                ...cardVariants.visible(1),
+                x: [0, -4, 4, -3, 3, -2, 2, 0],
+                boxShadow: [
+                  "0 18px 40px rgba(0,0,0,0.75)",
+                  "0 0 0 0 rgba(248,113,113,0.6)",
+                  "0 0 0 6px rgba(248,113,113,0.35)",
+                  "0 0 0 0 rgba(248,113,113,0)"
+                ],
+                transition: {
+                  duration: 0.5,
+                  ease: "easeOut"
+                }
+              }
+            }}
+            className="rounded-[24px] border border-white/10 bg-white/5 px-5 py-5 shadow-[0_18px_40px_rgba(0,0,0,0.75)] backdrop-blur-2xl"
           >
             <div className="space-y-4">
               <div className="space-y-2">
-                <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-[0.2em] text-text-muted">
-                  Имя артиста
-                </label>
-                <motion.input
-                  {...register("artistName", { required: "Укажите имя артиста" })}
-                  placeholder="Введите имя артиста"
-                  onFocus={() => setFocusedField("artistName")}
-                  onBlur={() => setFocusedField((prev) => (prev === "artistName" ? null : prev))}
-                  animate={
-                    focusedField === "artistName"
-                      ? {
-                          scale: 1.01,
-                          boxShadow: "0 0 0 2px rgba(0,122,255,0.2)"
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/60">
+                    Артисты
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      appendArtist({
+                        name: "",
+                        role: artistRoleEnum.Values.feat
+                      })
+                    }
+                    className="text-[11px] font-medium text-[#A5B4FC]"
+                  >
+                    + Добавить
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  {artistFields.map((field, index) => (
+                    <div
+                      key={field.id}
+                      className="flex items-center gap-2 rounded-[16px] bg-black/60 px-3 py-2.5 border border-white/10"
+                    >
+                      <input
+                        {...register(`artists.${index}.name` as const)}
+                        placeholder={
+                          index === 0 ? "Основной артист" : "Feat / Remixer"
                         }
-                      : { scale: 1, boxShadow: "0 0 0 0 rgba(0,0,0,0)" }
-                  }
-                  transition={{ duration: 0.12 }}
-                  className="h-[52px] w-full min-h-[52px] rounded-[16px] border border-transparent bg-[#1d1d20] px-4 text-[16px] text-white placeholder:text-text-muted outline-none focus:border-primary focus:ring-0 box-border"
-                />
-                {errors.artistName && (
-                  <p className="mt-1 text-[11px] text-red-400">
-                    {errors.artistName.message}
+                        className="flex-1 bg-transparent text-[14px] text-white placeholder:text-white/40 outline-none"
+                      />
+                      <select
+                        {...register(`artists.${index}.role` as const)}
+                        className="h-8 rounded-[999px] bg-white/10 px-2 text-[11px] text-white outline-none"
+                      >
+                        <option value="main">Main</option>
+                        <option value="feat">Feat.</option>
+                        <option value="remixer">Remixer</option>
+                      </select>
+                      {index > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => removeArtist(index)}
+                          className="text-[11px] text-white/40"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {errors.artists && (
+                  <p className="mt-0.5 text-[11px] text-red-400">
+                    {errors.artists.message as string}
                   </p>
                 )}
               </div>
 
-              <div className="space-y-2">
-                <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-[0.2em] text-text-muted">
-                  Правообладатель (ФИО)
+              <div className="space-y-1.5">
+                <label className="block text-[11px] font-medium uppercase tracking-[0.18em] text-white/60">
+                  Правообладатель (ФИО / Лейбл)
                 </label>
-                <motion.input
-                  {...register("authorFullName", {
-                    required: "Укажите ФИО автора / исполнителя"
-                  })}
-                  placeholder="Фамилия Имя Отчество"
-                  onFocus={() => setFocusedField("authorFullName")}
-                  onBlur={() =>
-                    setFocusedField((prev) => (prev === "authorFullName" ? null : prev))
-                  }
-                  animate={
-                    focusedField === "authorFullName"
-                      ? {
-                          scale: 1.01,
-                          boxShadow: "0 0 0 2px rgba(0,122,255,0.2)"
-                        }
-                      : { scale: 1, boxShadow: "0 0 0 0 rgba(0,0,0,0)" }
-                  }
-                  transition={{ duration: 0.12 }}
-                  className="h-[52px] w-full min-h-[52px] rounded-[16px] border border-transparent bg-[#1d1d20] px-4 text-[16px] text-white placeholder:text-text-muted outline-none focus:border-primary focus:ring-0 box-border"
+                <input
+                  {...register("rightHolder")}
+                  placeholder="Фамилия Имя Отчество или название компании"
+                  onBlur={() => setRightHolderTouched(true)}
+                  className="h-[56px] w-full rounded-[18px] border border-white/10 bg-black/60 px-4 text-[16px] text-white placeholder:text-white/40 outline-none focus:border-[#4F46E5]"
                 />
-                {errors.authorFullName && (
-                  <p className="mt-1 text-[11px] text-red-400">
-                    {errors.authorFullName.message}
+                {errors.rightHolder && (
+                  <p className="mt-0.5 text-[11px] text-red-400">
+                    {errors.rightHolder.message}
                   </p>
                 )}
               </div>
 
-              <div className="space-y-2">
-                <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-[0.2em] text-text-muted">
-                  Наименование произведения
+              <div className="space-y-1.5">
+                <label className="block text-[11px] font-medium uppercase tracking-[0.18em] text-white/60">
+                  Название трека
                 </label>
-                <motion.input
-                  {...register("trackName", {
-                    required: "Укажите название трека"
-                  })}
-                  placeholder="Введите название трека"
-                  onFocus={() => setFocusedField("trackName")}
-                  onBlur={() => setFocusedField((prev) => (prev === "trackName" ? null : prev))}
-                  animate={
-                    focusedField === "trackName"
-                      ? {
-                          scale: 1.01,
-                          boxShadow: "0 0 0 2px rgba(0,122,255,0.2)"
-                        }
-                      : { scale: 1, boxShadow: "0 0 0 0 rgba(0,0,0,0)" }
-                  }
-                  transition={{ duration: 0.12 }}
-                  className="h-[52px] w-full min-h-[52px] rounded-[16px] border border-transparent bg-[#1d1d20] px-4 text-[16px] text-white placeholder:text-text-muted outline-none focus:border-primary focus:ring-0 box-border"
+                <input
+                  {...register("trackName")}
+                  placeholder="Основное название без лишних символов"
+                  className="h-[56px] w-full rounded-[18px] border border-white/10 bg-black/60 px-4 text-[16px] text-white placeholder:text-white/40 outline-none focus:border-[#4F46E5]"
                 />
                 {errors.trackName && (
-                  <p className="mt-1 text-[11px] text-red-400">
+                  <p className="mt-0.5 text-[11px] text-red-400">
                     {errors.trackName.message}
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-[11px] font-medium uppercase tracking-[0.18em] text-white/60">
+                  Тип релиза
+                </label>
+                <div className="relative mt-1 flex h-[56px] w-full items-center justify-between rounded-[18px] border border-white/10 bg-black/60 px-1.5 text-[13px] text-white">
+                  <motion.div
+                    layoutId="release-type-active-pill"
+                    className="absolute inset-y-1 rounded-[16px] bg-white/10 shadow-[0_10px_30px_rgba(0,0,0,0.55)]"
+                    initial={false}
+                    animate={{
+                      left:
+                        values.releaseType === "ep"
+                          ? "33.33%"
+                          : values.releaseType === "album"
+                          ? "66.66%"
+                          : "0%",
+                      width: "33.33%"
+                    }}
+                    transition={{ type: "spring", stiffness: 420, damping: 32 }}
+                  />
+                  {[
+                    { key: "single", label: "Single" },
+                    { key: "ep", label: "EP" },
+                    { key: "album", label: "Album" }
+                  ].map((option) => {
+                    const isActive = values.releaseType === option.key;
+                    return (
+                      <button
+                        key={option.key}
+                        type="button"
+                        onClick={() => {
+                          setValue("releaseType", option.key as any, {
+                            shouldValidate: true
+                          });
+                          try {
+                            window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.(
+                              "light"
+                            );
+                          } catch {}
+                        }}
+                        className={`relative z-[1] flex-1 rounded-[16px] px-2 text-center text-[13px] font-medium transition-colors ${
+                          isActive ? "text-white" : "text-white/45"
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                {errors.releaseType && (
+                  <p className="mt-0.5 text-[11px] text-red-400">
+                    {errors.releaseType.message}
                   </p>
                 )}
               </div>
@@ -331,289 +337,129 @@ export function ReleaseForm({ onSubmitted }: ReleaseFormProps) {
           </motion.div>
 
           <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.05 }}
-            className="form-card rounded-[24px] border border-white/5 bg-surface/80 px-6 py-5 shadow-[0_20px_40px_rgba(0,0,0,0.55)] backdrop-blur-xl focus-within:border-[#007AFF]/50 focus-within:ring-2 focus-within:ring-[#007AFF]/30"
+            custom={2}
+            initial="hidden"
+            animate="visible"
+            variants={cardVariants}
+            className="rounded-[24px] border border-white/10 bg-white/5 px-5 py-5 shadow-[0_18px_40px_rgba(0,0,0,0.75)] backdrop-blur-2xl"
           >
-            <div className="grid grid-cols-2 gap-x-3 gap-y-4 mb-4">
-              <div className="min-w-0 space-y-1.5">
-                <label className="mb-1.5 block pl-4 text-[11px] font-medium uppercase tracking-[0.2em] text-text-muted">
-                  Жанр
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="block text-[11px] font-medium uppercase tracking-[0.18em] text-white/60">
+                  Основной жанр
                 </label>
                 <select
-                  {...register("genre", { required: "Выберите жанр" })}
-                  className="h-[52px] min-h-[52px] w-full rounded-[16px] border border-transparent bg-[#1d1d20] px-4 text-[16px] text-white outline-none focus:border-primary appearance-none box-border"
+                  {...register("mainGenre")}
+                  onChange={(e) => {
+                    register("mainGenre").onChange(e);
+                    try {
+                      window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.("light");
+                    } catch {}
+                  }}
+                  className="h-[56px] w-full rounded-[18px] border border-white/10 bg-black/60 px-4 text-[15px] text-white outline-none [color-scheme:dark] focus:border-[#4F46E5]"
                 >
                   <option value="">Выберите жанр</option>
-                  <option value="Techno">Техно</option>
-                  <option value="House">Хаус</option>
-                  <option value="Hip-hop">Хип-хоп</option>
-                  <option value="Pop">Поп</option>
-                  <option value="Electronic">Электронная</option>
+                  <option value="Techno">Techno</option>
+                  <option value="House">House</option>
+                  <option value="Hip-hop">Hip-hop</option>
+                  <option value="Pop">Pop</option>
+                  <option value="Electronic">Electronic</option>
                   <option value="Other">Другое</option>
                 </select>
-                {errors.genre && (
-                  <p className="text-[11px] text-red-400 mt-1">
-                    {errors.genre.message}
+                {errors.mainGenre && (
+                  <p className="mt-0.5 text-[11px] text-red-400">
+                    {errors.mainGenre.message}
                   </p>
                 )}
               </div>
 
-              <div className="min-w-0 space-y-1.5">
-                <label className="mb-1.5 block pl-4 text-[11px] font-medium uppercase tracking-[0.2em] text-text-muted">
-                  Дата релиза
+              <div className="space-y-1.5">
+                <label className="block text-[11px] font-medium uppercase tracking-[0.18em] text-white/60">
+                  Дата релиса
                 </label>
                 <input
                   type="date"
-                  {...register("releaseDate", {
-                    required: "Укажите дату релиза"
-                  })}
-                  className="h-[52px] min-h-[52px] w-full rounded-[16px] border border-transparent bg-[#1d1d20] px-4 text-[16px] text-white outline-none [color-scheme:dark] focus:border-primary appearance-none box-border"
+                  {...register("releaseDate")}
+                  onChange={(e) => {
+                    register("releaseDate").onChange(e);
+                    try {
+                      window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.("light");
+                    } catch {}
+                  }}
+                  className="h-[56px] w-full rounded-[18px] border border-white/10 bg-black/60 px-4 text-[15px] text-white outline-none [color-scheme:dark] focus:border-[#4F46E5]"
                 />
                 {errors.releaseDate && (
-                  <p className="text-[11px] text-red-400 mt-1">
+                  <p className="mt-0.5 text-[11px] text-red-400">
                     {errors.releaseDate.message}
                   </p>
                 )}
               </div>
             </div>
+          </motion.div>
 
-            <div className="grid grid-cols-2 gap-x-3 gap-y-4 mb-4">
-              <div className="min-w-0 space-y-1.5">
-                <label className="mb-1.5 block pl-4 text-[11px] font-medium uppercase tracking-[0.2em] text-text-muted">
-                  Настроение
-                </label>
-                <select
-                  {...register("mood", { required: "Выберите настроение" })}
-                  className="h-[52px] min-h-[52px] w-full rounded-[16px] border border-transparent bg-[#1d1d20] px-4 text-[16px] text-white outline-none focus:border-primary appearance-none box-border"
-                >
-                  <option value="">Выберите настроение</option>
-                  <option value="Peak-time">Пиковое время / фестиваль</option>
-                  <option value="Dark & hypnotic">Тёмный гипнотик</option>
-                  <option value="Melodic">Мелодичный</option>
-                  <option value="Deep / minimal">Дип / минимал</option>
-                  <option value="Chill / downtempo">Чилл / даунтемпо</option>
-                  <option value="Experimental">Экспериментальный</option>
-                </select>
-                {errors.mood && (
-                  <p className="text-[11px] text-red-400 mt-1">
-                    {errors.mood.message}
-                  </p>
-                )}
+          <motion.div
+            custom={3}
+            initial="hidden"
+            animate="visible"
+            variants={cardVariants}
+            className="rounded-[24px] border border-white/10 bg-white/5 px-5 py-4 shadow-[0_18px_40px_rgba(0,0,0,0.75)] backdrop-blur-2xl"
+          >
+            <div className="flex items-center justify-between gap-4">
+              <div className="space-y-0.5">
+                <p className="text-[13px] font-medium">Explicit (18+)</p>
+                <p className="text-[11px] text-white/50">
+                  Отметьте, если в тексте есть ненормативная лексика.
+                </p>
               </div>
-
-              <div className="min-w-0 space-y-1.5">
-                <label className="mb-1.5 block pl-4 text-[11px] font-medium uppercase tracking-[0.2em] text-text-muted">
-                  Язык
-                </label>
-                <select
-                  {...register("language", { required: "Укажите язык" })}
-                  className="h-[52px] min-h-[52px] w-full rounded-[16px] border border-transparent bg-[#1d1d20] px-4 text-[16px] text-white outline-none focus:border-primary appearance-none box-border"
-                >
-                  <option value="">Выберите язык</option>
-                  <option value="Instrumental">Инструментал</option>
-                  <option value="Russian">Русский</option>
-                  <option value="English">Английский</option>
-                  <option value="Spanish">Испанский</option>
-                  <option value="German">Немецкий</option>
-                  <option value="Other">Другое</option>
-                </select>
-                {errors.language && (
-                  <p className="text-[11px] text-red-400 mt-1">
-                    {errors.language.message}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="mb-1.5 block pl-4 text-[11px] font-medium uppercase tracking-[0.2em] text-text-muted">
-                Лирика (Lyrics)
-              </label>
-              <textarea
-                {...register("lyrics")}
-                placeholder="Вставьте текст трека, если он готов (опционально)"
-                maxLength={LYRICS_MAX}
-                className="min-h-[120px] w-full resize-none rounded-[16px] border border-white/5 bg-zinc-800/50 p-4 text-[16px] text-white placeholder:text-text-muted outline-none focus:border-primary box-border"
-              />
-              <div className="flex justify-end">
-                <span
-                  className={`text-[11px] ${
-                    (values.lyrics?.length ?? 0) >= LYRICS_MAX * 0.9
-                      ? "text-red-400"
-                      : "text-text-muted"
-                  }`}
-                >
-                  {values.lyrics?.length ?? 0} / {LYRICS_MAX}
-                </span>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between gap-3 py-3 pt-2 flex-nowrap">
-              <span className="text-[15px] font-medium whitespace-nowrap flex-shrink min-w-0">
-                Ненормативная лексика
-              </span>
               <button
                 type="button"
                 aria-label="Ненормативная лексика"
-                onClick={() => setValue("explicit", !values.explicit)}
-                className={`inline-flex h-6 w-10 flex-shrink-0 items-center rounded-full px-[2px] transition-colors ${
-                  values.explicit ? "bg-[#007AFF]" : "bg-zinc-700"
+                onClick={() => {
+                  setValue("explicit", !values.explicit, { shouldValidate: true });
+                  try {
+                    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.("light");
+                  } catch {}
+                }}
+                className={`inline-flex h-7 w-12 flex-shrink-0 items-center rounded-full px-[3px] transition-colors ${
+                  values.explicit ? "bg-[#EF4444]" : "bg-white/20"
                 }`}
               >
-                <span
-                  className={`h-4 w-4 rounded-full bg-white transition-transform ${
-                    values.explicit ? "translate-x-[16px]" : "translate-x-0"
-                  }`}
+                <motion.span
+                  layout
+                  transition={{
+                    type: "spring",
+                    stiffness: 500,
+                    damping: 30
+                  }}
+                  animate={{
+                    x: values.explicit ? 18 : 0,
+                    scaleX: values.explicit ? 1.12 : 1,
+                    scaleY: values.explicit ? 0.9 : 1
+                  }}
+                  className="h-5 w-5 rounded-full bg-white"
                 />
               </button>
             </div>
-
-            <div className="mt-4 space-y-2">
-              <div className="grid gap-x-3 gap-y-4 sm:grid-cols-2">
-                <div className="min-w-0 space-y-1.5">
-                <label className="mb-1.5 block pl-4 text-[11px] font-medium uppercase tracking-[0.2em] text-text-muted">
-                  Автор музыки
-                </label>
-                  <input
-                    {...register("musicAuthor", {
-                      required: "Укажите автора музыки"
-                    })}
-                    placeholder="Имя битмейкера / продюсера"
-                    className="h-[52px] min-h-[52px] w-full rounded-[16px] border border-transparent bg-[#1d1d20] px-4 text-[16px] text-white placeholder:text-text-muted outline-none focus:border-primary box-border"
-                  />
-                  {errors.musicAuthor && (
-                    <p className="mt-1 text-[11px] text-red-400">
-                      {errors.musicAuthor.message}
-                    </p>
-                  )}
-                </div>
-                <div className="min-w-0 space-y-1.5">
-                  <label className="mb-1.5 block pl-4 text-[11px] font-medium uppercase tracking-[0.2em] text-text-muted">
-                    Тип лицензии
-                  </label>
-                  <select
-                    {...register("licenseType", {
-                      required: "Выберите тип лицензии"
-                    })}
-                    className="h-[52px] min-h-[52px] w-full rounded-[16px] border border-transparent bg-[#1d1d20] px-4 text-[16px] text-white outline-none focus:border-primary appearance-none box-border"
-                  >
-                    <option value="">Выберите тип</option>
-                    <option value="Собственное производство">Собственное производство</option>
-                    <option value="Исключительная лицензия (Exclusive)">
-                      Исключительная лицензия (Exclusive)
-                    </option>
-                    <option value="Неисключительная (Leasing)">Неисключительная (Leasing)</option>
-                  </select>
-                  {errors.licenseType && (
-                    <p className="mt-1 text-[11px] text-red-400">
-                      {errors.licenseType.message}
-                    </p>
-                  )}
-                </div>
-              </div>
-              <p className="text-[11px] text-text-muted pl-1">
-                Укажите ФИО человека, создавшего аранжировку.
-              </p>
-            </div>
           </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.08 }}
-            className="form-card rounded-[24px] border border-white/5 bg-surface/80 px-6 py-5 shadow-[0_20px_40px_rgba(0,0,0,0.55)] backdrop-blur-xl focus-within:border-[#007AFF]/50 focus-within:ring-2 focus-within:ring-[#007AFF]/30"
-          >
-            <p className="mb-2 pl-4 text-[11px] font-medium uppercase tracking-[0.2em] text-text-muted">
-              ℗ Фонограмма / © Авторское право
-            </p>
-            <div className="grid gap-x-3 gap-y-4 sm:grid-cols-2">
-              <div className="min-w-0 space-y-1.5">
-                <input
-                  {...register("pLine", {
-                    required: "Укажите ℗ (фонограмму)"
-                  })}
-                  placeholder="2026 OMF Label"
-                  className="h-[52px] min-h-[52px] w-full rounded-[16px] border border-transparent bg-[#1d1d20] px-4 text-[16px] text-white placeholder:text-text-muted outline-none focus:border-primary box-border"
-                />
-                {errors.pLine && (
-                  <p className="mt-1 text-[11px] text-red-400">
-                    {errors.pLine.message}
-                  </p>
-                )}
-              </div>
-              <div className="min-w-0 space-y-1.5">
-                <input
-                  {...register("cLine", {
-                    required: "Укажите © (авторское право)"
-                  })}
-                  placeholder="2026 Имя артиста"
-                  className="h-[52px] min-h-[52px] w-full rounded-[16px] border border-transparent bg-[#1d1d20] px-4 text-[16px] text-white placeholder:text-text-muted outline-none focus:border-primary box-border"
-                />
-                {errors.cLine && (
-                  <p className="mt-1 text-[11px] text-red-400">
-                    {errors.cLine.message}
-                  </p>
-                )}
-              </div>
-            </div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="form-card rounded-[24px] border border-white/5 bg-surface/80 px-6 py-5 shadow-[0_20px_40px_rgba(0,0,0,0.55)] backdrop-blur-xl space-y-4 focus-within:border-[#007AFF]/50 focus-within:ring-2 focus-within:ring-[#007AFF]/30"
-          >
-            <FileUploader
-              label="Трек (WAV)"
-              accept=".wav"
-              maxSizeMb={200}
-              type="wav"
-              onFileChange={setWavFile}
-            />
-            <FileUploader
-              label="Обложка релиза"
-              accept=".jpg,.jpeg,.png"
-              maxSizeMb={20}
-              type="cover"
-              onFileChange={setArtworkFile}
-            />
-          </motion.div>
-
-          {submitPhase !== "idle" && (
-            <div className="mb-2 h-1.5 w-full overflow-hidden rounded-[20px] bg-[#1d1d20]">
-              <motion.div
-                className="h-full bg-[#007AFF]"
-                initial={{ width: "0%" }}
-                animate={{ width: `${uploadProgress}%` }}
-                transition={{ duration: 0.2 }}
-              />
-            </div>
-          )}
 
           <motion.button
             type="submit"
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            disabled={submitting || !wavFile || !artworkFile}
-            className="btn-primary mt-2 inline-flex h-[60px] w-full items-center justify-center rounded-[20px] bg-gradient-to-tr from-[#007AFF] to-[#0051FF] text-[17px] font-semibold text-white shadow-[0_10px_30px_rgba(0,122,255,0.45)] transition-all disabled:opacity-70"
+            whileHover={{ scale: isNextEnabled ? 1.02 : 1 }}
+            whileTap={{ scale: isNextEnabled ? 0.96 : 1 }}
+            animate={{ scale: 1 }}
+            transition={{
+              type: "spring",
+              stiffness: 400,
+              damping: 28
+            }}
+            disabled={!isNextEnabled}
+            className="mt-3 inline-flex h-[60px] w-full items-center justify-center rounded-[20px] bg-gradient-to-tr from-[#4F46E5] to-[#7C3AED] text-[17px] font-semibold text-white shadow-[0_14px_40px_rgba(88,80,236,0.6)] transition-all disabled:opacity-60 disabled:shadow-none"
           >
-            {submitPhase === "uploading" && "Загружаем файлы..."}
-            {submitPhase === "saving" && "Сохраняем релиз..."}
-            {submitPhase === "done" && "Готово!"}
-            {submitPhase === "idle" && !submitting && "Сформировать релиз"}
+            Далее
           </motion.button>
 
-          {submitError && (
-            <p className="mt-2 text-center text-[13px] text-red-400">
-              {submitError}
-            </p>
-          )}
-
-          <p className="mt-8 text-center text-[10px] uppercase tracking-widest text-white/20">
-            © 2026 OMF DISTRIBUTION. ВСЕ ПРАВА ЗАЩИЩЕНЫ.
+          <p className="mt-6 text-center text-[10px] uppercase tracking-[0.22em] text-white/25">
+            © 2026 OMF DISTRIBUTION
           </p>
         </form>
       </div>

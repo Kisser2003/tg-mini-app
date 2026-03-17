@@ -50,12 +50,15 @@ export function SuccessScreen({ onReset, summary }: Props) {
         </div>
 
         <div className="mt-4 flex flex-col gap-3">
-          <button
+          <motion.button
+            whileTap={{ scale: 0.96 }}
+            animate={{ scale: 1 }}
+            transition={{ type: "spring", stiffness: 400, damping: 28 }}
             onClick={onReset}
             className="btn-primary inline-flex h-[46px] w-full items-center justify-center rounded-[18px] bg-gradient-to-tr from-[#007AFF] to-[#0051FF] text-[14px] font-semibold text-white shadow-[0_10px_30px_rgba(0,122,255,0.45)] transition-all"
           >
             Оформить ещё поставку
-          </button>
+          </motion.button>
           <p className="text-center text-[10px] tracking-[0.26em] text-white/28 uppercase">
             OMF DISTRIBUTION • 2026
           </p>
