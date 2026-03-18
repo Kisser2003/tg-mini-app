@@ -118,7 +118,7 @@ export default function DashboardPage() {
                 aria-label="Открыть админку"
               >
                 <ShieldCheck className="h-3.5 w-3.5" />
-                Admin
+                Админ
               </button>
             )}
             {telegramName && (

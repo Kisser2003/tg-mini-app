@@ -2,257 +2,77 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Fallbacks so всё красиво даже если Tailwind не подхватывается */
-
 html,
 body {
   height: 100%;
   margin: 0;
   padding: 0;
-  font-family: -apple-system;
-  background-color: #080808;
-  color: #ffffff;
+  font-family: var(--font-inter), Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+  background-color: #030303;
+  color: #fff;
+  overflow-x: hidden;
+  scrollbar-width: none;
 }
 
-body {
-  background-color: #080808;
-  color: #ffffff;
+* {
+  scrollbar-width: none;
 }
 
-.bg-background {
-  background-color: #080808;
+*::-webkit-scrollbar {
+  display: none;
 }
 
-.bg-surface {
-  background-color: #141416;
+input,
+textarea,
+select {
+  outline: none;
+  color: #fff;
 }
 
-.text-text {
-  color: #ffffff;
+button {
+  -webkit-tap-highlight-color: transparent;
 }
 
-.text-text-muted {
-  color: #8e8e93;
-}
-
-.text-primary {
-  color: #007aff;
-}
-
-.border {
-  border-width: 1px;
-  border-style: solid;
-}
-
-.border-white\/5 {
-  border-color: rgba(255, 255, 255, 0.05);
-}
-
-.rounded-\[24px\] {
+.glass-card {
   border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.02);
+  backdrop-filter: blur(64px);
+  -webkit-backdrop-filter: blur(64px);
 }
 
-.rounded-\[20px\] {
-  border-radius: 20px;
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
-.shadow-\[0_20px_40px_rgba\(0,0,0,0\.55\)\] {
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.55);
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }
 
-.shadow-\[0_10px_30px_rgba\(0,122,255,0\.45\)\] {
-  box-shadow: 0 10px 30px rgba(0, 122, 255, 0.45);
-}
-
-.bg-gradient-to-tr {
-  background-image: linear-gradient(135deg, #007aff 0%, #0051ff 100%);
-}
-
-.from-\[\#007AFF\] {
-  /* градиент задаём целиком выше, этот класс просто заглушка */
-}
-
-.to-\[\#0051FF\] {
-  /* заглушка */
-}
-
-.h-14 {
-  height: 56px;
-}
-
-.w-full {
-  width: 100%;
-}
-
-.max-w-\[440px\] {
-  max-width: 440px;
-}
-
-.rounded-\[16px\] {
-  border-radius: 16px;
-}
-
-.bg-\[\#1d1d20\] {
-  background-color: #1d1d20;
-}
-
-.min-h-screen {
-  min-height: 100vh;
-}
-
-.px-4 {
-  padding-left: 1rem;
-  padding-right: 1rem;
-}
-
-.px-5 {
-  padding-left: 1.25rem;
-  padding-right: 1.25rem;
-}
-
-.py-5 {
-  padding-top: 1.25rem;
-  padding-bottom: 1.25rem;
-}
-
-.py-8 {
-  padding-top: 2rem;
-  padding-bottom: 2rem;
-}
-
-.mx-auto {
-  margin-left: auto;
-  margin-right: auto;
-}
-
-.flex {
-  display: flex;
-}
-
-.flex-col {
-  flex-direction: column;
-}
-
-.gap-4 {
-  gap: 1rem;
-}
-
-.gap-6 {
-  gap: 1.5rem;
-}
-
-/* Mobile: prevent iOS default styling on selects/date */
-.appearance-none {
-  appearance: none;
-  -webkit-appearance: none;
-}
-
-/* Grid for 2-column rows on mobile */
-.grid {
-  display: grid;
-}
-.gap-3 {
-  gap: 0.75rem;
-}
-.grid-cols-2 {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-.min-w-0 {
-  min-width: 0;
-}
-.flex-nowrap {
-  flex-wrap: nowrap;
-}
-.flex-shrink-0 {
-  flex-shrink: 0;
-}
-
-/* Extra background tone for lyrics textarea */
-.bg-zinc-800\/50 {
-  background-color: rgba(39, 39, 42, 0.5);
-}
-
-/* focus-within helpers for card glow when inputs are focused */
-.focus-within\:border-\[\#007AFF\]\/50:focus-within {
-  border-color: rgba(0, 122, 255, 0.5);
-}
-
-.focus-within\:ring-2:focus-within {
-  box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.15);
-}
-
-.focus-within\:ring-\[\#007AFF\]\/30:focus-within {
-  box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.3);
-}
-
-/* Breathing focus glow on form cards */
-.form-card:focus-within {
-  animation: focusGlow 2.2s ease-in-out infinite;
-}
-@keyframes focusGlow {
-  0%,
-  100% {
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.55), 0 0 0 2px rgba(0, 122, 255, 0.25);
-  }
-  50% {
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.55), 0 0 0 2px rgba(0, 122, 255, 0.5);
-  }
-}
-
-/* Shimmer animation for primary buttons */
-.btn-primary {
+.wave-track {
   position: relative;
   overflow: hidden;
 }
 
-.btn-primary::after {
+.wave-track::after {
   content: "";
   position: absolute;
   inset: 0;
   background: linear-gradient(
-    120deg,
+    90deg,
     transparent 0%,
-    rgba(255, 255, 255, 0.18) 40%,
-    transparent 80%
+    rgba(255, 255, 255, 0.25) 50%,
+    transparent 100%
   );
-  transform: translateX(-100%);
-  pointer-events: none;
+  animation: scan 1.7s linear infinite;
 }
 
-/* Shimmer: every 3s when idle, continuous on hover */
-.btn-primary::after {
-  animation: shimmerOnce 3s ease-in-out infinite;
-}
-.btn-primary:hover::after {
-  animation: shimmer 1.4s infinite;
-}
-
-@keyframes shimmer {
-  0% {
+@keyframes scan {
+  from {
     transform: translateX(-100%);
   }
-  100% {
+  to {
     transform: translateX(100%);
   }
 }
-
-@keyframes shimmerOnce {
-  0%,
-  90%,
-  100% {
-    transform: translateX(-100%);
-  }
-  95% {
-    transform: translateX(100%);
-  }
-}
-
-::-webkit-scrollbar {
-  width: 6px;
-}
-
-::-webkit-scrollbar-thumb {
-  background-color: #3f3f46;
-  border-radius: 999px;
-}
-

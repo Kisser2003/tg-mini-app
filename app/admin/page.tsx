@@ -1,264 +1,106 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { supabase } from "@/lib/supabase";
-import type { ReleaseStatus } from "@/lib/db-enums";
-
-type ReleaseRow = {
-  id: string;
-  artist_name: string;
-  author_full_name: string | null;
-  track_name: string;
-  genre: string | null;
-  mood: string | null;
-  lyrics: string | null;
-  audio_url: string | null;
-  artwork_url: string | null;
-  created_at: string;
-};
+import { useEffect, useMemo, useState } from "react";
+import { motion } from "framer-motion";
+import { CheckCircle2, XCircle } from "lucide-react";
+import { GlassCard } from "@/components/GlassCard";
+import { isAdmin, pendingReleases, systemLogs } from "@/lib/mock-data";
+import { readModerationQueue } from "@/lib/release-storage";
 
 export default function AdminPage() {
-  const readyStatus: ReleaseStatus = "ready";
-  const [releases, setReleases] = useState<ReleaseRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [expandedLyricsId, setExpandedLyricsId] = useState<string | null>(null);
+  const [submittedQueue, setSubmittedQueue] = useState(() => readModerationQueue());
 
   useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const { data, error: dbError } = await supabase
-          .from("releases")
-          .select(
-            "id, artist_name, author_full_name, track_name, genre, mood, lyrics, audio_url, artwork_url, created_at, status"
-          )
-          .eq("status", readyStatus)
-          .order("created_at", { ascending: false });
-
-        if (dbError) {
-          throw dbError;
-        }
-
-        setReleases(data as ReleaseRow[]);
-      } catch (err: any) {
-        setError(err?.message || "Не удалось загрузить релизы.");
-      } finally {
-        setLoading(false);
-      }
+    const sync = () => setSubmittedQueue(readModerationQueue());
+    sync();
+    window.addEventListener("storage", sync);
+    window.addEventListener("focus", sync);
+    return () => {
+      window.removeEventListener("storage", sync);
+      window.removeEventListener("focus", sync);
     };
-
-    void load();
   }, []);
 
-  const handleCopyInfo = async (release: ReleaseRow) => {
-    const text = `${release.artist_name} — ${release.track_name} — ${
-      release.author_full_name || "Автор не указан"
-    }`;
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch {
-      // ignore clipboard errors
-    }
-  };
+  const moderationQueue = useMemo(
+    () => [...submittedQueue, ...pendingReleases],
+    [submittedQueue]
+  );
+
+  if (!isAdmin) {
+    return (
+      <GlassCard className="p-5">
+        <h1 className="text-xl font-semibold tracking-tight">Панель модерации</h1>
+        <p className="mt-2 text-sm text-white/65">Раздел доступен только при `isAdmin = true`.</p>
+      </GlassCard>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-background px-4 py-6 pb-10 text-text">
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 font-sans">
-        <header className="space-y-1">
-          <h1 className="text-[26px] font-extrabold tracking-tight">
-            Label Admin Dashboard
-          </h1>
-          <p className="text-[13px] text-text-muted leading-relaxed">
-            Быстрый обзор релизов, текстов и WAV‑файлов.
-          </p>
-        </header>
+    <div className="flex flex-col gap-4 pb-10">
+      <GlassCard className="p-5">
+        <p className="text-xs uppercase tracking-[0.2em] text-white/55">Админ</p>
+        <h1 className="mt-2 text-2xl font-semibold tracking-tight">Очередь модерации</h1>
+      </GlassCard>
 
-        {loading && (
-          <div className="space-y-3">
-            {[0, 1, 2].map((i) => (
-              <motion.div
-                // glass intake + shimmer skeleton
-                key={i}
-                initial={{
-                  opacity: 0,
-                  scale: 0.9,
-                  filter: "blur(10px)"
-                }}
-                animate={{
-                  opacity: 1,
-                  scale: 1,
-                  filter: "blur(0px)"
-                }}
-                transition={{ duration: 0.35, delay: i * 0.06, ease: "easeOut" }}
-                className="relative overflow-hidden rounded-[24px] border border-white/5 bg-surface/80 px-6 py-5 shadow-[0_20px_40px_rgba(0,0,0,0.55)] backdrop-blur-xl"
-              >
-                <div className="space-y-3">
-                  <div className="h-3 w-24 rounded-full bg-white/5" />
-                  <div className="h-4 w-40 rounded-full bg-white/8" />
-                  <div className="h-3 w-32 rounded-full bg-white/4" />
-                  <div className="mt-3 h-2 w-full rounded-full bg-white/5" />
-                </div>
-                <motion.div
-                  aria-hidden
-                  className="pointer-events-none absolute inset-0 bg-[linear-gradient(120deg,transparent,rgba(255,255,255,0.12),transparent)]"
-                  initial={{ x: "-120%" }}
-                  animate={{ x: "120%" }}
-                  transition={{
-                    duration: 1.4,
-                    repeat: Infinity,
-                    ease: "linear"
-                  }}
-                />
-              </motion.div>
-            ))}
-          </div>
-        )}
-
-        {error && (
-          <div className="rounded-[24px] border border-red-500/40 bg-red-950/40 px-6 py-4 text-[13px] text-red-200">
-            {error}
-          </div>
-        )}
-
-        <div className="space-y-4">
-          <AnimatePresence>
-            {releases.map((release, index) => (
-              <motion.div
-                key={release.id}
-                initial={{
-                  opacity: 0,
-                  scale: 0.9,
-                  filter: "blur(10px)"
-                }}
-                animate={{
-                  opacity: 1,
-                  scale: 1,
-                  filter: "blur(0px)"
-                }}
-                exit={{ opacity: 0, y: -10, filter: "blur(6px)" }}
-                transition={{
-                  duration: 0.3,
-                  ease: "easeOut",
-                  delay: index * 0.05
-                }}
-                className="rounded-[24px] border border-white/5 bg-surface/80 px-5 py-4 shadow-[0_18px_40px_rgba(0,0,0,0.6)] backdrop-blur-xl"
-              >
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="space-y-1 min-w-0">
-                    <div className="text-[12px] uppercase tracking-[0.18em] text-text-muted">
-                      {new Date(release.created_at).toLocaleString("ru-RU", {
-                        day: "2-digit",
-                        month: "2-digit",
-                        year: "2-digit",
-                        hour: "2-digit",
-                        minute: "2-digit"
-                      })}
-                    </div>
-                    <div className="text-[15px] font-semibold">
-                      {release.artist_name} — {release.track_name}
-                    </div>
-                    <div className="text-[13px] text-text-muted">
-                      Автор (ФИО):{" "}
-                      {release.author_full_name || "не указано"}
-                    </div>
-                    <div className="text-[12px] text-text-muted">
-                      Жанр: {release.genre || "—"} · Настроение:{" "}
-                      {release.mood || "—"}
-                    </div>
-                  </div>
-
-                  {release.artwork_url && (
-                    <a
-                      href={release.artwork_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mt-1 inline-block flex-shrink-0 overflow-hidden rounded-[16px] border border-white/10 bg-[#101012]"
-                    >
-                      <img
-                        src={release.artwork_url}
-                        alt={`${release.track_name} artwork`}
-                        className="h-[80px] w-[80px] object-cover"
-                      />
-                    </a>
-                  )}
-                </div>
-
-                <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex flex-wrap gap-2">
-                    {release.audio_url && (
-                      <audio
-                        src={release.audio_url}
-                        controls
-                        className="w-full max-w-xs rounded-lg bg-[#101012]"
-                      />
-                    )}
-                  </div>
-
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setExpandedLyricsId((prev) =>
-                          prev === release.id ? null : release.id
-                        )
-                      }
-                      className="rounded-[999px] border border-white/15 px-3 py-1.5 text-[12px] text-text-muted hover:border-white/40 hover:text-white transition-colors"
-                    >
-                      {expandedLyricsId === release.id
-                        ? "Скрыть текст"
-                        : "Текст песни"}
-                    </button>
-
-                    {release.audio_url && (
-                      <a
-                        href={release.audio_url}
-                        download
-                        className="rounded-[999px] border border-white/15 px-3 py-1.5 text-[12px] text-text-muted hover:border-white/40 hover:text-white transition-colors"
-                      >
-                        Скачать WAV
-                      </a>
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={() => void handleCopyInfo(release)}
-                      className="rounded-[999px] border border-white/15 px-3 py-1.5 text-[12px] text-text-muted hover:border-white/40 hover:text-white transition-colors"
-                    >
-                      Скопировать инфо
-                    </button>
-                  </div>
-                </div>
-
-                <AnimatePresence>
-                  {expandedLyricsId === release.id && release.lyrics && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -4 }}
-                      transition={{ duration: 0.18 }}
-                      className="mt-3 rounded-[16px] border border-white/5 bg-[#101012] p-3 text-[12px] leading-relaxed text-text-muted max-h-[260px] overflow-y-auto"
-                    >
-                      {release.lyrics.split("\n").map((line, idx) => (
-                        <p key={idx}>{line}</p>
-                      ))}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </motion.div>
-            ))}
-          </AnimatePresence>
-
-          {!loading && releases.length === 0 && !error && (
-            <div className="rounded-[24px] border border-white/5 bg-surface/80 px-6 py-5 text-[13px] text-text-muted shadow-[0_20px_40px_rgba(0,0,0,0.55)] backdrop-blur-xl">
-              Пока нет загруженных релизов. Как только артисты отправят треки,
-              они появятся здесь.
+      <div className="space-y-3">
+        {moderationQueue.map((release, index) => (
+          <motion.div
+            key={release.id}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            whileHover={{ scale: 0.995 }}
+            whileTap={{ scale: 0.98 }}
+            transition={{ delay: index * 0.06, type: "spring", stiffness: 280, damping: 24 }}
+            className="glass-card p-4"
+          >
+            <div className="flex gap-3">
+              <img
+                src={release.coverUrl}
+                alt={release.title}
+                className="h-16 w-16 rounded-xl object-cover"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-base font-medium">{release.title}</p>
+                <p className="text-sm text-white/60">{release.artist}</p>
+                <p className="text-xs text-white/50">
+                  {release.genre} - {release.submittedAt}
+                </p>
+              </div>
             </div>
-          )}
-        </div>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <motion.button
+                type="button"
+                whileHover={{ scale: 0.99 }}
+                whileTap={{ scale: 0.98 }}
+                transition={{ type: "spring", stiffness: 320, damping: 22 }}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-300/40 bg-emerald-500/20 px-3 py-2 text-sm text-emerald-100 shadow-[0_0_25px_rgba(16,185,129,0.35)]"
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                Одобрить
+              </motion.button>
+              <motion.button
+                type="button"
+                whileHover={{ scale: 0.99 }}
+                whileTap={{ scale: 0.98 }}
+                transition={{ type: "spring", stiffness: 320, damping: 22 }}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-rose-300/40 bg-rose-500/20 px-3 py-2 text-sm text-rose-100 shadow-[0_0_25px_rgba(244,63,94,0.35)]"
+              >
+                <XCircle className="h-4 w-4" />
+                Отклонить
+              </motion.button>
+            </div>
+          </motion.div>
+        ))}
       </div>
+
+      <GlassCard className="p-4">
+        <p className="mb-2 text-xs uppercase tracking-[0.2em] text-white/55">Логи системы</p>
+        <div className="space-y-2 rounded-xl border border-white/10 bg-black/40 p-3 font-mono text-[11px] text-emerald-300/85">
+          {systemLogs.map((line) => (
+            <p key={line}>{line}</p>
+          ))}
+        </div>
+      </GlassCard>
     </div>
   );
 }

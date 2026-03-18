@@ -2,12 +2,20 @@ import "./globals.css";
 import type { Metadata } from "next";
 import Script from "next/script";
 import { Toaster } from "sonner";
+import { Inter } from "next/font/google";
 import { PageTransition } from "@/components/PageTransition";
 import { TelegramBootstrap } from "@/components/TelegramBootstrap";
+import { BottomNav } from "@/components/BottomNav";
+import { NoiseOverlay } from "@/components/NoiseOverlay";
+
+const inter = Inter({
+  subsets: ["latin", "cyrillic"],
+  variable: "--font-inter"
+});
 
 export const metadata: Metadata = {
-  title: "Release Assistant",
-  description: "Telegram Mini App for fast music release preparation"
+  title: "omf mini app",
+  description: "Премиальный Telegram Mini App для музыкальной дистрибуции"
 };
 
 export default function RootLayout({
@@ -17,20 +25,21 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ru" className="dark">
-      <body className="min-h-screen bg-background text-text antialiased">
+      <body className={`${inter.variable} min-h-screen bg-[#030303] font-sans text-white antialiased`}>
         <TelegramBootstrap />
         <Toaster richColors expand position="top-center" />
         <Script
           src="https://telegram.org/js/telegram-web-app.js"
           strategy="beforeInteractive"
         />
-        <div className="relative mx-auto flex min-h-screen w-full max-w-xl items-stretch px-3 py-4 sm:items-center sm:px-4">
-          <div className="pointer-events-none absolute inset-0 -z-10 opacity-60">
-            <div className="absolute inset-[-120px] bg-[radial-gradient(circle_at_top,_rgba(51,144,236,0.24),_transparent_55%),radial-gradient(circle_at_bottom,_rgba(255,255,255,0.05),_transparent_55%)]" />
+        <div className="relative mx-auto min-h-screen w-full max-w-[450px] px-3 pb-28 pt-4">
+          <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+            <div className="absolute inset-0 bg-[#030303]" />
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(29,78,216,0.15),transparent_55%),radial-gradient(circle_at_80%_25%,rgba(88,28,135,0.15),transparent_50%),radial-gradient(circle_at_50%_90%,rgba(37,99,235,0.1),transparent_45%)]" />
           </div>
-          <div className="w-full max-w-[520px] rounded-2xl border border-border/70 bg-surface/95 p-6 shadow-[0_18px_60px_rgba(0,0,0,0.75)] backdrop-blur-xl">
-            <PageTransition>{children}</PageTransition>
-          </div>
+          <NoiseOverlay />
+          <PageTransition>{children}</PageTransition>
+          <BottomNav />
         </div>
       </body>
     </html>
