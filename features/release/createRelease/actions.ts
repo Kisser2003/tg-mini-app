@@ -149,22 +149,40 @@ export async function uploadArtworkForDraft(file: File): Promise<string | null> 
     store.setSubmitError("Нет данных релиза для загрузки обложки.");
     return null;
   }
-  try {
-    store.setSubmitError(null);
+
+  const attempt = async (): Promise<string | null> => {
     const artworkUrl = await uploadReleaseArtwork({
-      userId: store.userId,
-      releaseId: store.releaseId,
+      userId: store.userId!,
+      releaseId: store.releaseId!,
       file
     });
-    const updated = await updateRelease(store.releaseId, { artwork_url: artworkUrl });
+    const updated = await updateRelease(store.releaseId!, { artwork_url: artworkUrl });
     store.setArtworkUrl(updated.artwork_url ?? artworkUrl);
     try {
       getTelegramWebApp()?.HapticFeedback?.notificationOccurred?.("success");
     } catch {}
     return updated.artwork_url ?? artworkUrl;
+  };
+
+  try {
+    store.setSubmitError(null);
+    return await attempt();
   } catch (e: unknown) {
-    const detail = e instanceof Error ? e.message : JSON.stringify(e);
-    store.setSubmitError(`Ошибка загрузки: ${detail}`);
+    const msg = e instanceof Error ? e.message : JSON.stringify(e);
+    const isStaleRow = msg.includes("PGRST116") || msg.includes("0 rows");
+    if (isStaleRow) {
+      store.setReleaseId(null);
+      const draft = await ensureDraftRelease();
+      if (!draft) return null;
+      try {
+        return await attempt();
+      } catch (retryErr: unknown) {
+        const detail = retryErr instanceof Error ? retryErr.message : JSON.stringify(retryErr);
+        store.setSubmitError(`Ошибка загрузки: ${detail}`);
+        return null;
+      }
+    }
+    store.setSubmitError(`Ошибка загрузки: ${msg}`);
     return null;
   }
 }
