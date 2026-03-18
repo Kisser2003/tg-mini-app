@@ -149,40 +149,21 @@ export async function uploadArtworkForDraft(file: File): Promise<string | null> 
     store.setSubmitError("Нет данных релиза для загрузки обложки.");
     return null;
   }
-
-  const attempt = async (): Promise<string | null> => {
+  try {
+    store.setSubmitError(null);
     const artworkUrl = await uploadReleaseArtwork({
-      userId: store.userId!,
-      releaseId: store.releaseId!,
+      userId: store.userId,
+      releaseId: store.releaseId,
       file
     });
-    const updated = await updateRelease(store.releaseId!, { artwork_url: artworkUrl });
-    store.setArtworkUrl(updated.artwork_url ?? artworkUrl);
+    store.setArtworkUrl(artworkUrl);
     try {
       getTelegramWebApp()?.HapticFeedback?.notificationOccurred?.("success");
     } catch {}
-    return updated.artwork_url ?? artworkUrl;
-  };
-
-  try {
-    store.setSubmitError(null);
-    return await attempt();
+    return artworkUrl;
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : JSON.stringify(e);
-    const isStaleRow = msg.includes("PGRST116") || msg.includes("0 rows");
-    if (isStaleRow) {
-      store.setReleaseId(null);
-      const draft = await ensureDraftRelease();
-      if (!draft) return null;
-      try {
-        return await attempt();
-      } catch (retryErr: unknown) {
-        const detail = retryErr instanceof Error ? retryErr.message : JSON.stringify(retryErr);
-        store.setSubmitError(`Ошибка загрузки: ${detail}`);
-        return null;
-      }
-    }
-    store.setSubmitError(`Ошибка загрузки: ${msg}`);
+    const detail = e instanceof Error ? e.message : JSON.stringify(e);
+    store.setSubmitError(`Ошибка загрузки: ${detail}`);
     return null;
   }
 }
@@ -210,6 +191,10 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
   store.setSubmitError(null);
 
   try {
+    if (store.artworkUrl) {
+      await updateRelease(store.releaseId, { artwork_url: store.artworkUrl });
+    }
+
     for (let index = 0; index < parsedTracks.data.tracks.length; index += 1) {
       const track = parsedTracks.data.tracks[index];
       const file = args.files[index];

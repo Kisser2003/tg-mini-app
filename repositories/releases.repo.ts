@@ -142,22 +142,25 @@ export async function createDraftRelease(
         },
         { onConflict: "client_request_id" }
       )
-      .select("*")
-      .single();
+      .select("*");
     return response;
   });
 
-  if (error || !data) {
-    // release_id ещё неизвестен, логировать нечего
-    throw error ?? new Error("Failed to create draft release");
+  if (error) {
+    throw error;
   }
 
-  const record = data as ReleaseRecord;
+  const rows = data as ReleaseRecord[] | null;
+  if (!rows || rows.length === 0) {
+    throw new Error("Upsert вернул 0 строк — проверьте RLS-политики таблицы releases");
+  }
+
+  const record = rows[0];
   await logReleaseEvent({
     releaseId: record.id,
     stage: "create",
     status: record.status
-  });
+  }).catch(() => {});
 
   return record;
 }
@@ -196,21 +199,25 @@ export async function updateRelease(
       .from("releases")
       .update(payload)
       .eq("id", id)
-      .select("*")
-      .single();
+      .select("*");
     return response;
   });
 
-  if (error || !data) {
-    throw error ?? new Error("Failed to update release");
+  if (error) {
+    throw error;
   }
 
-  const record = data as ReleaseRecord;
+  const rows = data as ReleaseRecord[] | null;
+  if (!rows || rows.length === 0) {
+    throw new Error(`Запись релиза не найдена (id: ${id})`);
+  }
+
+  const record = rows[0];
   await logReleaseEvent({
     releaseId: record.id,
     stage: "status",
     status: record.status
-  });
+  }).catch(() => {});
 
   return record;
 }
