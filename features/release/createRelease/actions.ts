@@ -136,8 +136,8 @@ export async function ensureDraftRelease(): Promise<ReleaseRecord | null> {
     } catch {}
     return draft;
   } catch (e: unknown) {
-    console.error("[ensureDraftRelease] Error:", e);
-    store.setSubmitError(formatErrorMessage(e, "Не удалось создать черновик релиза."));
+    const detail = e instanceof Error ? e.message : JSON.stringify(e);
+    store.setSubmitError(`Ошибка черновика: ${detail}`);
     return null;
   }
 }
@@ -163,8 +163,8 @@ export async function uploadArtworkForDraft(file: File): Promise<string | null> 
     } catch {}
     return updated.artwork_url ?? artworkUrl;
   } catch (e: unknown) {
-    console.error("[uploadArtworkForDraft] Error:", e);
-    store.setSubmitError(formatErrorMessage(e, "Не удалось загрузить обложку."));
+    const detail = e instanceof Error ? e.message : JSON.stringify(e);
+    store.setSubmitError(`Ошибка загрузки: ${detail}`);
     return null;
   }
 }
