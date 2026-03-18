@@ -9,7 +9,7 @@ import { FileUploader } from "./FileUploader";
 import { getTelegramWebApp } from "@/lib/telegram";
 import { useTelegramMainButton } from "@/lib/useTelegramMainButton";
 
-const artistRoleEnum = z.enum(["main", "feat", "remixer"]);
+const artistRoleEnum = z.enum(["primary", "featuring"]);
 
 const artistSchema = z.object({
   name: z.string().min(1, "Укажите имя артиста"),
@@ -17,13 +17,19 @@ const artistSchema = z.object({
 });
 
 const releaseStepOneSchema = z.object({
-  artists: z.array(artistSchema).min(1, "Добавьте хотя бы одного артиста"),
-  trackName: z.string().min(1, "Укажите название трека"),
+  // паспорт релиза
+  releaseTitle: z.string().min(1, "Укажите название релиза"),
   releaseType: z.enum(["single", "ep", "album"]),
-  mainGenre: z.string().min(1, "Выберите жанр"),
+  genre: z.string().min(1, "Выберите основной жанр"),
+  subgenre: z.string().default(""),
+  language: z.string().default(""),
+  label: z.string().default(""),
+  // артисты релиза
+  artists: z.array(artistSchema).min(1, "Добавьте хотя бы одного артиста"),
+  // дата и флаги
   releaseDate: z
     .string()
-    .min(1, "Укажите дату релиса")
+    .min(1, "Укажите дату релизного издания")
     .refine((value) => {
       if (!value) return false;
       const selected = new Date(`${value}T00:00:00`);
@@ -35,18 +41,16 @@ const releaseStepOneSchema = z.object({
       minDate.setDate(minDate.getDate() + 5);
 
       return selected >= minDate;
-    }, "Дата релиза должна быть не раньше чем через 5 дней от сегодняшней даты"),
-  rightHolder: z.string().min(1, "Укажите правообладателя"),
+    }, "Дата релизного издания должна быть не раньше чем через 5 дней от сегодняшней даты"),
   explicit: z.boolean()
 });
 
-export type ReleaseStepOneValues = z.infer<typeof releaseStepOneSchema>;
+export type ReleaseStepOneValues = z.input<typeof releaseStepOneSchema>;
 
 type ReleaseFormProps = {
   onSubmitted: (summary: { artistName: string; trackName: string }) => void;
   onSubmitRelease: (args: {
     form: ReleaseStepOneValues;
-    audioFile: File;
     artworkFile: File;
   }) => Promise<"success" | "tracks">;
   isSubmitting?: boolean;
@@ -74,12 +78,14 @@ export function ReleaseForm({
     resolver: zodResolver(releaseStepOneSchema),
     mode: "onChange",
     defaultValues: {
-      artists: initialValues?.artists ?? [{ name: "", role: "main" }],
-      trackName: initialValues?.trackName ?? "",
-      releaseType: initialValues?.releaseType,
-      mainGenre: initialValues?.mainGenre ?? "",
+      releaseTitle: initialValues?.releaseTitle ?? "",
+      releaseType: initialValues?.releaseType ?? "single",
+      genre: initialValues?.genre ?? "",
+      subgenre: initialValues?.subgenre ?? "",
+      language: initialValues?.language ?? "",
+      label: initialValues?.label ?? "",
+      artists: initialValues?.artists ?? [{ name: "", role: "primary" }],
       releaseDate: initialValues?.releaseDate ?? "",
-      rightHolder: initialValues?.rightHolder ?? "",
       explicit: initialValues?.explicit ?? false
     }
   });
@@ -90,10 +96,8 @@ export function ReleaseForm({
   });
 
   const values = watch();
-  const [audioFile, setAudioFile] = useState<File | null>(null);
   const [artworkFile, setArtworkFile] = useState<File | null>(null);
   const [invalidShake, setInvalidShake] = useState(false);
-  const [rightHolderTouched, setRightHolderTouched] = useState(false);
   const [submitAttempted, setSubmitAttempted] = useState(false);
 
   const minReleaseDate = useMemo(() => {
@@ -108,11 +112,11 @@ export function ReleaseForm({
   }, []);
 
   useEffect(() => {
-    const mainArtistName = values.artists?.[0]?.name;
-    if (!rightHolderTouched && mainArtistName && !values.rightHolder) {
-      setValue("rightHolder", mainArtistName, { shouldValidate: true });
+    const primaryArtist = values.artists?.[0]?.name;
+    if (primaryArtist && !values.label) {
+      setValue("label", primaryArtist, { shouldValidate: false, shouldDirty: true });
     }
-  }, [values.artists, values.rightHolder, rightHolderTouched, setValue]);
+  }, [values.artists, values.label, setValue]);
 
   // синхронизируем значения формы наружу для персиста (дебаунс + только при изменениях)
   useEffect(() => {
@@ -131,7 +135,7 @@ export function ReleaseForm({
     async (data: ReleaseStepOneValues) => {
       setSubmitAttempted(true);
 
-      if (!audioFile || !artworkFile) {
+      if (!artworkFile) {
         setInvalidShake(true);
         setTimeout(() => setInvalidShake(false), 220);
         try {
@@ -145,7 +149,6 @@ export function ReleaseForm({
       try {
         result = await onSubmitRelease({
           form: data,
-          audioFile,
           artworkFile
         });
       } catch {
@@ -164,10 +167,10 @@ export function ReleaseForm({
 
       onSubmitted({
         artistName: data.artists[0]?.name ?? "",
-        trackName: data.trackName
+        trackName: data.releaseTitle
       });
     },
-    [audioFile, artworkFile, onSubmitRelease, onSubmitted]
+    [artworkFile, onSubmitRelease, onSubmitted]
   );
 
   const onInvalidSubmit = useCallback(() => {
@@ -216,10 +219,10 @@ export function ReleaseForm({
       <div className="mx-auto flex w-full max-w-[440px] flex-col gap-5 font-sans">
         <header className="space-y-1">
           <h1 className="text-[22px] font-semibold leading-tight tracking-tight">
-            Релиз · Шаг 1
+            Релиз · Шаг 1 · Паспорт
           </h1>
           <p className="text-[13px] text-white/60 leading-relaxed">
-            Минимальный набор данных, чтобы начать оформление релиза.
+            Основная информация о релизе и обложка. Аудио загружаются на следующем шаге.
           </p>
         </header>
 
@@ -236,13 +239,6 @@ export function ReleaseForm({
           >
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <FileUploader
-                label="Audio (WAV)"
-                accept=".wav"
-                maxSizeMb={200}
-                type="wav"
-                onFileChange={setAudioFile}
-              />
-              <FileUploader
                 label="Artwork (JPG/PNG)"
                 accept=".jpg,.jpeg,.png"
                 maxSizeMb={20}
@@ -252,9 +248,6 @@ export function ReleaseForm({
             </div>
 
             <div className="mt-2 grid grid-cols-1 gap-2 text-[11px]">
-              {submitAttempted && !audioFile && (
-                <p className="text-red-400">Добавьте WAV-файл релиза.</p>
-              )}
               {submitAttempted && !artworkFile && (
                 <p className="text-red-400">Загрузите обложку (JPG/PNG).</p>
               )}
@@ -295,7 +288,7 @@ export function ReleaseForm({
                     onClick={() =>
                       appendArtist({
                         name: "",
-                        role: "feat"
+                        role: "featuring"
                       })
                     }
                     className="text-[11px] font-medium text-[#A5B4FC]"
@@ -322,9 +315,8 @@ export function ReleaseForm({
                           {...register(`artists.${index}.role` as const)}
                           className="h-8 w-full max-w-[120px] rounded-[999px] border border-white/15 bg-white/5 px-3 text-[11px] text-white/80 outline-none transition-colors focus:border-[#4F46E5] focus:bg-white/10 sm:w-auto"
                         >
-                          <option value="main">Main</option>
-                          <option value="feat">Feat.</option>
-                          <option value="remixer">Remixer</option>
+                          <option value="primary">Primary</option>
+                          <option value="featuring">Featuring</option>
                         </select>
                         {index > 0 && (
                           <button
@@ -349,33 +341,16 @@ export function ReleaseForm({
 
               <div className="space-y-1.5">
                 <label className="block text-[11px] font-medium uppercase tracking-[0.18em] text-white/60">
-                  Название трека
+                  Название релиза
                 </label>
                 <input
-                  {...register("trackName")}
-                  placeholder="Основное название без лишних символов"
+                  {...register("releaseTitle")}
+                  placeholder="Основное название релиза без лишних символов"
                   className="h-[56px] w-full rounded-[18px] border border-white/10 bg-black/60 px-4 text-[15px] sm:text-[16px] text-white placeholder:text-white/30 outline-none focus:border-[#4F46E5]"
                 />
-                {errors.trackName && (
+                {errors.releaseTitle && (
                   <p className="mt-0.5 text-[11px] text-red-400">
-                    {errors.trackName.message}
-                  </p>
-                )}
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="block text-[11px] font-medium uppercase tracking-[0.18em] text-white/60">
-                  Правообладатель (ФИО / Лейбл)
-                </label>
-                <input
-                  {...register("rightHolder")}
-                  placeholder="Фамилия Имя Отчество или название компании"
-                  onBlur={() => setRightHolderTouched(true)}
-                  className="h-[56px] w-full rounded-[18px] border border-white/10 bg-black/60 px-4 text-[15px] sm:text-[16px] text-white placeholder:text-white/30 outline-none focus:border-[#4F46E5]"
-                />
-                {errors.rightHolder && (
-                  <p className="mt-0.5 text-[11px] text-red-400">
-                    {errors.rightHolder.message}
+                    {errors.releaseTitle.message}
                   </p>
                 )}
               </div>
@@ -448,12 +423,12 @@ export function ReleaseForm({
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <label className="block text-[11px] font-medium uppercase tracking-[0.18em] text-white/60">
-                  Основной жанр
+                  Жанр
                 </label>
                 <select
-                  {...register("mainGenre")}
+                  {...register("genre")}
                   onChange={(e) => {
-                    register("mainGenre").onChange(e);
+                    register("genre").onChange(e);
                     try {
                       getTelegramWebApp()?.HapticFeedback?.impactOccurred?.("light");
                     } catch {}
@@ -468,9 +443,9 @@ export function ReleaseForm({
                   <option value="Electronic">Electronic</option>
                   <option value="Other">Другое</option>
                 </select>
-                {errors.mainGenre && (
+                {errors.genre && (
                   <p className="mt-0.5 text-[11px] text-red-400">
-                    {errors.mainGenre.message}
+                    {errors.genre.message}
                   </p>
                 )}
               </div>
@@ -496,6 +471,49 @@ export function ReleaseForm({
                     {errors.releaseDate.message}
                   </p>
                 )}
+              </div>
+            </div>
+            <div className="mt-3 space-y-3">
+              <div className="space-y-1.5">
+                <label className="block text-[11px] font-medium uppercase tracking-[0.18em] text-white/60">
+                  Поджанр
+                </label>
+                <input
+                  {...register("subgenre")}
+                  placeholder="Например, Melodic Techno"
+                  className="h-[48px] w-full rounded-[16px] border border-white/10 bg-black/60 px-4 text-[14px] sm:text-[15px] text-white placeholder:text-white/30 outline-none focus:border-[#4F46E5]"
+                />
+              </div>
+            </div>
+          </motion.div>
+
+          <motion.div
+            custom={3}
+            initial="hidden"
+            animate="visible"
+            variants={cardVariants}
+            className="rounded-[24px] border border-white/10 bg-white/5 px-5 py-5 shadow-[0_18px_40px_rgba(0,0,0,0.75)] backdrop-blur-2xl"
+          >
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <label className="block text-[11px] font-medium uppercase tracking-[0.18em] text-white/60">
+                  Язык
+                </label>
+                <input
+                  {...register("language")}
+                  placeholder="Например, English / Russian"
+                  className="h-[48px] w-full rounded-[16px] border border-white/10 bg-black/60 px-4 text-[14px] sm:text-[15px] text-white placeholder:text-white/30 outline-none focus:border-[#4F46E5]"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="block text-[11px] font-medium uppercase tracking-[0.18em] text-white/60">
+                  Лейбл
+                </label>
+                <input
+                  {...register("label")}
+                  placeholder="Название лейбла или артиста"
+                  className="h-[48px] w-full rounded-[16px] border border-white/10 bg-black/60 px-4 text-[14px] sm:text-[15px] text-white placeholder:text-white/30 outline-none focus:border-[#4F46E5]"
+                />
               </div>
             </div>
           </motion.div>

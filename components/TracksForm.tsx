@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useRef, useState, useCallback, useEffect } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -7,9 +7,15 @@ import { FileUploader } from "./FileUploader";
 import { getTelegramWebApp } from "@/lib/telegram";
 import { useTelegramMainButton } from "@/lib/useTelegramMainButton";
 
+const trackArtistSchema = z.object({
+  name: z.string().min(1, "Укажите имя артиста"),
+  role: z.enum(["primary", "featuring"])
+});
+
 const trackSchema = z.object({
   title: z.string().min(1, "Укажите название трека"),
-  explicit: z.boolean()
+  explicit: z.boolean(),
+  artists: z.array(trackArtistSchema).min(1, "Добавьте хотя бы одного артиста для трека")
 });
 
 const tracksFormSchema = z.object({
@@ -22,33 +28,41 @@ type TracksFormProps = {
   onSubmitted: () => void;
   releaseTitle: string;
   artistName: string;
+  releaseType: "single" | "ep" | "album";
   onSubmitTracks: (tracks: { title: string; explicit: boolean; file: File }[]) => Promise<void>;
   isSubmitting?: boolean;
   submitError?: string | null;
   initialValues?: TracksFormValues;
   onChangeValues?: (values: TracksFormValues) => void;
+  uploadStates?: ("idle" | "uploading" | "done" | "error")[];
 };
 
 export function TracksForm({
   onSubmitted,
   releaseTitle,
   artistName,
+  releaseType,
   onSubmitTracks,
   isSubmitting,
   submitError,
   initialValues,
-  onChangeValues
+  onChangeValues,
+  uploadStates
 }: TracksFormProps) {
   const {
     control,
     register,
     handleSubmit,
+    getValues,
+    setValue,
     watch,
     formState: { errors, isValid }
   } = useForm<TracksFormValues>({
     resolver: zodResolver(tracksFormSchema),
     defaultValues: {
-      tracks: initialValues?.tracks ?? [{ title: "", explicit: false }]
+      tracks: initialValues?.tracks ?? [
+        { title: "", explicit: false, artists: [{ name: artistName, role: "primary" }] }
+      ]
     },
     mode: "onChange"
   });
@@ -58,17 +72,40 @@ export function TracksForm({
     name: "tracks"
   });
 
-  const [files, setFiles] = useState<(File | null)[]>(initialValues?.tracks?.map(() => null) ?? [null]);
+  const [files, setFiles] = useState<(File | null)[]>(
+    initialValues?.tracks?.map(() => null) ?? [null]
+  );
   const [submitAttempted, setSubmitAttempted] = useState(false);
 
   const values = watch();
 
-  // синхронизация значения формы наружу для персиста
+  // синхронизация значения формы наружу для персиста (дебаунс + защита от циклов)
+  const lastPersistedJsonRef = useRef<string>("");
+  const persistTimeoutRef = useRef<number | null>(null);
+
   useEffect(() => {
-    if (onChangeValues) {
-      onChangeValues(values);
+    if (!onChangeValues || isSubmitting) return;
+
+    // watch() возвращает новый объект на каждый рендер, поэтому сравниваем по JSON.
+    // Здесь данные маленькие (только метаданные треков), этого достаточно и стабильно.
+    const json = JSON.stringify(values);
+    if (json === lastPersistedJsonRef.current) return;
+
+    if (persistTimeoutRef.current) {
+      window.clearTimeout(persistTimeoutRef.current);
     }
-  }, [values, onChangeValues]);
+
+    persistTimeoutRef.current = window.setTimeout(() => {
+      lastPersistedJsonRef.current = json;
+      onChangeValues(values);
+    }, 250);
+
+    return () => {
+      if (persistTimeoutRef.current) {
+        window.clearTimeout(persistTimeoutRef.current);
+      }
+    };
+  }, [values, onChangeValues, isSubmitting]);
 
   const onValidSubmit = async (data: TracksFormValues) => {
     setSubmitAttempted(true);
@@ -152,7 +189,7 @@ export function TracksForm({
                 <span className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/60">
                   Трек {index + 1}
                 </span>
-                {fields.length > 1 && (
+                {fields.length > 1 && !(releaseType === "single" && index === 0) && !isSubmitting && (
                   <button
                     type="button"
                     onClick={() => {
@@ -182,6 +219,57 @@ export function TracksForm({
                 )}
               </div>
 
+              <div className="space-y-1.5">
+                <label className="block text-[11px] font-medium uppercase tracking-[0.18em] text-white/60">
+                  Артисты трека
+                </label>
+                <div className="space-y-2">
+                  {values.tracks[index]?.artists?.map((artist, artistIndex) => (
+                    <div
+                      key={artistIndex}
+                      className="flex flex-col gap-2 rounded-[12px] bg-black/60 px-3 py-2 border border-white/10 sm:flex-row sm:items-center"
+                    >
+                      <input
+                        {...register(
+                          `tracks.${index}.artists.${artistIndex}.name` as const
+                        )}
+                        placeholder={artistIndex === 0 ? "Основной артист" : "Featuring"}
+                        className="w-full flex-1 bg-transparent text-[14px] text-white placeholder:text-white/30 outline-none"
+                      />
+                      <div className="flex w-full items-center gap-2 sm:w-auto sm:justify-end">
+                        <select
+                          {...register(
+                            `tracks.${index}.artists.${artistIndex}.role` as const
+                          )}
+                          className="h-8 w-full max-w-[120px] rounded-[999px] border border-white/15 bg-white/5 px-3 text-[11px] text-white/80 outline-none transition-colors focus:border-[#4F46E5] focus:bg-white/10 sm:w-auto"
+                        >
+                          <option value="primary">Primary</option>
+                          <option value="featuring">Featuring</option>
+                        </select>
+                        {artistIndex > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const current = getValues(
+                                `tracks.${index}.artists` as const
+                              );
+                              const next = current.filter((_a, i) => i !== artistIndex);
+                              setValue(`tracks.${index}.artists` as const, next, {
+                                shouldDirty: true,
+                                shouldValidate: true
+                              });
+                            }}
+                            className="text-[11px] text-white/40"
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               <FileUploader
                 label="WAV трека"
                 accept=".wav"
@@ -201,6 +289,15 @@ export function TracksForm({
                   Загрузите WAV-файл для этого трека.
                 </p>
               )}
+              {uploadStates?.[index] === "uploading" && (
+                <p className="text-[11px] text-white/60">Загружается...</p>
+              )}
+              {uploadStates?.[index] === "done" && (
+                <p className="text-[11px] text-emerald-400">Файл загружен</p>
+              )}
+              {uploadStates?.[index] === "error" && (
+                <p className="text-[11px] text-red-400">Ошибка загрузки этого трека</p>
+              )}
             </motion.div>
           ))}
 
@@ -208,19 +305,26 @@ export function TracksForm({
             <p className="text-[11px] text-red-400">{errors.tracks.message}</p>
           )}
 
-          <button
-            type="button"
-            onClick={() => {
-              append({ title: "", explicit: false });
-              setFiles((prev) => [...prev, null]);
-            }}
-            className="mt-1 inline-flex h-[44px] w-full items-center justify-center rounded-[18px] border border-white/15 text-[13px] font-medium text-white/80 hover:border-white/40 hover:text-white transition-colors"
-          >
-            + Добавить трек
-          </button>
+          {releaseType !== "single" && !isSubmitting && (
+            <button
+              type="button"
+              onClick={() => {
+                append({
+                  title: "",
+                  explicit: false,
+                  artists: [{ name: artistName, role: "primary" }]
+                });
+                setFiles((prev) => [...prev, null]);
+              }}
+              className="mt-1 inline-flex h-[44px] w-full items-center justify-center rounded-[18px] border border-white/15 text-[13px] font-medium text-white/80 hover:border-white/40 hover:text-white transition-colors"
+            >
+              + Добавить трек
+            </button>
+          )}
 
           <motion.button
-            type="submit"
+            type="button"
+            onClick={handleMainButtonClick}
             whileHover={{ scale: isSubmitting ? 1 : 1.02 }}
             whileTap={{ scale: isSubmitting ? 1 : 0.96 }}
             animate={{ scale: 1 }}

@@ -1,8 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, useMotionValue, useSpring } from "framer-motion";
 import { Music2, Image as ImageIcon } from "lucide-react";
 import confetti from "canvas-confetti";
-import { getTelegramWebApp } from "../lib/telegram";
 
 type Props = {
   label: string;
@@ -10,14 +9,32 @@ type Props = {
   maxSizeMb: number;
   type: "wav" | "cover";
   onFileChange: (file: File | null) => void;
+  /** Pass a File already held in the Zustand store to restore the UI after navigation. */
+  initialFile?: File | null;
 };
 
-export function FileUploader({ label, accept, maxSizeMb, type, onFileChange }: Props) {
+export function FileUploader({ label, accept, maxSizeMb, type, onFileChange, initialFile }: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+
+  // Restore file from the parent store on mount (covers navigation back to this step).
+  // We use a ref to ensure this runs only once and we don't react to future prop changes.
+  const initialFileRef = useRef(initialFile);
+  useEffect(() => {
+    const init = initialFileRef.current;
+    if (!init) return;
+
+    setFile(init);
+    if (type === "cover") {
+      const url = URL.createObjectURL(init);
+      setPreviewUrl(url);
+      return () => URL.revokeObjectURL(url);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // intentionally only on mount
 
   const cursorX = useMotionValue(0);
   const cursorY = useMotionValue(0);
@@ -126,9 +143,6 @@ export function FileUploader({ label, accept, maxSizeMb, type, onFileChange }: P
             setUploadSuccess(false);
           }, 1200);
           confetti({ particleCount: 30, spread: 50, origin: { y: 0.4 } });
-          try {
-            getTelegramWebApp()?.HapticFeedback?.impactOccurred?.("light");
-          } catch {}
         }
       };
       img.onerror = () => {
@@ -149,9 +163,6 @@ export function FileUploader({ label, accept, maxSizeMb, type, onFileChange }: P
       setUploadSuccess(false);
     }, 1200);
     confetti({ particleCount: 30, spread: 50, origin: { y: 0.4 } });
-    try {
-      getTelegramWebApp()?.HapticFeedback?.impactOccurred?.("light");
-    } catch {}
   };
 
   return (
@@ -211,7 +222,7 @@ export function FileUploader({ label, accept, maxSizeMb, type, onFileChange }: P
             <div className="mt-1 w-full max-w-full space-y-1 text-[11px] text-text">
               <div className="flex items-center justify-center gap-1 text-emerald-400">
                 <span className="text-base leading-none">✓</span>
-                <span>Файл выбран</span>
+                <span>{file.name}</span>
               </div>
               {isUploading && (
                 <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-black/30">
@@ -242,6 +253,13 @@ export function FileUploader({ label, accept, maxSizeMb, type, onFileChange }: P
                   </motion.div>
                 </div>
               )}
+              {previewUrl && type === "cover" && (
+                <img
+                  src={previewUrl}
+                  alt="Предпросмотр обложки"
+                  className="mx-auto mt-2 h-16 w-16 rounded-lg object-cover"
+                />
+              )}
             </div>
           )}
         </div>
@@ -251,4 +269,3 @@ export function FileUploader({ label, accept, maxSizeMb, type, onFileChange }: P
     </div>
   );
 }
-

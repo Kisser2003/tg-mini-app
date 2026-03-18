@@ -88,7 +88,7 @@ export default function DashboardPage() {
   }, [userId]);
 
   const handleCreate = () => {
-    router.push("/create");
+    router.push("/create/metadata");
   };
 
   useTelegramMainButton({
@@ -159,7 +159,7 @@ export default function DashboardPage() {
         )}
 
         {!loading && !error && !hasReleases && (
-          <div className="flex flex-1 flex-col items-center justify-center gap-4 rounded-[24px] border border-white/8 bg-surface/80 px-6 py-10 text-center shadow-[0_18px_40px_rgba(0,0,0,0.7)] backdrop-blur-2xl">
+          <div className="flex flex-1 flex-col items-center justify-center gap-4 rounded-[24px] bg-white/5 px-6 py-10 text-center shadow-2xl backdrop-blur-xl">
             <div className="text-4xl">🎧</div>
             <div className="space-y-1">
               <p className="text-[16px] font-semibold">
@@ -210,7 +210,7 @@ export default function DashboardPage() {
                     initial={{ opacity: 0, y: 6 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -6 }}
-                    className="rounded-[20px] border border-white/8 bg-surface/80 px-4 py-4 shadow-[0_18px_40px_rgba(0,0,0,0.7)] backdrop-blur-2xl"
+                    className="rounded-[20px] bg-white/5 px-4 py-4 shadow-2xl backdrop-blur-xl"
                   >
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
@@ -249,7 +249,7 @@ export default function DashboardPage() {
                           <button
                             type="button"
                             onClick={() => {
-                              router.push(`/create?from=failed&releaseId=${release.id}`);
+                              router.push(`/create/metadata?from=failed&releaseId=${release.id}`);
                             }}
                             className="text-[11px] font-medium text-red-300 underline underline-offset-2"
                           >

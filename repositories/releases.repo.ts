@@ -1,5 +1,10 @@
 import { z } from "zod";
 import { supabase } from "../lib/supabase";
+import {
+  getReleaseAudioPath,
+  getReleaseArtworkPath,
+  getReleaseTrackAudioPath
+} from "../lib/storagePaths";
 
 export type ReleaseStatus = "draft" | "processing" | "review" | "ready" | "failed";
 
@@ -240,46 +245,6 @@ export async function submitRelease(id: string): Promise<ReleaseRecord> {
   return record;
 }
 
-export async function createFullRelease(params: {
-  releaseId: string;
-  audioUrl: string;
-  artworkUrl: string;
-  step2?: ReleaseStep2Payload;
-}): Promise<ReleaseRecord> {
-  const { data, error } = await withRetry(async () => {
-    const response = await supabase
-      .rpc("create_full_release", {
-        p_release_id: params.releaseId,
-        p_audio_url: params.audioUrl,
-        p_artwork_url: params.artworkUrl,
-        p_isrc: params.step2?.isrc ?? null,
-        p_authors: params.step2?.authors ?? null,
-        p_splits: params.step2?.splits ?? null
-      })
-      .single();
-    return response;
-  });
-
-  if (error || !data) {
-    await logReleaseEvent({
-      releaseId: params.releaseId,
-      stage: "error",
-      status: "failed",
-      errorMessage: error?.message ?? "Failed to create full release"
-    });
-    throw error ?? new Error("Failed to create full release");
-  }
-
-  const record = data as ReleaseRecord;
-  await logReleaseEvent({
-    releaseId: record.id,
-    stage: "finalize",
-    status: record.status
-  });
-
-  return record;
-}
-
 function assertAudioFile(file: File, maxSizeMb: number) {
   const sizeMb = file.size / (1024 * 1024);
   if (sizeMb > maxSizeMb) {
@@ -306,7 +271,7 @@ export async function uploadReleaseAudio(params: {
   file: File;
 }): Promise<string> {
   assertAudioFile(params.file, 200);
-  const path = `${params.userId}/${params.releaseId}/audio.wav`;
+  const path = getReleaseAudioPath(params.userId, params.releaseId);
 
   const { error } = await withRetry(async () => {
     const response = await supabase.storage
@@ -332,7 +297,7 @@ export async function uploadReleaseArtwork(params: {
   file: File;
 }): Promise<string> {
   assertArtworkFile(params.file, 20);
-  const path = `${params.userId}/${params.releaseId}/cover.jpg`;
+  const path = getReleaseArtworkPath(params.userId, params.releaseId);
 
   const { error } = await withRetry(async () => {
     const response = await supabase.storage
@@ -359,7 +324,7 @@ export async function uploadReleaseTrackAudio(params: {
   file: File;
 }): Promise<string> {
   assertAudioFile(params.file, 200);
-  const path = `${params.userId}/${params.releaseId}/tracks/${params.trackIndex}.wav`;
+  const path = getReleaseTrackAudioPath(params.userId, params.releaseId, params.trackIndex);
 
   const { error } = await withRetry(async () => {
     const response = await supabase.storage
@@ -417,10 +382,10 @@ export async function deleteReleaseFiles(params: {
   const audioBucket = supabase.storage.from("audio");
   const artworkBucket = supabase.storage.from("artwork");
 
-  const audioPaths: string[] = [`${params.userId}/${params.releaseId}/audio.wav`];
+  const audioPaths: string[] = [getReleaseAudioPath(params.userId, params.releaseId)];
   if (params.trackCount && params.trackCount > 0) {
     for (let i = 0; i < params.trackCount; i += 1) {
-      audioPaths.push(`${params.userId}/${params.releaseId}/tracks/${i}.wav`);
+      audioPaths.push(getReleaseTrackAudioPath(params.userId, params.releaseId, i));
     }
   }
 
@@ -431,7 +396,7 @@ export async function deleteReleaseFiles(params: {
     }),
     withRetry(async () => {
       const response = await artworkBucket.remove([
-        `${params.userId}/${params.releaseId}/cover.jpg`
+        getReleaseArtworkPath(params.userId, params.releaseId)
       ]);
       return response;
     })

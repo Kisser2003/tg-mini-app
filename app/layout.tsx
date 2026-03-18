@@ -2,6 +2,7 @@ import "./globals.css";
 import type { Metadata } from "next";
 import Script from "next/script";
 import { Toaster } from "sonner";
+import { PageTransition } from "@/components/PageTransition";
 
 export const metadata: Metadata = {
   title: "Release Assistant",
@@ -26,7 +27,7 @@ export default function RootLayout({
             <div className="absolute inset-[-120px] bg-[radial-gradient(circle_at_top,_rgba(51,144,236,0.24),_transparent_55%),radial-gradient(circle_at_bottom,_rgba(255,255,255,0.05),_transparent_55%)]" />
           </div>
           <div className="w-full max-w-[520px] rounded-2xl border border-border/70 bg-surface/95 p-6 shadow-[0_18px_60px_rgba(0,0,0,0.75)] backdrop-blur-xl">
-            {children}
+            <PageTransition>{children}</PageTransition>
           </div>
         </div>
       </body>
