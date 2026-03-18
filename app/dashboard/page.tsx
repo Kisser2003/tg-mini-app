@@ -151,7 +151,7 @@ export default function DashboardPage() {
         )}
 
         {!loading && !error && !hasReleases && (
-          <div className="flex flex-1 flex-col items-center justify-center gap-4 rounded-[24px] bg-white/5 px-6 py-10 text-center shadow-2xl backdrop-blur-xl">
+          <div className="flex flex-1 flex-col items-center justify-center gap-4 rounded-[24px] border border-white/[0.08] bg-surface/80 px-6 py-10 text-center shadow-[0_18px_40px_rgba(0,0,0,0.7)] backdrop-blur-2xl">
             <div className="text-4xl">🎧</div>
             <div className="space-y-1">
               <p className="text-[16px] font-semibold">
@@ -202,7 +202,7 @@ export default function DashboardPage() {
                     initial={{ opacity: 0, y: 6 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -6 }}
-                    className="rounded-[20px] bg-white/5 px-4 py-4 shadow-2xl backdrop-blur-xl"
+                    className="rounded-[20px] border border-white/[0.08] bg-surface/80 px-4 py-4 shadow-[0_18px_40px_rgba(0,0,0,0.7)] backdrop-blur-2xl"
                   >
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">

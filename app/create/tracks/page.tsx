@@ -139,7 +139,7 @@ export default function CreateTracksPage() {
               key={field.id}
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
-              className="rounded-[24px] bg-white/5 px-5 py-5 shadow-2xl backdrop-blur-xl space-y-3"
+              className="rounded-[24px] border border-white/[0.08] bg-surface/80 px-5 py-5 shadow-[0_18px_40px_rgba(0,0,0,0.7)] backdrop-blur-2xl space-y-3"
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/60">

@@ -49,7 +49,7 @@ export default function CreateReviewPage() {
         />
       ) : (
         <div className="space-y-4">
-          <div className="rounded-[24px] bg-white/5 px-5 py-5 shadow-2xl backdrop-blur-xl">
+          <div className="rounded-[24px] border border-white/[0.08] bg-surface/80 px-5 py-5 shadow-[0_18px_40px_rgba(0,0,0,0.7)] backdrop-blur-2xl">
             <p className="text-[13px] text-text-muted leading-relaxed">
               Проверьте данные перед отправкой. Отправка начнёт загрузку WAV и передачу релиза в
               модерацию.
