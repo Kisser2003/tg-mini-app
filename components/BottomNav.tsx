@@ -4,7 +4,8 @@ import { useMemo } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Home, Library, Settings, Shield, Wallet } from "lucide-react";
-import { ADMIN_TELEGRAM_ID, mockCurrentUserId } from "@/lib/mock-data";
+import { getExpectedAdminTelegramId } from "@/lib/admin";
+import { getTelegramUserId, initTelegramWebApp } from "@/lib/telegram";
 
 type NavItem = {
   label: string;
@@ -15,7 +16,10 @@ type NavItem = {
 export function BottomNav() {
   const pathname = usePathname();
   const router = useRouter();
-  const isAdmin = mockCurrentUserId === ADMIN_TELEGRAM_ID;
+  const isAdmin = useMemo(() => {
+    initTelegramWebApp();
+    return getTelegramUserId() === getExpectedAdminTelegramId();
+  }, []);
 
   const items = useMemo<NavItem[]>(
     () => [

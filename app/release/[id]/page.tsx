@@ -1,65 +1,123 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowLeft, Check, Link2, ShieldCheck } from "lucide-react";
 import { GlassCard } from "@/components/GlassCard";
-import { releaseDetails } from "@/lib/mock-data";
+import { supabase } from "@/lib/supabase";
+import { getTelegramUserId, initTelegramWebApp } from "@/lib/telegram";
+
+type ReleaseDetailsRow = {
+  id: string;
+  user_id: number;
+  artist_name: string;
+  track_name: string;
+  artwork_url: string | null;
+  audio_url: string | null;
+  release_type: string;
+  genre: string;
+  status: string;
+  error_message: string | null;
+  created_at: string;
+};
 
 const statusStyles: Record<string, string> = {
-  Live: "bg-emerald-400/20 text-emerald-200 border-emerald-300/40",
-  Pending: "bg-amber-400/20 text-amber-200 border-amber-300/40",
-  Rejected: "bg-rose-400/20 text-rose-200 border-rose-300/40"
+  draft: "bg-zinc-400/20 text-zinc-200 border-zinc-300/40",
+  processing: "bg-amber-400/20 text-amber-200 border-amber-300/40",
+  under_review: "bg-sky-400/20 text-sky-200 border-sky-300/40",
+  ready: "bg-emerald-400/20 text-emerald-200 border-emerald-300/40",
+  failed: "bg-rose-400/20 text-rose-200 border-rose-300/40"
 };
 
 const statusLabel: Record<string, string> = {
-  Live: "Опубликован",
-  Pending: "На модерации",
-  Rejected: "Отклонен"
+  draft: "Черновик",
+  processing: "На модерации",
+  under_review: "На проверке",
+  ready: "Готов",
+  failed: "Отклонен"
 };
 
 export default function ReleaseDetailsPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const [userId, setUserId] = useState<number | null>(null);
+  const [release, setRelease] = useState<ReleaseDetailsRow | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const release = useMemo(() => releaseDetails[params.id], [params.id]);
-  const maxValue = useMemo(
-    () => (release ? Math.max(...release.streamTrend.map((point) => point.value), 1) : 1),
-    [release]
-  );
-  const chart = useMemo(() => {
-    if (!release) {
-      return { areaPath: "", linePath: "" };
+  useEffect(() => {
+    initTelegramWebApp();
+    setUserId(getTelegramUserId());
+  }, []);
+
+  useEffect(() => {
+    if (!params.id) return;
+    if (userId == null) {
+      setLoading(false);
+      return;
     }
-    const width = 640;
-    const height = 220;
-    const baseline = 196;
-    const stepX = width / Math.max(release.streamTrend.length - 1, 1);
-    const points = release.streamTrend.map((point, index) => {
-      const x = index * stepX;
-      const y = baseline - (point.value / maxValue) * 150;
-      return { x, y };
-    });
-    const linePath = points.map((point, index) => `${index === 0 ? "M" : "L"}${point.x},${point.y}`).join(" ");
-    const areaPath = `${linePath} L${points[points.length - 1].x},${baseline} L${points[0].x},${baseline} Z`;
-    return { areaPath, linePath };
-  }, [maxValue, release]);
+
+    let cancelled = false;
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const { data, error: dbError } = await supabase
+          .from("releases")
+          .select(
+            "id, user_id, artist_name, track_name, artwork_url, audio_url, release_type, genre, status, error_message, created_at"
+          )
+          .eq("id", params.id)
+          .eq("user_id", userId)
+          .maybeSingle();
+
+        if (dbError) throw dbError;
+        if (!cancelled) setRelease((data as ReleaseDetailsRow | null) ?? null);
+      } catch (e: any) {
+        if (!cancelled) setError(e?.message ?? "Не удалось загрузить релиз.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [params.id, userId]);
 
   const moderationChecklist = useMemo(
     () => [
-      { title: "Проверка метаданных", done: release?.moderationStatus !== "Rejected" },
-      { title: "Проверка обложки", done: release?.moderationStatus === "Live" || release?.moderationStatus === "Pending" },
-      { title: "Доставка на платформы", done: release?.moderationStatus === "Live" }
+      { title: "Проверка метаданных", done: release?.status !== "failed" },
+      { title: "Проверка обложки", done: release?.status !== "draft" },
+      { title: "Доставка на платформы", done: release?.status === "ready" }
     ],
     [release]
   );
+
+  if (userId == null) {
+    return (
+      <GlassCard className="p-5">
+        <h1 className="text-xl font-semibold tracking-tight">Карточка релиза</h1>
+        <p className="mt-2 text-sm text-white/65">Открой приложение из Telegram для доступа к релизу.</p>
+      </GlassCard>
+    );
+  }
+
+  if (loading) {
+    return <GlassCard className="p-5 text-sm text-white/70">Загружаем карточку релиза...</GlassCard>;
+  }
+
+  if (error) {
+    return <GlassCard className="p-5 text-sm text-rose-200">{error}</GlassCard>;
+  }
 
   if (!release) {
     return (
       <GlassCard className="p-5">
         <h1 className="text-xl font-semibold tracking-tight">Релиз не найден</h1>
-        <p className="mt-2 text-sm text-white/65">Это заглушка динамического маршрута.</p>
+        <p className="mt-2 text-sm text-white/65">Проверь ссылку или доступ к релизу.</p>
       </GlassCard>
     );
   }
@@ -79,50 +137,29 @@ export default function ReleaseDetailsPage() {
           Назад
         </motion.button>
         <div className="flex items-center gap-3">
-          <img src={release.coverUrl} alt={release.title} className="h-16 w-16 rounded-2xl object-cover" />
+          {release.artwork_url ? (
+            <img src={release.artwork_url} alt={release.track_name} className="h-16 w-16 rounded-2xl object-cover" />
+          ) : (
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-white/15 bg-black/30 text-[10px] text-white/45">
+              NO ART
+            </div>
+          )}
           <div className="min-w-0">
-            <h1 className="truncate text-xl font-semibold">{release.title}</h1>
-            <p className="text-sm text-white/60">{release.artist}</p>
+            <h1 className="truncate text-xl font-semibold">{release.track_name}</h1>
+            <p className="text-sm text-white/60">{release.artist_name}</p>
           </div>
         </div>
       </GlassCard>
 
       <GlassCard className="p-5">
         <div className="mb-3 flex items-center justify-between">
-          <p className="text-sm font-medium tracking-tight text-white/85">График стримов (7 дней)</p>
-          <p className="text-sm font-semibold">{release.totalStreams}</p>
+          <p className="text-sm font-medium tracking-tight text-white/85">Параметры релиза</p>
+          <p className="text-sm font-semibold">{release.release_type}</p>
         </div>
-        <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
-          <svg viewBox="0 0 640 220" className="h-40 w-full">
-            <defs>
-              <linearGradient id="areaGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stopColor="rgba(56,189,248,0.7)" />
-                <stop offset="100%" stopColor="rgba(56,189,248,0.02)" />
-              </linearGradient>
-            </defs>
-            <motion.path
-              d={chart.areaPath}
-              fill="url(#areaGradient)"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.6 }}
-            />
-            <motion.path
-              d={chart.linePath}
-              fill="none"
-              stroke="rgba(125,211,252,0.95)"
-              strokeWidth="4"
-              strokeLinecap="round"
-              initial={{ pathLength: 0 }}
-              animate={{ pathLength: 1 }}
-              transition={{ duration: 0.8, ease: "easeInOut" }}
-            />
-          </svg>
-          <div className="mt-2 flex justify-between text-[10px] text-white/55">
-            {release.streamTrend.map((point) => (
-              <span key={point.label}>{point.label}</span>
-            ))}
-          </div>
+        <div className="space-y-2 rounded-2xl border border-white/10 bg-black/25 p-3 text-sm text-white/75">
+          <p>Жанр: {release.genre}</p>
+          <p>Создан: {new Date(release.created_at).toLocaleString("ru-RU")}</p>
+          <p>ID: {release.id}</p>
         </div>
       </GlassCard>
 
@@ -131,10 +168,12 @@ export default function ReleaseDetailsPage() {
           <ShieldCheck className="h-4 w-4" />
           Статус модерации
         </p>
-        <span className={`inline-flex rounded-full border px-3 py-1 text-xs ${statusStyles[release.moderationStatus]}`}>
-          {statusLabel[release.moderationStatus]}
+        <span className={`inline-flex rounded-full border px-3 py-1 text-xs ${statusStyles[release.status] ?? statusStyles.draft}`}>
+          {statusLabel[release.status] ?? release.status}
         </span>
-        <p className="mt-3 text-sm text-white/70">{release.moderationNote}</p>
+        <p className="mt-3 text-sm text-white/70">
+          {release.error_message?.trim() ? release.error_message : "Ошибок модерации не зафиксировано."}
+        </p>
 
         <div className="mt-4 space-y-2">
           {moderationChecklist.map((item, index) => (
@@ -162,18 +201,20 @@ export default function ReleaseDetailsPage() {
           ))}
         </div>
 
-        <motion.a
-          href="https://example.com/omf-smart-link"
-          target="_blank"
-          rel="noreferrer"
-          whileHover={{ scale: 0.99 }}
-          whileTap={{ scale: 0.98 }}
-          transition={{ type: "spring", stiffness: 320, damping: 22 }}
-          className="mt-4 inline-flex items-center gap-2 rounded-full border border-sky-300/35 bg-sky-500/15 px-3 py-1.5 text-xs text-sky-100"
-        >
-          <Link2 className="h-3.5 w-3.5" />
-          Smart Link
-        </motion.a>
+        {release.audio_url && (
+          <motion.a
+            href={release.audio_url}
+            target="_blank"
+            rel="noreferrer"
+            whileHover={{ scale: 0.99 }}
+            whileTap={{ scale: 0.98 }}
+            transition={{ type: "spring", stiffness: 320, damping: 22 }}
+            className="mt-4 inline-flex items-center gap-2 rounded-full border border-sky-300/35 bg-sky-500/15 px-3 py-1.5 text-xs text-sky-100"
+          >
+            <Link2 className="h-3.5 w-3.5" />
+            Открыть аудио
+          </motion.a>
+        )}
       </GlassCard>
     </div>
   );

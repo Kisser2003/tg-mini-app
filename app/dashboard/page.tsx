@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { ShieldCheck } from "lucide-react";
-import { ADMIN_TELEGRAM_ID } from "@/lib/admin";
+import { getExpectedAdminTelegramId } from "@/lib/admin";
 import { supabase } from "@/lib/supabase";
 import { getTelegramUserDisplayName, getTelegramUserId, initTelegramWebApp } from "@/lib/telegram";
 import type { ReleaseStatus } from "@/lib/db-enums";
@@ -94,7 +94,7 @@ export default function DashboardPage() {
   };
 
   const hasReleases = useMemo(() => releases.length > 0, [releases]);
-  const isAdmin = userId === ADMIN_TELEGRAM_ID;
+  const isAdmin = userId === getExpectedAdminTelegramId();
 
   return (
     <div className="min-h-screen bg-background px-5 py-6 pb-10 text-text">
