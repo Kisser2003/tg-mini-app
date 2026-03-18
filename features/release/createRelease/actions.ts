@@ -7,7 +7,9 @@ import {
 } from "@/lib/telegram";
 import {
   addReleaseTrack,
+  cleanupReleaseTracks,
   createDraftRelease,
+  deleteReleaseFiles,
   getReleaseById,
   submitRelease,
   updateRelease,
@@ -68,7 +70,16 @@ export function initUserContextInStore() {
   const devUserId = getDevUserIdOverride() ?? getDevUserIdDefault();
   const userId = devUserId ?? getTelegramUserId() ?? null;
   const telegramName = getTelegramUserDisplayName();
-  useCreateReleaseDraftStore.getState().setUserContext({ userId, telegramName });
+  const store = useCreateReleaseDraftStore.getState();
+  const previousUserId = store.userId;
+  if (
+    previousUserId != null &&
+    userId != null &&
+    previousUserId !== userId
+  ) {
+    store.resetDraft();
+  }
+  store.setUserContext({ userId, telegramName });
 }
 
 export async function hydrateFromReleaseId(releaseId: string): Promise<void> {
@@ -171,6 +182,8 @@ export async function uploadArtworkForDraft(file: File): Promise<string | null> 
 export async function submitTracksAndFinalize(args: { files: File[] }): Promise<boolean> {
   const store = useCreateReleaseDraftStore.getState();
   initUserContextInStore();
+  store.setSubmitStage("idle");
+  store.setSubmitProgress(0);
   if (!store.userId || !store.releaseId) {
     store.setSubmitError("Нет данных релиза для отправки.");
     return false;
@@ -188,14 +201,19 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
   }
 
   store.setSubmitStatus("submitting");
+  store.setSubmitStage("preparing");
+  store.setSubmitProgress(5);
   store.setSubmitError(null);
 
   try {
     if (store.artworkUrl) {
       await updateRelease(store.releaseId, { artwork_url: store.artworkUrl });
+      store.setSubmitProgress(15);
     }
 
+    const totalTracks = parsedTracks.data.tracks.length;
     for (let index = 0; index < parsedTracks.data.tracks.length; index += 1) {
+      store.setSubmitStage("uploading_tracks");
       const track = parsedTracks.data.tracks[index];
       const file = args.files[index];
       const audioUrl = await uploadReleaseTrackAudio({
@@ -211,10 +229,16 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
         explicit: Boolean(track.explicit),
         audioUrl
       });
+      const uploadedRatio = (index + 1) / Math.max(totalTracks, 1);
+      store.setSubmitProgress(15 + uploadedRatio * 70);
     }
 
+    store.setSubmitStage("finalizing");
+    store.setSubmitProgress(92);
     const updated = await submitRelease(store.releaseId);
     store.setSubmitStatus("success");
+    store.setSubmitStage("done");
+    store.setSubmitProgress(100);
     store.setSuccessSummary({
       artistName: updated.artist_name,
       trackName: updated.track_name
@@ -224,9 +248,30 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
     } catch {}
     return true;
   } catch (e: unknown) {
+    let cleanupFailed = false;
+    try {
+      await cleanupReleaseTracks(store.releaseId);
+      await deleteReleaseFiles({
+        userId: store.userId,
+        releaseId: store.releaseId,
+        trackCount: parsedTracks.data.tracks.length
+      });
+      await updateRelease(store.releaseId, {
+        status: "failed",
+        error_message: "Отправка прервана, временные файлы очищены."
+      });
+    } catch {
+      cleanupFailed = true;
+    }
+
     store.setSubmitStatus("error");
+    store.setSubmitStage("error");
     const detail = e instanceof Error ? e.message : JSON.stringify(e);
-    store.setSubmitError(`Ошибка отправки: ${detail}`);
+    store.setSubmitError(
+      cleanupFailed
+        ? `Ошибка отправки: ${detail}. Автоочистка завершилась с ошибкой, обратитесь к администратору.`
+        : `Ошибка отправки: ${detail}. Временные файлы очищены, можно повторить отправку.`
+    );
     return false;
   }
 }

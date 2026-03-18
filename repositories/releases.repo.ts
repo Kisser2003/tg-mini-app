@@ -435,12 +435,15 @@ export async function deleteReleaseFiles(params: {
   await Promise.all([
     withRetry(async () => {
       const response = await audioBucket.remove(audioPaths);
+      if (response.error) throw response.error;
       return response;
     }),
     withRetry(async () => {
       const response = await artworkBucket.remove([
-        getReleaseArtworkPath(params.userId, params.releaseId)
+        getReleaseArtworkPath(params.userId, params.releaseId, "jpg"),
+        getReleaseArtworkPath(params.userId, params.releaseId, "png")
       ]);
+      if (response.error) throw response.error;
       return response;
     })
   ]);
@@ -452,6 +455,7 @@ export async function cleanupReleaseTracks(releaseId: string): Promise<void> {
       .from("release_tracks")
       .delete()
       .eq("release_id", releaseId);
+    if (response.error) throw response.error;
     return response;
   });
 }

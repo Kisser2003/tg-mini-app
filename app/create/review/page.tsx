@@ -19,10 +19,20 @@ export default function CreateReviewPage() {
   const submitError = useCreateReleaseDraftStore((s) => s.submitError);
   const setSubmitError = useCreateReleaseDraftStore((s) => s.setSubmitError);
   const submitStatus = useCreateReleaseDraftStore((s) => s.submitStatus);
+  const submitStage = useCreateReleaseDraftStore((s) => s.submitStage);
+  const submitProgress = useCreateReleaseDraftStore((s) => s.submitProgress);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const missingFiles = useMemo(() => tracks.some((_t, i) => !trackFiles[i]), [trackFiles, tracks]);
+  const stageLabel = useMemo(() => {
+    if (submitStage === "preparing") return "Подготавливаем релиз";
+    if (submitStage === "uploading_tracks") return "Загружаем WAV-файлы";
+    if (submitStage === "finalizing") return "Передаем релиз в модерацию";
+    if (submitStage === "done") return "Готово";
+    if (submitStage === "error") return "Ошибка отправки";
+    return "Ожидание отправки";
+  }, [submitStage]);
 
   const handleSubmit = useCallback(async () => {
     setSubmitError(null);
@@ -101,7 +111,26 @@ export default function CreateReviewPage() {
             {isSubmitting ? "Отправляем..." : "Отправить релиз"}
           </button>
 
-          {submitError && <p className="text-center text-[11px] text-red-400">{submitError}</p>}
+          {(submitStatus === "submitting" || submitStatus === "error") && (
+            <div className="rounded-[18px] border border-white/10 bg-black/30 px-4 py-3">
+              <div className="mb-2 flex items-center justify-between text-xs text-white/70">
+                <span>{stageLabel}</span>
+                <span>{submitProgress}%</span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-white/10">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-sky-400 to-violet-400 transition-all duration-500"
+                  style={{ width: `${submitProgress}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          {submitError && (
+            <p className="text-center text-[11px] text-red-400">
+              {submitError} Попробуйте повторно отправить релиз после исправления проблемы.
+            </p>
+          )}
         </div>
       )}
     </CreateShell>

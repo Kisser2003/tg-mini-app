@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { ShieldCheck } from "lucide-react";
 import { getExpectedAdminTelegramId } from "@/lib/admin";
-import { getReleaseStatusLabel, normalizeReleaseStatus } from "@/lib/release-status";
+import { getReleaseStatusMeta, normalizeReleaseStatus } from "@/lib/release-status";
 import { supabase } from "@/lib/supabase";
 import { getTelegramUserDisplayName, getTelegramUserId, initTelegramWebApp } from "@/lib/telegram";
+import { useSafePolling } from "@/lib/useSafePolling";
 import type { ReleaseStatus } from "@/lib/db-enums";
 
 type ReleaseRow = {
@@ -18,26 +19,10 @@ type ReleaseRow = {
   error_message?: string | null;
 };
 
-const getStatusMeta = (status: string) => {
-  switch (normalizeReleaseStatus(status)) {
-    case "ready":
-      return { text: "Готов", color: "green" as const };
-    case "processing":
-      return { text: "На проверке", color: "yellow" as const };
-    case "failed":
-      return { text: "Ошибка", color: "red" as const };
-    default:
-      return { text: "Черновик", color: "gray" as const };
-  }
-};
-
 export default function DashboardPage() {
   const router = useRouter();
   const [telegramName, setTelegramName] = useState<string | null>(null);
   const [userId, setUserId] = useState<number | null>(null);
-  const [releases, setReleases] = useState<ReleaseRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [expandedErrorId, setExpandedErrorId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -47,52 +32,45 @@ export default function DashboardPage() {
     setTelegramName(getTelegramUserDisplayName());
   }, []);
 
-  useEffect(() => {
-    if (userId == null) {
-      setLoading(false);
-      setReleases([]);
-      return;
-    }
-
-    let cancelled = false;
-
-    const load = async () => {
-      if (cancelled) return;
-      setLoading(true);
-      setError(null);
-      try {
-        const { data, error: dbError } = await supabase
-          .from("releases")
-          .select("id, track_name, status, created_at, error_message")
-          .eq("user_id", userId)
-          .order("created_at", { ascending: false });
-
-        if (dbError) {
-          throw dbError;
-        }
-
-        setReleases((data ?? []) as ReleaseRow[]);
-      } catch (e: any) {
-        setError(e?.message ?? "Не удалось загрузить релизы.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    void load();
-    const intervalId = window.setInterval(load, 7000);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(intervalId);
-    };
+  const loadReleases = useCallback(async () => {
+    if (userId == null) return [] as ReleaseRow[];
+    const { data, error: dbError } = await supabase
+      .from("releases")
+      .select("id, track_name, status, created_at, error_message")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
+    if (dbError) throw dbError;
+    return (data ?? []) as ReleaseRow[];
   }, [userId]);
+
+  const {
+    data: releases,
+    loading,
+    error
+  } = useSafePolling<ReleaseRow[]>({
+    enabled: userId != null,
+    intervalMs: 7000,
+    load: loadReleases,
+    initialData: []
+  });
 
   const handleCreate = () => {
     router.push("/create/metadata");
   };
 
   const hasReleases = useMemo(() => releases.length > 0, [releases]);
+  const releaseStats = useMemo(() => {
+    return releases.reduce(
+      (acc, release) => {
+        const status = normalizeReleaseStatus(release.status);
+        if (status === "ready") acc.ready += 1;
+        else if (status === "processing") acc.processing += 1;
+        else if (status === "failed") acc.failed += 1;
+        return acc;
+      },
+      { ready: 0, processing: 0, failed: 0 }
+    );
+  }, [releases]);
   const isAdmin = userId === getExpectedAdminTelegramId();
 
   return (
@@ -146,6 +124,21 @@ export default function DashboardPage() {
           </button>
         </div>
 
+        <div className="grid grid-cols-3 gap-2">
+          <div className="rounded-[16px] border border-emerald-500/30 bg-emerald-500/10 px-3 py-3">
+            <p className="text-[10px] uppercase tracking-[0.14em] text-emerald-200/80">Готово</p>
+            <p className="mt-1 text-lg font-semibold text-emerald-100">{releaseStats.ready}</p>
+          </div>
+          <div className="rounded-[16px] border border-amber-500/30 bg-amber-500/10 px-3 py-3">
+            <p className="text-[10px] uppercase tracking-[0.14em] text-amber-200/80">Проверка</p>
+            <p className="mt-1 text-lg font-semibold text-amber-100">{releaseStats.processing}</p>
+          </div>
+          <div className="rounded-[16px] border border-rose-500/30 bg-rose-500/10 px-3 py-3">
+            <p className="text-[10px] uppercase tracking-[0.14em] text-rose-200/80">Ошибки</p>
+            <p className="mt-1 text-lg font-semibold text-rose-100">{releaseStats.failed}</p>
+          </div>
+        </div>
+
         {loading && (
           <div className="space-y-4">
             <p className="text-[13px] text-text-muted">
@@ -194,15 +187,7 @@ export default function DashboardPage() {
           <div className="space-y-3">
             <AnimatePresence>
               {releases.map((release) => {
-                const meta = getStatusMeta(release.status);
-                const colorClass =
-                  meta.color === "green"
-                    ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/40"
-                    : meta.color === "yellow"
-                    ? "bg-amber-500/15 text-amber-300 border-amber-500/40"
-                    : meta.color === "red"
-                    ? "bg-red-500/15 text-red-300 border-red-500/40"
-                    : "bg-zinc-500/10 text-zinc-300 border-zinc-500/30";
+                const statusMeta = getReleaseStatusMeta(release.status);
 
                 const normalizedStatus = normalizeReleaseStatus(release.status);
                 const isFailed = normalizedStatus === "failed";
@@ -239,7 +224,7 @@ export default function DashboardPage() {
                       <div className="flex flex-col items-end gap-2">
                         <button
                           type="button"
-                          className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[11px] font-medium ${colorClass}`}
+                          className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[11px] font-medium ${statusMeta.badgeClassName}`}
                           onClick={() => {
                             if (!isFailed) return;
                             setExpandedErrorId((prev) =>
@@ -247,7 +232,7 @@ export default function DashboardPage() {
                             );
                           }}
                         >
-                          {getReleaseStatusLabel(release.status)}
+                          {statusMeta.label}
                           {isFailed && (
                             <span className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full border border-current text-[9px]">
                               i

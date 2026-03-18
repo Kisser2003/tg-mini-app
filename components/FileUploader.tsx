@@ -229,6 +229,9 @@ export function FileUploader({ label, accept, maxSizeMb, type, onFileChange, ini
                 <span className="text-base leading-none">✓</span>
                 <span>{file.name}</span>
               </div>
+              <p className="text-[10px] text-white/45">
+                Локальная проверка файла завершена. Фактическая загрузка начнется на шаге отправки релиза.
+              </p>
               {isUploading && (
                 <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-black/30">
                   <motion.div

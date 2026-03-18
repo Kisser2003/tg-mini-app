@@ -11,6 +11,14 @@ export type CreateStep = "metadata" | "assets" | "tracks" | "review" | "success"
 
 export type SubmissionStatus = "idle" | "submitting" | "success" | "error";
 
+export type SubmissionStage =
+  | "idle"
+  | "preparing"
+  | "uploading_tracks"
+  | "finalizing"
+  | "done"
+  | "error";
+
 export type CreateReleaseSuccessSummary = {
   artistName: string;
   trackName: string;

@@ -1,26 +1,61 @@
-export type CanonicalReleaseStatus = "draft" | "processing" | "ready" | "failed";
+export type CanonicalReleaseStatus =
+  | "draft"
+  | "processing"
+  | "ready"
+  | "failed"
+  | "unknown";
+
+export type ReleaseStatusMeta = {
+  canonical: CanonicalReleaseStatus;
+  label: string;
+  badgeClassName: string;
+};
+
+const STATUS_META: Record<CanonicalReleaseStatus, Omit<ReleaseStatusMeta, "canonical">> = {
+  draft: {
+    label: "Черновик",
+    badgeClassName: "border-zinc-500/30 bg-zinc-500/10 text-zinc-300"
+  },
+  processing: {
+    label: "На проверке",
+    badgeClassName: "border-amber-500/40 bg-amber-500/15 text-amber-300"
+  },
+  ready: {
+    label: "Готов",
+    badgeClassName: "border-emerald-500/40 bg-emerald-500/15 text-emerald-300"
+  },
+  failed: {
+    label: "Отклонено",
+    badgeClassName: "border-rose-500/40 bg-rose-500/15 text-rose-300"
+  },
+  unknown: {
+    label: "Неизвестно",
+    badgeClassName: "border-sky-500/35 bg-sky-500/10 text-sky-300"
+  }
+};
 
 export function normalizeReleaseStatus(status: string | null | undefined): CanonicalReleaseStatus {
   const value = (status ?? "").toLowerCase().trim();
 
-  if (value === "processing" || value === "under_review" || value === "review") {
+  if (value === "draft") return "draft";
+  if (value === "processing" || value === "under_review" || value === "review" || value === "pending") {
     return "processing";
   }
-  if (value === "ready") {
-    return "ready";
-  }
-  if (value === "failed" || value === "rejected") {
-    return "failed";
-  }
-  return "draft";
+  if (value === "ready" || value === "approved" || value === "live") return "ready";
+  if (value === "failed" || value === "rejected" || value === "error") return "failed";
+  if (!value) return "unknown";
+  return "unknown";
+}
+
+export function getReleaseStatusMeta(status: string | null | undefined): ReleaseStatusMeta {
+  const canonical = normalizeReleaseStatus(status);
+  return {
+    canonical,
+    ...STATUS_META[canonical]
+  };
 }
 
 export function getReleaseStatusLabel(status: string | null | undefined): string {
-  const normalized = normalizeReleaseStatus(status);
-
-  if (normalized === "processing") return "На проверке";
-  if (normalized === "ready") return "Готов";
-  if (normalized === "failed") return "Ошибка";
-  return "Черновик";
+  return getReleaseStatusMeta(status).label;
 }
 

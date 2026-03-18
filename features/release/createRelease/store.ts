@@ -4,6 +4,7 @@ import type {
   CreateMetadata,
   CreateReleaseSuccessSummary,
   CreateTrack,
+  SubmissionStage,
   SubmissionStatus
 } from "./types";
 import { isAssetsComplete, isMetadataComplete, isTracksComplete } from "./schemas";
@@ -27,6 +28,8 @@ export type CreateReleaseDraftState = {
   // submission / status
   submitError: string | null;
   submitStatus: SubmissionStatus;
+  submitStage: SubmissionStage;
+  submitProgress: number;
   successSummary: CreateReleaseSuccessSummary | null;
   hasHydrated: boolean;
 
@@ -47,6 +50,8 @@ type CreateReleaseDraftActions = {
   syncTrackFilesLength: (len: number) => void;
 
   setSubmitStatus: (status: SubmissionStatus) => void;
+  setSubmitStage: (stage: SubmissionStage) => void;
+  setSubmitProgress: (progress: number) => void;
   setSubmitError: (error: string | null) => void;
   setSuccessSummary: (summary: CreateReleaseSuccessSummary | null) => void;
 
@@ -96,6 +101,8 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
 
         submitError: null,
         submitStatus: "idle",
+        submitStage: "idle",
+        submitProgress: 0,
         successSummary: null,
         // Starts false so the create layout can show a loader until localStorage
         // has been read. The persist middleware's onRehydrateStorage sets it to
@@ -134,6 +141,11 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
           }),
 
         setSubmitStatus: (status) => set({ submitStatus: status }),
+        setSubmitStage: (stage) => set({ submitStage: stage }),
+        setSubmitProgress: (progress) =>
+          set({
+            submitProgress: Math.max(0, Math.min(100, Math.round(progress)))
+          }),
         setSubmitError: (error) => set({ submitError: error }),
         setSuccessSummary: (summary) => set({ successSummary: summary }),
 
@@ -146,11 +158,13 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
             artworkFile: null,
             tracks: [{ title: "", explicit: false }],
             trackFiles: [null],
-          submitError: null,
-          submitStatus: "idle",
-          successSummary: null,
-          hasHydrated: true, // already on client, no rehydration needed after reset
-          lastModified: null
+            submitError: null,
+            submitStatus: "idle",
+            submitStage: "idle",
+            submitProgress: 0,
+            successSummary: null,
+            hasHydrated: true, // already on client, no rehydration needed after reset
+            lastModified: null
           }),
         setHasHydrated: (value) => set({ hasHydrated: value })
       };
@@ -172,16 +186,11 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
       // artworkFile and trackFiles are intentionally excluded: File objects
       // cannot be serialized to JSON. They live in memory only for the session.
       partialize: (state) => ({
-        userId: state.userId,
-        telegramName: state.telegramName,
         releaseId: state.releaseId,
         clientRequestId: state.clientRequestId,
         metadata: state.metadata,
         artworkUrl: state.artworkUrl,
         tracks: state.tracks,
-        submitError: state.submitError,
-        submitStatus: state.submitStatus,
-        successSummary: state.successSummary,
         lastModified: state.lastModified
       })
     }
