@@ -3,9 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
+import { ShieldCheck } from "lucide-react";
+import { ADMIN_TELEGRAM_ID } from "@/lib/admin";
 import { supabase } from "@/lib/supabase";
 import { getTelegramUserDisplayName, getTelegramUserId } from "@/lib/telegram";
-import type { ReleaseStatus } from "@/repositories/releases.repo";
+import type { ReleaseStatus } from "@/lib/db-enums";
 
 type ReleaseRow = {
   id: string;
@@ -21,7 +23,7 @@ const getStatusMeta = (status: string) => {
       return { text: "Готов", color: "green" as const };
     case "processing":
       return { text: "На модерации", color: "yellow" as const };
-    case "review":
+    case "under_review":
       return { text: "На проверке менеджером", color: "blue" as const };
     case "failed":
       return { text: "Ошибка", color: "red" as const };
@@ -91,6 +93,7 @@ export default function DashboardPage() {
   };
 
   const hasReleases = useMemo(() => releases.length > 0, [releases]);
+  const isAdmin = userId === ADMIN_TELEGRAM_ID;
 
   return (
     <div className="min-h-screen bg-background px-5 py-6 pb-10 text-text">
@@ -102,11 +105,24 @@ export default function DashboardPage() {
           >
             OMF 2026
           </span>
-          {telegramName && (
-            <p className="max-w-[180px] truncate text-[12px] text-text-muted">
-              Привет, {telegramName}!
-            </p>
-          )}
+          <div className="flex items-center gap-2">
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => router.push("/admin")}
+                className="inline-flex h-8 items-center gap-1 rounded-[999px] border border-emerald-500/40 bg-emerald-500/10 px-2.5 text-[11px] font-medium text-emerald-300"
+                aria-label="Открыть админку"
+              >
+                <ShieldCheck className="h-3.5 w-3.5" />
+                Admin
+              </button>
+            )}
+            {telegramName && (
+              <p className="max-w-[180px] truncate text-[12px] text-text-muted">
+                Привет, {telegramName}!
+              </p>
+            )}
+          </div>
         </header>
 
         <div className="flex items-center justify-between">

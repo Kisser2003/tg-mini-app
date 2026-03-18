@@ -1,6 +1,7 @@
 import { z } from "zod";
+import { ARTIST_ROLE_VALUES, RELEASE_TYPE_VALUES } from "@/lib/db-enums";
 
-export const artistRoleEnum = z.enum(["primary", "featuring"]);
+export const artistRoleEnum = z.enum(ARTIST_ROLE_VALUES);
 
 export const artistSchema = z.object({
   name: z.string().min(1, "Укажите имя артиста"),
@@ -9,7 +10,7 @@ export const artistSchema = z.object({
 
 export const metadataSchema = z.object({
   releaseTitle: z.string().min(1, "Укажите название релиза"),
-  releaseType: z.enum(["single", "ep", "album"]),
+  releaseType: z.enum(RELEASE_TYPE_VALUES),
   genre: z.string().min(1, "Выберите основной жанр"),
   subgenre: z.string().default(""),
   language: z.string().default(""),

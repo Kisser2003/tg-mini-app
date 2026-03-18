@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Script from "next/script";
 import { Toaster } from "sonner";
 import { PageTransition } from "@/components/PageTransition";
+import { TelegramBootstrap } from "@/components/TelegramBootstrap";
 
 export const metadata: Metadata = {
   title: "Release Assistant",
@@ -17,6 +18,7 @@ export default function RootLayout({
   return (
     <html lang="ru" className="dark">
       <body className="min-h-screen bg-background text-text antialiased">
+        <TelegramBootstrap />
         <Toaster richColors expand position="top-center" />
         <Script
           src="https://telegram.org/js/telegram-web-app.js"

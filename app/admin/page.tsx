@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/lib/supabase";
-import { getTelegramUserId } from "@/lib/telegram";
+import type { ReleaseStatus } from "@/lib/db-enums";
 
 type ReleaseRow = {
   id: string;
@@ -19,22 +19,11 @@ type ReleaseRow = {
 };
 
 export default function AdminPage() {
+  const readyStatus: ReleaseStatus = "ready";
   const [releases, setReleases] = useState<ReleaseRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedLyricsId, setExpandedLyricsId] = useState<string | null>(null);
-
-  const [isAuthorized, setIsAuthorized] = useState(false);
-
-  useEffect(() => {
-    const adminId = process.env.NEXT_PUBLIC_ADMIN_TELEGRAM_ID;
-    const currentId = getTelegramUserId();
-    if (adminId && currentId && String(currentId) === String(adminId)) {
-      setIsAuthorized(true);
-    } else {
-      setIsAuthorized(false);
-    }
-  }, []);
 
   useEffect(() => {
     const load = async () => {
@@ -46,7 +35,7 @@ export default function AdminPage() {
           .select(
             "id, artist_name, author_full_name, track_name, genre, mood, lyrics, audio_url, artwork_url, created_at, status"
           )
-          .eq("status", "ready")
+          .eq("status", readyStatus)
           .order("created_at", { ascending: false });
 
         if (dbError) {
@@ -61,10 +50,8 @@ export default function AdminPage() {
       }
     };
 
-    if (isAuthorized) {
-      void load();
-    }
-  }, [isAuthorized]);
+    void load();
+  }, []);
 
   const handleCopyInfo = async (release: ReleaseRow) => {
     const text = `${release.artist_name} — ${release.track_name} — ${
@@ -76,21 +63,6 @@ export default function AdminPage() {
       // ignore clipboard errors
     }
   };
-
-  if (!isAuthorized) {
-    return (
-      <div className="min-h-screen bg-background px-4 py-8 text-text flex items-center justify-center">
-        <div className="rounded-[24px] border border-white/5 bg-surface/80 px-6 py-5 shadow-[0_20px_40px_rgba(0,0,0,0.55)] backdrop-blur-xl text-center max-w-sm">
-          <h1 className="mb-2 text-[20px] font-semibold tracking-tight">
-            Доступ запрещён
-          </h1>
-          <p className="text-[14px] text-text-muted">
-            Этот раздел доступен только администраторам лейбла.
-          </p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-background px-4 py-6 pb-10 text-text">

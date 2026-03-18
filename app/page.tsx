@@ -3,14 +3,13 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { getTelegramUserDisplayName, initTelegramWebApp } from "@/lib/telegram";
+import { getTelegramUserDisplayName } from "@/lib/telegram";
 
 export default function WelcomePage() {
   const router = useRouter();
   const [telegramName, setTelegramName] = useState<string | null>(null);
 
   useEffect(() => {
-    initTelegramWebApp();
     setTelegramName(getTelegramUserDisplayName());
   }, []);
 

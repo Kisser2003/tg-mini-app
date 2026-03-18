@@ -1,19 +1,26 @@
 import { z } from "zod";
 import { supabase } from "../lib/supabase";
 import {
+  RELEASE_STATUS_VALUES,
+  RELEASE_TYPE_VALUES,
+  type ReleaseStatus,
+  type ReleaseType
+} from "../lib/db-enums";
+import {
   getReleaseAudioPath,
   getReleaseArtworkPath,
   getReleaseTrackAudioPath
 } from "../lib/storagePaths";
 
-export type ReleaseStatus = "draft" | "processing" | "review" | "ready" | "failed";
+const releaseStatusSchema = z.enum(RELEASE_STATUS_VALUES);
+export type { ReleaseStatus };
 
 export type ReleaseStep1Payload = {
   user_id: number;
   client_request_id: string;
   artist_name: string;
   track_name: string;
-  release_type: "single" | "ep" | "album";
+  release_type: ReleaseType;
   genre: string;
   release_date: string;
   explicit: boolean;
@@ -31,7 +38,7 @@ export type ReleaseRecord = {
   client_request_id: string;
   artist_name: string;
   track_name: string;
-  release_type: string;
+  release_type: ReleaseType;
   genre: string;
   release_date: string;
   explicit: boolean;
@@ -47,7 +54,7 @@ const releaseStep1Schema = z.object({
   client_request_id: z.string().uuid(),
   artist_name: z.string().min(1).max(256).trim(),
   track_name: z.string().min(1).max(256).trim(),
-  release_type: z.enum(["single", "ep", "album"]),
+  release_type: z.enum(RELEASE_TYPE_VALUES),
   genre: z.string().min(1).max(128).trim(),
   release_date: z.string().min(1),
   explicit: z.boolean()
@@ -185,6 +192,9 @@ export async function updateRelease(
   if (payload.isrc !== undefined) base.isrc = payload.isrc;
   if (payload.authors !== undefined) base.authors = payload.authors;
   if (payload.splits !== undefined) base.splits = payload.splits;
+  if (payload.status !== undefined) {
+    releaseStatusSchema.parse(payload.status);
+  }
 
   if (Object.keys(base).length > 0) {
     releaseStep1Schema

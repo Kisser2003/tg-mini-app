@@ -32,6 +32,7 @@ type TelegramWebApp = {
     user?: TelegramUser;
     query_id?: string;
     auth_date?: number;
+    start_param?: string;
     hash?: string;
   };
   colorScheme?: "light" | "dark";
@@ -70,6 +71,11 @@ export function initTelegramWebApp() {
     webApp.ready?.();
     webApp.expand?.();
     webApp.setHeaderColor?.("bg_color");
+    if (webApp.initData) {
+      const encoded = encodeURIComponent(webApp.initData);
+      const secure = window.location.protocol === "https:" ? "; Secure" : "";
+      document.cookie = `tg_init_data=${encoded}; Path=/; Max-Age=86400; SameSite=Lax${secure}`;
+    }
   } catch {
     // ignore API errors in regular browser
   }
@@ -102,5 +108,12 @@ export function getTelegramUserDisplayName(): string | null {
   }
 
   return null;
+}
+
+export function getTelegramStartParam(): string | null {
+  const webApp = getTelegramWebApp();
+  if (!webApp) return null;
+  const raw = webApp.initDataUnsafe?.start_param;
+  return raw && raw.trim().length > 0 ? raw : null;
 }
 
