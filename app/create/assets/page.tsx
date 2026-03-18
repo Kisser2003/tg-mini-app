@@ -36,7 +36,6 @@ export default function CreateAssetsPage() {
   );
 
   const handleNext = useCallback(async () => {
-    // Already uploaded and no new file selected → skip upload, go next.
     if (artworkUrl && !artworkFile) {
       router.push("/create/tracks");
       return;
@@ -46,17 +45,22 @@ export default function CreateAssetsPage() {
       return;
     }
     setIsUploading(true);
-    if (!releaseId) {
-      const draft = await ensureDraftRelease();
-      if (!draft) {
-        setIsUploading(false);
-        return;
+    setSubmitError(null);
+    try {
+      if (!releaseId) {
+        const draft = await ensureDraftRelease();
+        if (!draft) return;
       }
+      const url = await uploadArtworkForDraft(artworkFile);
+      if (!url) return;
+      router.push("/create/tracks");
+    } catch (e: unknown) {
+      setSubmitError(
+        e instanceof Error ? e.message : "Произошла ошибка при загрузке обложки."
+      );
+    } finally {
+      setIsUploading(false);
     }
-    const url = await uploadArtworkForDraft(artworkFile);
-    setIsUploading(false);
-    if (!url) return;
-    router.push("/create/tracks");
   }, [artworkFile, artworkUrl, releaseId, router, setSubmitError]);
 
   return (
@@ -81,6 +85,7 @@ export default function CreateAssetsPage() {
                 maxSizeMb={20}
                 type="cover"
                 initialFile={artworkFile}
+                initialPreviewUrl={artworkUrl}
                 onFileChange={setArtworkFile}
               />
             </div>

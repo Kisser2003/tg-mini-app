@@ -11,27 +11,32 @@ type Props = {
   onFileChange: (file: File | null) => void;
   /** Pass a File already held in the Zustand store to restore the UI after navigation. */
   initialFile?: File | null;
+  /** Persisted remote URL shown as preview when initialFile is unavailable (e.g. after F5). */
+  initialPreviewUrl?: string | null;
 };
 
-export function FileUploader({ label, accept, maxSizeMb, type, onFileChange, initialFile }: Props) {
+export function FileUploader({ label, accept, maxSizeMb, type, onFileChange, initialFile, initialPreviewUrl }: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
-  // Restore file from the parent store on mount (covers navigation back to this step).
-  // We use a ref to ensure this runs only once and we don't react to future prop changes.
   const initialFileRef = useRef(initialFile);
+  const initialPreviewUrlRef = useRef(initialPreviewUrl);
   useEffect(() => {
     const init = initialFileRef.current;
-    if (!init) return;
-
-    setFile(init);
-    if (type === "cover") {
-      const url = URL.createObjectURL(init);
-      setPreviewUrl(url);
-      return () => URL.revokeObjectURL(url);
+    if (init) {
+      setFile(init);
+      if (type === "cover") {
+        const url = URL.createObjectURL(init);
+        setPreviewUrl(url);
+        return () => URL.revokeObjectURL(url);
+      }
+      return;
+    }
+    if (type === "cover" && initialPreviewUrlRef.current) {
+      setPreviewUrl(initialPreviewUrlRef.current);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // intentionally only on mount

@@ -59,6 +59,10 @@ export function useTelegramMainButton({
       isMounted = false;
       try {
         mainButton?.offClick(handleClick);
+        if (isVisibleRef.current) {
+          mainButton?.hide();
+          isVisibleRef.current = false;
+        }
       } catch {
         // ignore
       }
