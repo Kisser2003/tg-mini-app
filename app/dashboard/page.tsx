@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ShieldCheck } from "lucide-react";
 import { ADMIN_TELEGRAM_ID } from "@/lib/admin";
 import { supabase } from "@/lib/supabase";
-import { getTelegramUserDisplayName, getTelegramUserId } from "@/lib/telegram";
+import { getTelegramUserDisplayName, getTelegramUserId, initTelegramWebApp } from "@/lib/telegram";
 import type { ReleaseStatus } from "@/lib/db-enums";
 
 type ReleaseRow = {
@@ -42,6 +42,7 @@ export default function DashboardPage() {
   const [expandedErrorId, setExpandedErrorId] = useState<string | null>(null);
 
   useEffect(() => {
+    initTelegramWebApp();
     const id = getTelegramUserId();
     setUserId(id ?? null);
     setTelegramName(getTelegramUserDisplayName());
@@ -109,7 +110,10 @@ export default function DashboardPage() {
             {isAdmin && (
               <button
                 type="button"
-                onClick={() => router.push("/admin")}
+                onClick={() => {
+                  initTelegramWebApp();
+                  window.location.assign("/admin");
+                }}
                 className="inline-flex h-8 items-center gap-1 rounded-[999px] border border-emerald-500/40 bg-emerald-500/10 px-2.5 text-[11px] font-medium text-emerald-300"
                 aria-label="Открыть админку"
               >
