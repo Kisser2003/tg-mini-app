@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { ArrowUpRight, Wallet } from "lucide-react";
 import { GlassCard } from "@/components/GlassCard";
+import { getReleaseStatusLabel, normalizeReleaseStatus } from "@/lib/release-status";
 import { supabase } from "@/lib/supabase";
 import { getTelegramUserId, initTelegramWebApp } from "@/lib/telegram";
 
@@ -57,11 +58,9 @@ export default function WalletPage() {
   }, [userId]);
 
   const summary = useMemo(() => {
-    const available = rows.filter((item) => item.status === "ready").length;
-    const pending = rows.filter(
-      (item) => item.status === "processing" || item.status === "under_review"
-    ).length;
-    const failed = rows.filter((item) => item.status === "failed").length;
+    const available = rows.filter((item) => normalizeReleaseStatus(item.status) === "ready").length;
+    const pending = rows.filter((item) => normalizeReleaseStatus(item.status) === "processing").length;
+    const failed = rows.filter((item) => normalizeReleaseStatus(item.status) === "failed").length;
     return { available, pending, failed };
   }, [rows]);
 
@@ -136,7 +135,7 @@ export default function WalletPage() {
                 <p className="text-xs text-white/55">{new Date(item.created_at).toLocaleDateString("ru-RU")}</p>
               </div>
               <span className="rounded-full border border-emerald-300/35 bg-emerald-500/20 px-2 py-1 text-[10px] text-emerald-100">
-                {item.status}
+                {getReleaseStatusLabel(item.status)}
               </span>
             </motion.div>
           ))}

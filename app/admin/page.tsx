@@ -44,7 +44,7 @@ export default function AdminPage() {
       const { data, error: dbError } = await supabase
         .from("releases")
         .select("id, artist_name, track_name, genre, artwork_url, status, created_at")
-        .in("status", ["processing", "under_review"])
+        .eq("status", "processing")
         .order("created_at", { ascending: false });
       if (dbError) throw dbError;
       setModerationQueue((data ?? []) as ModerationItem[]);
@@ -111,7 +111,9 @@ export default function AdminPage() {
       {error && <GlassCard className="p-4 text-sm text-rose-200">{error}</GlassCard>}
 
       {!loading && !error && moderationQueue.length === 0 && (
-        <GlassCard className="p-4 text-sm text-white/70">Новых заявок нет.</GlassCard>
+        <GlassCard className="p-4 text-sm text-white/70">
+          На данный момент новых релизов на проверку нет.
+        </GlassCard>
       )}
 
       {!loading && moderationQueue.length > 0 && (

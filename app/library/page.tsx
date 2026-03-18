@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { GlassCard } from "@/components/GlassCard";
+import { getReleaseStatusLabel } from "@/lib/release-status";
 import { supabase } from "@/lib/supabase";
 import { getTelegramUserId, initTelegramWebApp } from "@/lib/telegram";
 
@@ -15,19 +16,12 @@ type ReleaseRow = {
   created_at: string;
 };
 
-const statusLabel: Record<string, string> = {
-  draft: "Черновик",
-  processing: "На модерации",
-  under_review: "На проверке",
-  ready: "Готов",
-  failed: "Ошибка"
-};
-
 export default function LibraryPage() {
   const router = useRouter();
   const [userId, setUserId] = useState<number | null>(null);
   const [releases, setReleases] = useState<ReleaseRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -35,16 +29,15 @@ export default function LibraryPage() {
     setUserId(getTelegramUserId());
   }, []);
 
-  useEffect(() => {
-    if (userId == null) {
-      setLoading(false);
-      setReleases([]);
-      return;
-    }
-
-    let cancelled = false;
-    const load = async () => {
-      setLoading(true);
+  const loadReleases = useCallback(
+    async (silent = false) => {
+      if (userId == null) {
+        setLoading(false);
+        setReleases([]);
+        return;
+      }
+      if (silent) setRefreshing(true);
+      else setLoading(true);
       setError(null);
       try {
         const { data, error: dbError } = await supabase
@@ -54,25 +47,54 @@ export default function LibraryPage() {
           .order("created_at", { ascending: false });
 
         if (dbError) throw dbError;
-        if (!cancelled) setReleases((data ?? []) as ReleaseRow[]);
+        setReleases((data ?? []) as ReleaseRow[]);
       } catch (e: any) {
-        if (!cancelled) setError(e?.message ?? "Не удалось загрузить библиотеку.");
+        setError(e?.message ?? "Не удалось загрузить библиотеку.");
       } finally {
-        if (!cancelled) setLoading(false);
+        if (silent) setRefreshing(false);
+        else setLoading(false);
       }
-    };
+    },
+    [userId]
+  );
 
-    void load();
+  useEffect(() => {
+    if (userId == null) {
+      setLoading(false);
+      setReleases([]);
+      return;
+    }
+    let cancelled = false;
+    void loadReleases();
+    const intervalId = window.setInterval(() => {
+      if (!cancelled) void loadReleases(true);
+    }, 8000);
     return () => {
       cancelled = true;
+      window.clearInterval(intervalId);
     };
-  }, [userId]);
+  }, [loadReleases, userId]);
 
   return (
     <div className="flex flex-col gap-4 pb-10">
       <GlassCard className="p-5">
-        <p className="text-xs uppercase tracking-[0.2em] text-white/55">Библиотека</p>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">Каталог релизов</h1>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-white/55">Мои релизы</p>
+            <h1 className="mt-2 text-2xl font-semibold tracking-tight">Список релизов</h1>
+          </div>
+          <motion.button
+            type="button"
+            whileHover={{ scale: 0.99 }}
+            whileTap={{ scale: 0.98 }}
+            transition={{ type: "spring", stiffness: 320, damping: 22 }}
+            onClick={() => void loadReleases(true)}
+            disabled={refreshing}
+            className="rounded-full border border-white/20 bg-white/5 px-3 py-1.5 text-xs text-white/80 disabled:opacity-60"
+          >
+            {refreshing ? "Обновляем..." : "Обновить"}
+          </motion.button>
+        </div>
       </GlassCard>
 
       {loading && <GlassCard className="p-4 text-sm text-white/70">Загружаем релизы...</GlassCard>}
@@ -117,7 +139,7 @@ export default function LibraryPage() {
                 </p>
               </div>
               <span className="rounded-full border border-white/20 px-2 py-1 text-[10px] text-white/75">
-                {statusLabel[release.status] ?? release.status}
+                {getReleaseStatusLabel(release.status)}
               </span>
             </motion.button>
           ))}

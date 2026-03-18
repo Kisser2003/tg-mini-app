@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowLeft, Check, Link2, ShieldCheck } from "lucide-react";
 import { GlassCard } from "@/components/GlassCard";
+import { getReleaseStatusLabel, normalizeReleaseStatus } from "@/lib/release-status";
 import { supabase } from "@/lib/supabase";
 import { getTelegramUserId, initTelegramWebApp } from "@/lib/telegram";
 
@@ -25,17 +26,8 @@ type ReleaseDetailsRow = {
 const statusStyles: Record<string, string> = {
   draft: "bg-zinc-400/20 text-zinc-200 border-zinc-300/40",
   processing: "bg-amber-400/20 text-amber-200 border-amber-300/40",
-  under_review: "bg-sky-400/20 text-sky-200 border-sky-300/40",
   ready: "bg-emerald-400/20 text-emerald-200 border-emerald-300/40",
   failed: "bg-rose-400/20 text-rose-200 border-rose-300/40"
-};
-
-const statusLabel: Record<string, string> = {
-  draft: "Черновик",
-  processing: "На модерации",
-  under_review: "На проверке",
-  ready: "Готов",
-  failed: "Отклонен"
 };
 
 export default function ReleaseDetailsPage() {
@@ -89,9 +81,9 @@ export default function ReleaseDetailsPage() {
 
   const moderationChecklist = useMemo(
     () => [
-      { title: "Проверка метаданных", done: release?.status !== "failed" },
-      { title: "Проверка обложки", done: release?.status !== "draft" },
-      { title: "Доставка на платформы", done: release?.status === "ready" }
+      { title: "Проверка метаданных", done: normalizeReleaseStatus(release?.status) !== "failed" },
+      { title: "Проверка обложки", done: normalizeReleaseStatus(release?.status) !== "draft" },
+      { title: "Доставка на платформы", done: normalizeReleaseStatus(release?.status) === "ready" }
     ],
     [release]
   );
@@ -168,8 +160,8 @@ export default function ReleaseDetailsPage() {
           <ShieldCheck className="h-4 w-4" />
           Статус модерации
         </p>
-        <span className={`inline-flex rounded-full border px-3 py-1 text-xs ${statusStyles[release.status] ?? statusStyles.draft}`}>
-          {statusLabel[release.status] ?? release.status}
+        <span className={`inline-flex rounded-full border px-3 py-1 text-xs ${statusStyles[normalizeReleaseStatus(release.status)] ?? statusStyles.draft}`}>
+          {getReleaseStatusLabel(release.status)}
         </span>
         <p className="mt-3 text-sm text-white/70">
           {release.error_message?.trim() ? release.error_message : "Ошибок модерации не зафиксировано."}

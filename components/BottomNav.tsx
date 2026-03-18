@@ -24,7 +24,7 @@ export function BottomNav() {
   const items = useMemo<NavItem[]>(
     () => [
       { label: "Главная", href: "/", icon: Home },
-      { label: "Библиотека", href: "/library", icon: Library },
+      { label: "Мои релизы", href: "/library", icon: Library },
       { label: "Кошелек", href: "/wallet", icon: Wallet },
       { label: "Настройки", href: "/settings", icon: Settings },
       ...(isAdmin ? [{ label: "Админ", href: "/admin", icon: Shield }] : [])

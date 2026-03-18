@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { ShieldCheck } from "lucide-react";
 import { getExpectedAdminTelegramId } from "@/lib/admin";
+import { getReleaseStatusLabel, normalizeReleaseStatus } from "@/lib/release-status";
 import { supabase } from "@/lib/supabase";
 import { getTelegramUserDisplayName, getTelegramUserId, initTelegramWebApp } from "@/lib/telegram";
 import type { ReleaseStatus } from "@/lib/db-enums";
@@ -18,13 +19,11 @@ type ReleaseRow = {
 };
 
 const getStatusMeta = (status: string) => {
-  switch (status) {
+  switch (normalizeReleaseStatus(status)) {
     case "ready":
       return { text: "Готов", color: "green" as const };
     case "processing":
-      return { text: "На модерации", color: "yellow" as const };
-    case "under_review":
-      return { text: "На проверке менеджером", color: "blue" as const };
+      return { text: "На проверке", color: "yellow" as const };
     case "failed":
       return { text: "Ошибка", color: "red" as const };
     default:
@@ -203,11 +202,10 @@ export default function DashboardPage() {
                     ? "bg-amber-500/15 text-amber-300 border-amber-500/40"
                     : meta.color === "red"
                     ? "bg-red-500/15 text-red-300 border-red-500/40"
-                    : meta.color === "blue"
-                    ? "bg-sky-500/15 text-sky-300 border-sky-500/40"
                     : "bg-zinc-500/10 text-zinc-300 border-zinc-500/30";
 
-                const isFailed = release.status === "failed";
+                const normalizedStatus = normalizeReleaseStatus(release.status);
+                const isFailed = normalizedStatus === "failed";
                 const hasErrorText =
                   (release.error_message && release.error_message.trim().length > 0) ||
                   false;
@@ -249,7 +247,7 @@ export default function DashboardPage() {
                             );
                           }}
                         >
-                          {meta.text}
+                          {getReleaseStatusLabel(release.status)}
                           {isFailed && (
                             <span className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full border border-current text-[9px]">
                               i
