@@ -55,6 +55,7 @@ export default function CreateAssetsPage() {
       if (!url) return;
       router.push("/create/tracks");
     } catch (e: unknown) {
+      console.error("[CreateAssetsPage] Upload error:", e);
       setSubmitError(
         e instanceof Error ? e.message : "Произошла ошибка при загрузке обложки."
       );

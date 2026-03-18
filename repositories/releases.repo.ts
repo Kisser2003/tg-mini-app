@@ -297,17 +297,28 @@ export async function uploadReleaseArtwork(params: {
   file: File;
 }): Promise<string> {
   assertArtworkFile(params.file, 20);
-  const path = getReleaseArtworkPath(params.userId, params.releaseId);
+
+  const ext = params.file.type === "image/png" ? "png" : "jpg";
+  const path = getReleaseArtworkPath(params.userId, params.releaseId, ext);
 
   const { error } = await withRetry(async () => {
     const response = await supabase.storage
       .from("artwork")
-      .upload(path, params.file, { upsert: true });
+      .upload(path, params.file, {
+        upsert: true,
+        contentType: params.file.type
+      });
     return response;
   });
 
   if (error) {
-    throw error;
+    console.error("[uploadReleaseArtwork] Supabase Storage error:", {
+      message: error.message,
+      name: (error as any).name,
+      statusCode: (error as any).statusCode,
+      error: JSON.stringify(error)
+    });
+    throw new Error(`Ошибка загрузки обложки: ${error.message}`);
   }
 
   const {
