@@ -237,7 +237,7 @@ export async function submitRelease(id: string): Promise<ReleaseRecord> {
       rpcError.code === "PGRST202";
 
     if (isMissing) {
-      const updated = await updateRelease(id, { status: "review" as ReleaseStatus });
+      const updated = await updateRelease(id, { status: "processing" as ReleaseStatus });
       record = updated;
     } else {
       await logReleaseEvent({
@@ -251,7 +251,7 @@ export async function submitRelease(id: string): Promise<ReleaseRecord> {
   } else {
     const rows = Array.isArray(rpcData) ? rpcData : rpcData ? [rpcData] : [];
     if (rows.length === 0) {
-      const updated = await updateRelease(id, { status: "review" as ReleaseStatus });
+      const updated = await updateRelease(id, { status: "processing" as ReleaseStatus });
       record = updated;
     } else {
       record = rows[0] as ReleaseRecord;
