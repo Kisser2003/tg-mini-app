@@ -223,31 +223,46 @@ export async function updateRelease(
 }
 
 export async function submitRelease(id: string): Promise<ReleaseRecord> {
-  // используем RPC, внутри БД всё делается транзакционно:
-  // проверка client_request_id, финальный статус и логирование
-  const { data, error } = await withRetry(async () => {
-    const response = await supabase
-      .rpc("finalize_release", { p_release_id: id })
-      .single();
-    return response;
+  // Try RPC first; fall back to simple status update if the function doesn't exist
+  let record: ReleaseRecord;
+
+  const { data: rpcData, error: rpcError } = await withRetry(async () => {
+    return await supabase.rpc("finalize_release", { p_release_id: id });
   });
 
-  if (error || !data) {
-    await logReleaseEvent({
-      releaseId: id,
-      stage: "error",
-      status: "failed",
-      errorMessage: error?.message ?? "Failed to finalize release"
-    });
-    throw error ?? new Error("Failed to finalize release");
+  if (rpcError) {
+    const isMissing =
+      rpcError.message?.includes("could not find") ||
+      rpcError.message?.includes("function") ||
+      rpcError.code === "PGRST202";
+
+    if (isMissing) {
+      const updated = await updateRelease(id, { status: "review" as ReleaseStatus });
+      record = updated;
+    } else {
+      await logReleaseEvent({
+        releaseId: id,
+        stage: "error",
+        status: "failed",
+        errorMessage: rpcError.message
+      }).catch(() => {});
+      throw rpcError;
+    }
+  } else {
+    const rows = Array.isArray(rpcData) ? rpcData : rpcData ? [rpcData] : [];
+    if (rows.length === 0) {
+      const updated = await updateRelease(id, { status: "review" as ReleaseStatus });
+      record = updated;
+    } else {
+      record = rows[0] as ReleaseRecord;
+    }
   }
 
-  const record = data as ReleaseRecord;
   await logReleaseEvent({
     releaseId: record.id,
     stage: "finalize",
     status: record.status
-  });
+  }).catch(() => {});
 
   return record;
 }

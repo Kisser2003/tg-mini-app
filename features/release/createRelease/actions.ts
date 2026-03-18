@@ -225,7 +225,8 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
     return true;
   } catch (e: unknown) {
     store.setSubmitStatus("error");
-    store.setSubmitError(formatErrorMessage(e, "Не удалось отправить релиз."));
+    const detail = e instanceof Error ? e.message : JSON.stringify(e);
+    store.setSubmitError(`Ошибка отправки: ${detail}`);
     return false;
   }
 }
