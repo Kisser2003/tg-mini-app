@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { persist, createJSONStorage } from "zustand/middleware";
+import { persist, createJSONStorage, type StateStorage } from "zustand/middleware";
 import type {
   CreateMetadata,
   CreateReleaseSuccessSummary,
@@ -158,7 +158,9 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
     {
       name: "omf_create_release_draft_v1",
       storage: createJSONStorage(() =>
-        typeof window !== "undefined" ? window.localStorage : localStorage
+        typeof window !== "undefined"
+          ? window.localStorage
+          : ({ getItem: () => null, setItem: () => {}, removeItem: () => {} } as StateStorage)
       ),
       onRehydrateStorage: () => (state, error) => {
         if (error) {

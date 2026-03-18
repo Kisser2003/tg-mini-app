@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/lib/supabase";
 import { getTelegramUserDisplayName, getTelegramUserId } from "@/lib/telegram";
-import { useTelegramMainButton } from "@/lib/useTelegramMainButton";
 import type { ReleaseStatus } from "@/repositories/releases.repo";
 
 type ReleaseRow = {
@@ -90,13 +89,6 @@ export default function DashboardPage() {
   const handleCreate = () => {
     router.push("/create/metadata");
   };
-
-  useTelegramMainButton({
-    text: "Загрузить релиз",
-    enabled: true,
-    loading: false,
-    onClick: handleCreate
-  });
 
   const hasReleases = useMemo(() => releases.length > 0, [releases]);
 
