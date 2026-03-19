@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { ArrowUpRight, RefreshCcw, Wallet } from "lucide-react";
 import { GlassCard } from "@/components/GlassCard";
+import { debugInit } from "@/lib/debug";
 import { getReleaseStatusMeta, normalizeReleaseStatus } from "@/lib/release-status";
 import { supabase } from "@/lib/supabase";
 import { getTelegramUserId, initTelegramWebApp } from "@/lib/telegram";
@@ -27,8 +28,10 @@ export default function WalletPage() {
   const [userId, setUserId] = useState<number | null>(null);
 
   useEffect(() => {
+    debugInit("wallet", "init start");
     initTelegramWebApp();
     setUserId(getTelegramUserId());
+    debugInit("wallet", "init done");
   }, []);
 
   const loadRows = useCallback(
@@ -62,7 +65,9 @@ export default function WalletPage() {
     enabled: userId != null,
     intervalMs: 8000,
     load: loadRows,
-    initialData: { summaryRows: [], recentRows: [] }
+    initialData: { summaryRows: [], recentRows: [] },
+    requestTimeoutMs: 12000,
+    debugName: "wallet.rows"
   });
 
   const summary = useMemo(() => {

@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { AlertTriangle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { GlassCard } from "@/components/GlassCard";
+import { debugInit } from "@/lib/debug";
 import { getReleaseStatusMeta, normalizeReleaseStatus } from "@/lib/release-status";
 import { supabase } from "@/lib/supabase";
 import { getTelegramUserId, initTelegramWebApp } from "@/lib/telegram";
@@ -24,8 +25,10 @@ export default function LibraryPage() {
   const [userId, setUserId] = useState<number | null>(null);
 
   useEffect(() => {
+    debugInit("library", "init start");
     initTelegramWebApp();
     setUserId(getTelegramUserId());
+    debugInit("library", "init done");
   }, []);
 
   const loadReleases = useCallback(async () => {
@@ -49,7 +52,9 @@ export default function LibraryPage() {
     enabled: userId != null,
     intervalMs: 8000,
     load: loadReleases,
-    initialData: []
+    initialData: [],
+    requestTimeoutMs: 12000,
+    debugName: "library.releases"
   });
 
   return (

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { ShieldCheck } from "lucide-react";
 import { getExpectedAdminTelegramId } from "@/lib/admin";
+import { debugInit } from "@/lib/debug";
 import { getReleaseStatusMeta, normalizeReleaseStatus } from "@/lib/release-status";
 import { supabase } from "@/lib/supabase";
 import { getTelegramUserDisplayName, getTelegramUserId, initTelegramWebApp } from "@/lib/telegram";
@@ -26,20 +27,24 @@ export default function DashboardPage() {
   const [expandedErrorId, setExpandedErrorId] = useState<string | null>(null);
 
   useEffect(() => {
+    debugInit("dashboard", "init start");
     initTelegramWebApp();
     const id = getTelegramUserId();
     setUserId(id ?? null);
     setTelegramName(getTelegramUserDisplayName());
+    debugInit("dashboard", "init done", { userId: id ?? null });
   }, []);
 
   const loadReleases = useCallback(async () => {
     if (userId == null) return [] as ReleaseRow[];
+    debugInit("dashboard", "loadReleases start", { userId });
     const { data, error: dbError } = await supabase
       .from("releases")
       .select("id, track_name, status, created_at, error_message")
       .eq("user_id", userId)
       .order("created_at", { ascending: false });
     if (dbError) throw dbError;
+    debugInit("dashboard", "loadReleases success", { count: (data ?? []).length });
     return (data ?? []) as ReleaseRow[];
   }, [userId]);
 
@@ -51,7 +56,9 @@ export default function DashboardPage() {
     enabled: userId != null,
     intervalMs: 7000,
     load: loadReleases,
-    initialData: []
+    initialData: [],
+    requestTimeoutMs: 12000,
+    debugName: "dashboard.releases"
   });
 
   const handleCreate = () => {

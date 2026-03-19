@@ -86,13 +86,17 @@ export default function CreateTracksPage() {
   }, [reset, setTracks, syncTrackFilesLength]);
 
   const values = watch();
+  const lastSyncedTracksRef = useRef<string>("");
 
   // Persist form values to store while editing (debounced).
   useEffect(() => {
     if (!isDirty) return;
+    const serializedTracks = JSON.stringify(values.tracks);
+    if (serializedTracks === lastSyncedTracksRef.current) return;
     const id = window.setTimeout(() => {
       setTracks(values.tracks);
       syncTrackFilesLength(values.tracks.length);
+      lastSyncedTracksRef.current = serializedTracks;
     }, 200);
     return () => window.clearTimeout(id);
   }, [isDirty, setTracks, syncTrackFilesLength, values.tracks]);

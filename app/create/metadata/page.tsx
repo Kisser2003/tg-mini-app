@@ -21,6 +21,7 @@ function CreateMetadataPageInner() {
   const setMetadata = useCreateReleaseDraftStore((s) => s.setMetadata);
 
   const [isHydrating, setIsHydrating] = useState(Boolean(releaseIdParam));
+  const [hydrateError, setHydrateError] = useState<string | null>(null);
 
   useEffect(() => {
     initUserContextInStore();
@@ -30,9 +31,18 @@ function CreateMetadataPageInner() {
     let cancelled = false;
     const run = async () => {
       if (!releaseIdParam) return;
+      setHydrateError(null);
       setIsHydrating(true);
-      await hydrateFromReleaseId(releaseIdParam);
-      if (!cancelled) setIsHydrating(false);
+      try {
+        await hydrateFromReleaseId(releaseIdParam);
+      } catch (error) {
+        console.error("[create/metadata] hydrateFromReleaseId failed", error);
+        if (!cancelled) {
+          setHydrateError("Не удалось загрузить данные релиза. Попробуйте обновить страницу.");
+        }
+      } finally {
+        if (!cancelled) setIsHydrating(false);
+      }
     };
     void run();
     return () => {
@@ -74,11 +84,15 @@ function CreateMetadataPageInner() {
   }, [reset]);
 
   const values = watch();
+  const lastSyncedValuesRef = useRef<string>("");
 
   useEffect(() => {
     if (!isDirty) return;
+    const serialized = JSON.stringify(values);
+    if (serialized === lastSyncedValuesRef.current) return;
     const timeoutId = window.setTimeout(() => {
       setMetadata(values);
+      lastSyncedValuesRef.current = serialized;
     }, 200);
     return () => window.clearTimeout(timeoutId);
   }, [values, isDirty, setMetadata]);
@@ -113,6 +127,11 @@ function CreateMetadataPageInner() {
           <p className="text-[13px] text-text-muted">Загружаем данные релиза…</p>
         ) : (
           <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
+            {hydrateError && (
+              <p className="rounded-[14px] border border-red-500/30 bg-red-950/40 px-3 py-2 text-[12px] text-red-100">
+                {hydrateError}
+              </p>
+            )}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/60">

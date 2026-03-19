@@ -81,9 +81,44 @@ const EMPTY_METADATA: CreateMetadata = {
   explicit: false
 };
 
+function areArtistsEqual(
+  current: CreateMetadata["artists"],
+  next: CreateMetadata["artists"]
+) {
+  if (current.length !== next.length) return false;
+  for (let i = 0; i < current.length; i += 1) {
+    if (current[i]?.name !== next[i]?.name) return false;
+    if (current[i]?.role !== next[i]?.role) return false;
+  }
+  return true;
+}
+
+function areMetadataEqual(current: CreateMetadata, next: CreateMetadata) {
+  return (
+    current.releaseTitle === next.releaseTitle &&
+    current.releaseType === next.releaseType &&
+    current.genre === next.genre &&
+    current.subgenre === next.subgenre &&
+    current.language === next.language &&
+    current.label === next.label &&
+    current.releaseDate === next.releaseDate &&
+    current.explicit === next.explicit &&
+    areArtistsEqual(current.artists, next.artists)
+  );
+}
+
+function areTracksEqual(current: CreateTrack[], next: CreateTrack[]) {
+  if (current.length !== next.length) return false;
+  for (let i = 0; i < current.length; i += 1) {
+    if (current[i]?.title !== next[i]?.title) return false;
+    if (Boolean(current[i]?.explicit) !== Boolean(next[i]?.explicit)) return false;
+  }
+  return true;
+}
+
 export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
   persist(
-    (set, get) => {
+    (set) => {
       // Wraps every data-mutating set call with a fresh lastModified timestamp.
       const stamp = () => ({ lastModified: Date.now() });
 
@@ -110,34 +145,60 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
         hasHydrated: false,
         lastModified: null,
 
-        setUserContext: ({ userId, telegramName }) => set({ userId, telegramName }),
-        setReleaseId: (releaseId) => set({ releaseId }),
-        setClientRequestId: (clientRequestId) => set({ clientRequestId }),
+        setUserContext: ({ userId, telegramName }) =>
+          set((state) => {
+            if (state.userId === userId && state.telegramName === telegramName) {
+              return state;
+            }
+            return { userId, telegramName };
+          }),
+        setReleaseId: (releaseId) =>
+          set((state) => (state.releaseId === releaseId ? state : { releaseId })),
+        setClientRequestId: (clientRequestId) =>
+          set((state) =>
+            state.clientRequestId === clientRequestId ? state : { clientRequestId }
+          ),
 
         setMetadata: (patch) =>
-          set({ metadata: { ...get().metadata, ...patch }, ...stamp() }),
-        setArtworkUrl: (url) => set({ artworkUrl: url, ...stamp() }),
-        setArtworkFile: (file) => set({ artworkFile: file }),
-        setTracks: (tracks) => set({ tracks, ...stamp() }),
+          set((state) => {
+            const nextMetadata = { ...state.metadata, ...patch };
+            if (areMetadataEqual(state.metadata, nextMetadata)) {
+              return state;
+            }
+            return { metadata: nextMetadata, ...stamp() };
+          }),
+        setArtworkUrl: (url) =>
+          set((state) => {
+            if (state.artworkUrl === url) return state;
+            return { artworkUrl: url, ...stamp() };
+          }),
+        setArtworkFile: (file) =>
+          set((state) => (state.artworkFile === file ? state : { artworkFile: file })),
+        setTracks: (tracks) =>
+          set((state) => {
+            if (areTracksEqual(state.tracks, tracks)) return state;
+            return { tracks, ...stamp() };
+          }),
         setTrackFile: (index, file) =>
-          set({
-            trackFiles: (() => {
-              const prev = get().trackFiles;
-              const next = [...prev];
-              while (next.length < get().tracks.length) next.push(null);
-              next[index] = file;
-              return next;
-            })()
+          set((state) => {
+            const prev = state.trackFiles;
+            const trackCount = state.tracks.length;
+            const currentFile = prev[index] ?? null;
+            if (currentFile === file && prev.length >= trackCount) {
+              return state;
+            }
+            const next = [...prev];
+            while (next.length < trackCount) next.push(null);
+            next[index] = file;
+            return { trackFiles: next };
           }),
         syncTrackFilesLength: (len) =>
-          set({
-            trackFiles: (() => {
-              const prev = get().trackFiles;
-              if (prev.length === len) return prev;
-              const next = prev.slice(0, len);
-              while (next.length < len) next.push(null);
-              return next;
-            })()
+          set((state) => {
+            const prev = state.trackFiles;
+            if (prev.length === len) return state;
+            const next = prev.slice(0, len);
+            while (next.length < len) next.push(null);
+            return { trackFiles: next };
           }),
 
         setSubmitStatus: (status) => set({ submitStatus: status }),
@@ -166,7 +227,8 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
             hasHydrated: true, // already on client, no rehydration needed after reset
             lastModified: null
           }),
-        setHasHydrated: (value) => set({ hasHydrated: value })
+        setHasHydrated: (value) =>
+          set((state) => (state.hasHydrated === value ? state : { hasHydrated: value }))
       };
     },
     {

@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowLeft, Check, Link2, ShieldCheck } from "lucide-react";
 import { GlassCard } from "@/components/GlassCard";
+import { debugInit } from "@/lib/debug";
 import { getReleaseStatusMeta, normalizeReleaseStatus } from "@/lib/release-status";
 import { supabase } from "@/lib/supabase";
 import { getTelegramUserId, initTelegramWebApp } from "@/lib/telegram";
@@ -23,6 +24,8 @@ type ReleaseDetailsRow = {
   created_at: string;
 };
 
+const RELEASE_DETAILS_TIMEOUT_MS = 12000;
+
 export default function ReleaseDetailsPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -32,8 +35,10 @@ export default function ReleaseDetailsPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    debugInit("release/details", "init start");
     initTelegramWebApp();
     setUserId(getTelegramUserId());
+    debugInit("release/details", "init done");
   }, []);
 
   useEffect(() => {
@@ -44,31 +49,76 @@ export default function ReleaseDetailsPage() {
     }
 
     let cancelled = false;
+    let timeoutId: number | null = null;
     const load = async () => {
       setLoading(true);
       setError(null);
+      const startedAt = Date.now();
+      debugInit("release/details", "load start", { releaseId: params.id, userId });
       try {
-        const { data, error: dbError } = await supabase
+        const queryPromise = Promise.resolve(
+          supabase
           .from("releases")
           .select(
             "id, user_id, artist_name, track_name, artwork_url, audio_url, release_type, genre, status, error_message, created_at"
           )
           .eq("id", params.id)
           .eq("user_id", userId)
-          .maybeSingle();
+          .maybeSingle()
+        );
+        queryPromise.catch(() => {});
+        const timeoutPromise = new Promise<Awaited<typeof queryPromise>>((_, reject) => {
+          timeoutId = window.setTimeout(() => {
+            reject(
+              new Error(
+                `Запрос превысил таймаут (${RELEASE_DETAILS_TIMEOUT_MS} мс). Попробуйте снова.`
+              )
+            );
+          }, RELEASE_DETAILS_TIMEOUT_MS);
+        });
+
+        const { data, error: dbError } = await Promise.race([
+          queryPromise,
+          timeoutPromise
+        ]);
+        if (timeoutId != null) {
+          window.clearTimeout(timeoutId);
+          timeoutId = null;
+        }
 
         if (dbError) throw dbError;
-        if (!cancelled) setRelease((data as ReleaseDetailsRow | null) ?? null);
+        if (!cancelled) {
+          setRelease((data as ReleaseDetailsRow | null) ?? null);
+        }
+        debugInit("release/details", "load success", {
+          releaseId: params.id,
+          hasData: Boolean(data),
+          durationMs: Date.now() - startedAt
+        });
       } catch (e: any) {
-        if (!cancelled) setError(e?.message ?? "Не удалось загрузить релиз.");
+        if (timeoutId != null) {
+          window.clearTimeout(timeoutId);
+          timeoutId = null;
+        }
+        console.error("[release/details] load failed", e);
+        if (!cancelled) {
+          setError(e?.message ?? "Не удалось загрузить релиз.");
+        }
       } finally {
         if (!cancelled) setLoading(false);
+        debugInit("release/details", "load finished", {
+          releaseId: params.id,
+          durationMs: Date.now() - startedAt
+        });
       }
     };
 
     void load();
     return () => {
       cancelled = true;
+      if (timeoutId != null) {
+        window.clearTimeout(timeoutId);
+      }
     };
   }, [params.id, userId]);
 

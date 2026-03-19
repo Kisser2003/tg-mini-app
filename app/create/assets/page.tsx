@@ -8,6 +8,7 @@ import { useStepGuard } from "@/features/release/createRelease/guards";
 import { ensureDraftRelease, uploadArtworkForDraft } from "@/features/release/createRelease/actions";
 import { useCreateReleaseDraftStore } from "@/features/release/createRelease/store";
 import { FileUploader } from "@/components/FileUploader";
+import { debugInit } from "@/lib/debug";
 
 export default function CreateAssetsPage() {
   const router = useRouter();
@@ -36,11 +37,18 @@ export default function CreateAssetsPage() {
   );
 
   const handleNext = useCallback(async () => {
+    debugInit("create/assets", "handleNext start", {
+      hasArtworkUrl: Boolean(artworkUrl),
+      hasArtworkFile: Boolean(artworkFile),
+      hasReleaseId: Boolean(releaseId)
+    });
     if (artworkUrl && !artworkFile) {
+      debugInit("create/assets", "skip upload, artwork already exists");
       router.push("/create/tracks");
       return;
     }
     if (!artworkFile) {
+      debugInit("create/assets", "blocked: artwork file missing");
       setSubmitError("Загрузите обложку (JPG/PNG).");
       return;
     }
@@ -48,11 +56,21 @@ export default function CreateAssetsPage() {
     setSubmitError(null);
     try {
       if (!releaseId) {
+        debugInit("create/assets", "ensureDraftRelease start");
         const draft = await ensureDraftRelease();
-        if (!draft) return;
+        if (!draft) {
+          debugInit("create/assets", "ensureDraftRelease returned null");
+          return;
+        }
+        debugInit("create/assets", "ensureDraftRelease success", { releaseId: draft.id });
       }
+      debugInit("create/assets", "uploadArtworkForDraft start");
       const url = await uploadArtworkForDraft(artworkFile);
-      if (!url) return;
+      if (!url) {
+        debugInit("create/assets", "uploadArtworkForDraft returned empty URL");
+        return;
+      }
+      debugInit("create/assets", "uploadArtworkForDraft success", { hasUrl: true });
       router.push("/create/tracks");
     } catch (e: unknown) {
       console.error("[CreateAssetsPage] Upload error:", e);
@@ -60,6 +78,7 @@ export default function CreateAssetsPage() {
         e instanceof Error ? e.message : "Произошла ошибка при загрузке обложки."
       );
     } finally {
+      debugInit("create/assets", "handleNext finished");
       setIsUploading(false);
     }
   }, [artworkFile, artworkUrl, releaseId, router, setSubmitError]);

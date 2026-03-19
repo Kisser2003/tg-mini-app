@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { CheckCircle2, Info, RefreshCcw, XCircle } from "lucide-react";
 import { GlassCard } from "@/components/GlassCard";
 import { getExpectedAdminTelegramId } from "@/lib/admin";
+import { debugInit } from "@/lib/debug";
 import { getReleaseStatusMeta, normalizeReleaseStatus } from "@/lib/release-status";
 import { supabase } from "@/lib/supabase";
 import { getTelegramUserId, initTelegramWebApp } from "@/lib/telegram";
@@ -30,8 +31,10 @@ export default function AdminPage() {
   const isAdmin = userId === expectedAdminId;
 
   useEffect(() => {
+    debugInit("admin", "init start");
     initTelegramWebApp();
     setUserId(getTelegramUserId());
+    debugInit("admin", "init done");
   }, []);
 
   const loadQueue = useCallback(async () => {
@@ -60,7 +63,9 @@ export default function AdminPage() {
     enabled: isAdmin,
     intervalMs: 8000,
     load: loadQueue,
-    initialData: []
+    initialData: [],
+    requestTimeoutMs: 12000,
+    debugName: "admin.queue"
   });
 
   const updateStatus = useCallback(
