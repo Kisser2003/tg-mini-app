@@ -12,7 +12,26 @@ body {
   color: #fff;
   overflow-x: hidden;
   scrollbar-width: none;
+  overscroll-behavior-y: none;
+  /* Не smooth: на мобильных даёт «залипание» и конфликт с инерционным скроллом */
+  -webkit-overflow-scrolling: touch;
 }
+
+/*
+ * Единственный вертикальный скролл приложения (см. layout #app-main-scroll).
+ * overscroll-behavior-y: none — без системного rubber-band, который ломает ощущение с BottomNav.
+ */
+.app-main-scroll,
+#app-main-scroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: none;
+  touch-action: pan-y pinch-zoom;
+}
+
+/*
+ * В layout на body стоит overflow-hidden + flex — это единственный корневой скролл через #app-main-scroll.
+ * Не добавлять touch-action: none / второй overflow-y-auto на формах create/*.
+ */
 
 * {
   scrollbar-width: none;
@@ -30,6 +49,7 @@ select {
   color: #fff;
   font-size: 16px;
   line-height: 1.4;
+  overscroll-behavior: contain;
 }
 
 input::placeholder,

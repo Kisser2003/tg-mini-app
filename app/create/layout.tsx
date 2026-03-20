@@ -21,7 +21,7 @@ export default function CreateLayout({ children }: { children: React.ReactNode }
 
   if (!hasHydrated) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
+      <div className="flex min-h-[100dvh] items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
           {/* Glassmorphism card spinner */}
           <div className="rounded-[24px] border border-white/[0.08] bg-surface/80 p-8 shadow-[0_18px_40px_rgba(0,0,0,0.7)] backdrop-blur-2xl">

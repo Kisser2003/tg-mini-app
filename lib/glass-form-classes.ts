@@ -6,7 +6,7 @@ export const GLASS_FIELD_BASE =
 
 /** Обёртка для type=date: flex + фокус на контейнере */
 export const GLASS_DATE_WRAP_BASE =
-  "flex w-full min-h-[56px] items-center justify-between gap-3 rounded-[18px] border border-white/[0.08] bg-black/40 px-4 py-3 transition-[background-color,box-shadow,border-color] duration-200 focus-within:bg-black/60 focus-within:ring-2 focus-within:ring-violet-500/25 focus-within:ring-offset-0";
+  "flex w-full min-h-[56px] items-center justify-between gap-3 rounded-[18px] border border-white/[0.08] bg-black/40 py-3 pl-4 pr-4 transition-[background-color,box-shadow,border-color] duration-200 focus-within:bg-black/60 focus-within:ring-2 focus-within:ring-violet-500/25 focus-within:ring-offset-0";
 
 export const GLASS_FIELD_ERROR_STRONG =
   "border-red-500/45 ring-1 ring-red-500/30 focus:border-red-400/55 focus:ring-2 focus:ring-red-400/25";

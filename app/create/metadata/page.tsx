@@ -324,7 +324,7 @@ function CreateMetadataPageInner() {
                     className="glass-date-native cursor-pointer bg-transparent text-[16px] text-white [color-scheme:dark]"
                   />
                   <Calendar
-                    className="pointer-events-none h-5 w-5 shrink-0 text-white/35"
+                    className="pointer-events-none ml-auto h-5 w-5 shrink-0 pr-3 text-white/35"
                     strokeWidth={1.5}
                     aria-hidden
                   />

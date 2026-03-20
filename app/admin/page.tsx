@@ -171,7 +171,7 @@ export default function AdminPage() {
   const showQueueSkeleton = isLoading && data === undefined;
 
   return (
-    <div className="flex max-h-[min(100dvh,900px)] flex-col gap-4 overflow-y-auto pb-10">
+    <div className="flex min-h-[100dvh] flex-col gap-4 pb-10">
       <GlassCard className="p-5">
         <div className="flex items-center justify-between gap-3">
           <div>

@@ -7,7 +7,7 @@ import { AppProviders } from "@/components/AppProviders";
 import { AppErrorBoundary } from "@/components/ErrorBoundary";
 import { PageTransition } from "@/components/PageTransition";
 import { TelegramBootstrap } from "@/components/TelegramBootstrap";
-import { BottomNav } from "@/components/BottomNav";
+import { BottomNavHost } from "@/components/BottomNavHost";
 import { NoiseOverlay } from "@/components/NoiseOverlay";
 
 function supabasePreconnectOrigin(): string | null {
@@ -54,6 +54,7 @@ export default function RootLayout({
       </head>
       <body
         className={`${inter.variable} flex min-h-[100dvh] flex-col overflow-hidden bg-[#030303] font-sans text-white antialiased`}
+        style={{ backgroundColor: "#030303", color: "#fff" }}
       >
         <TelegramBootstrap />
         <Toaster richColors expand position="top-center" />
@@ -66,7 +67,10 @@ export default function RootLayout({
             <div className="absolute inset-0 bg-[#030303]" />
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(29,78,216,0.15),transparent_55%),radial-gradient(circle_at_80%_25%,rgba(88,28,135,0.15),transparent_50%),radial-gradient(circle_at_50%_90%,rgba(37,99,235,0.1),transparent_45%)]" />
           </div>
-          <div className="app-main-scroll relative flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-y-contain px-3 pb-[calc(7rem+env(safe-area-inset-bottom,0px))] pt-4 [-webkit-overflow-scrolling:touch]">
+          <div
+            id="app-main-scroll"
+            className="app-main-scroll relative flex min-h-0 flex-1 flex-col overflow-y-auto px-3 pb-[calc(7rem+env(safe-area-inset-bottom,0px))] pt-4"
+          >
             <NoiseOverlay />
             <AppProviders>
               <AppErrorBoundary>
@@ -74,7 +78,7 @@ export default function RootLayout({
               </AppErrorBoundary>
             </AppProviders>
           </div>
-          <BottomNav />
+          <BottomNavHost />
         </div>
       </body>
     </html>

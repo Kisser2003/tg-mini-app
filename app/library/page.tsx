@@ -182,7 +182,7 @@ function LibraryPageInner() {
   const showListSkeleton = userId != null && isLoading && data === undefined;
 
   return (
-    <div className="min-h-screen bg-background px-5 py-6 pb-10 text-text">
+    <div className="min-h-[100dvh] bg-background px-5 py-6 pb-10 text-text">
       <div className="mx-auto flex w-full max-w-[440px] flex-col gap-6 font-sans">
         <GlassCard className="p-5">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -441,7 +441,7 @@ export default function LibraryPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center bg-background px-5 py-6 text-text">
+        <div className="flex min-h-[100dvh] items-center justify-center bg-background px-5 py-6 text-text">
           <div className="flex flex-col items-center gap-4">
             <div
               className="h-9 w-9 animate-spin rounded-full border-2 border-white/10 border-t-[#7C3AED]"

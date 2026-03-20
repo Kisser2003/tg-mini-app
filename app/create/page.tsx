@@ -18,7 +18,7 @@ export default function CreateEntryPage() {
   }, [router]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
+    <div className="flex min-h-[100dvh] items-center justify-center bg-background">
       <div
         className="h-9 w-9 animate-spin rounded-full border-2 border-white/10 border-t-[#7C3AED]"
         aria-label="Загрузка…"
