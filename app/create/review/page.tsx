@@ -69,7 +69,10 @@ export default function CreateReviewPage() {
     setIsSubmitting(false);
     if (!ok) {
       const msg = useCreateReleaseDraftStore.getState().submitError;
-      toast.error(msg ?? "Не удалось отправить релиз", { id: loadingId });
+      toast.error(
+        msg ?? "Не удалось отправить релиз на модерацию. Статус не изменён.",
+        { id: loadingId }
+      );
       return;
     }
     toast.success("Релиз на проверке! Скоро всё будет.", { id: loadingId });

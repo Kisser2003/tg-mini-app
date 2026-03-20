@@ -12,6 +12,7 @@ import {
   cleanupReleaseTracks,
   createDraftRelease,
   deleteReleaseFiles,
+  ensureReleaseProcessing,
   getReleaseById,
   getReleaseTracksByReleaseId,
   submitRelease,
@@ -368,104 +369,128 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
   };
 
   try {
-    const existing = await getReleaseById(releaseId);
-    if (existing.status === "failed") {
-      await updateRelease(releaseId, { status: "draft", error_message: null });
-    }
-
-    if (store.artworkUrl) {
-      await updateRelease(releaseId, { artwork_url: store.artworkUrl });
-      store.setSubmitProgress(15);
-    }
-
-    for (let index = 0; index < parsedTracks.data.tracks.length; index += 1) {
-      store.setSubmitStage("uploading_tracks");
-      const track = parsedTracks.data.tracks[index];
-      const file = args.files[index];
-      const audioUrl = await uploadReleaseTrackAudio({
-        userId: store.userId,
-        releaseId,
-        trackIndex: index,
-        file,
-        options: {
-          markReleaseFailedOnError: { releaseId },
-          onProgress: (pct) => setTrackUploadProgress(index, pct)
-        }
-      });
-      await addReleaseTrack({
-        releaseId,
-        index,
-        title: track.title,
-        explicit: Boolean(track.explicit),
-        audioUrl
-      });
-      setTrackUploadProgress(index + 1, 0);
-    }
-
-    store.setSubmitStage("finalizing");
-    store.setSubmitProgress(92);
-    const updated = await submitRelease({ releaseId, clientRequestId });
-    if (process.env.NODE_ENV === "development") {
-      if (updated.status !== "processing" && updated.status !== "ready") {
-        console.warn(
-          "[submitTracksAndFinalize] unexpected status after finalize:",
-          updated.status
-        );
+    try {
+      const existing = await getReleaseById(releaseId);
+      if (existing.status === "failed") {
+        await updateRelease(releaseId, { status: "draft", error_message: null });
       }
-    }
-    store.setSubmitStatus("success");
-    store.setSubmitStage("done");
-    store.setSubmitProgress(100);
-    // Статус в БД уже `processing` (или `ready` при повторе) — см. submitRelease / finalize_release.
-    store.setSuccessSummary({
-      artistName: updated.artist_name?.trim() || "Артист",
-      trackName: updated.track_name?.trim() || "Релиз"
-    });
-    // Очистить мастер, оставить successSummary для экрана «Готово» (persist).
-    store.clearCreateFormKeepSummary();
-    try {
-      triggerHaptic("success");
-    } catch {}
-    return true;
-  } catch (e: unknown) {
-    let cleanupFailed = false;
-    let existingMessage: string | null = null;
-    try {
-      const current = await getReleaseById(releaseId).catch(() => null);
-      existingMessage = current?.error_message?.trim() ?? null;
 
-      await cleanupReleaseTracks(releaseId);
-      await deleteReleaseFiles({
-        userId: store.userId,
-        releaseId,
-        trackCount: parsedTracks.data.tracks.length
-      });
+      if (store.artworkUrl) {
+        await updateRelease(releaseId, { artwork_url: store.artworkUrl });
+        store.setSubmitProgress(15);
+      }
 
-      if (!current || current.status !== "failed") {
-        await updateRelease(releaseId, {
-          status: "failed",
-          error_message: "Отправка прервана, временные файлы очищены."
+      for (let index = 0; index < parsedTracks.data.tracks.length; index += 1) {
+        store.setSubmitStage("uploading_tracks");
+        const track = parsedTracks.data.tracks[index];
+        const file = args.files[index];
+        const audioUrl = await uploadReleaseTrackAudio({
+          userId: store.userId,
+          releaseId,
+          trackIndex: index,
+          file,
+          options: {
+            markReleaseFailedOnError: { releaseId },
+            onProgress: (pct) => setTrackUploadProgress(index, pct)
+          }
         });
+        await addReleaseTrack({
+          releaseId,
+          index,
+          title: track.title,
+          explicit: Boolean(track.explicit),
+          audioUrl
+        });
+        setTrackUploadProgress(index + 1, 0);
       }
-    } catch {
-      cleanupFailed = true;
+    } catch (e: unknown) {
+      let cleanupFailed = false;
+      let existingMessage: string | null = null;
+      try {
+        const current = await getReleaseById(releaseId).catch(() => null);
+        existingMessage = current?.error_message?.trim() ?? null;
+
+        await cleanupReleaseTracks(releaseId);
+        await deleteReleaseFiles({
+          userId: store.userId,
+          releaseId,
+          trackCount: parsedTracks.data.tracks.length
+        });
+
+        if (!current || current.status !== "failed") {
+          await updateRelease(releaseId, {
+            status: "failed",
+            error_message: "Отправка прервана, временные файлы очищены."
+          });
+        }
+      } catch {
+        cleanupFailed = true;
+      }
+
+      useCreateReleaseDraftStore.getState().setSubmitStatus("error");
+      useCreateReleaseDraftStore.getState().setSubmitStage("error");
+      const detail = e instanceof Error ? e.message : JSON.stringify(e);
+
+      const primary =
+        existingMessage && existingMessage.length > 0
+          ? existingMessage
+          : `Ошибка отправки: ${detail}`;
+
+      useCreateReleaseDraftStore.getState().setSubmitError(
+        cleanupFailed
+          ? `${primary}. Автоочистка завершилась с ошибкой — обратитесь к администратору.`
+          : `${primary}. Временные файлы очищены, можно повторить отправку.`
+      );
+      return false;
     }
 
-    store.setSubmitStatus("error");
-    store.setSubmitStage("error");
-    const detail = e instanceof Error ? e.message : JSON.stringify(e);
+    try {
+      const storeAfterUpload = useCreateReleaseDraftStore.getState();
+      storeAfterUpload.setSubmitStage("finalizing");
+      storeAfterUpload.setSubmitProgress(92);
 
-    const primary =
-      existingMessage && existingMessage.length > 0
-        ? existingMessage
-        : `Ошибка отправки: ${detail}`;
+      await submitRelease({ releaseId, clientRequestId });
 
-    store.setSubmitError(
-      cleanupFailed
-        ? `${primary}. Автоочистка завершилась с ошибкой — обратитесь к администратору.`
-        : `${primary}. Временные файлы очищены, можно повторить отправку.`
-    );
-    return false;
+      console.log("Попытка смены статуса на processing для ID:", releaseId);
+
+      const verified = await ensureReleaseProcessing(releaseId, clientRequestId);
+
+      if (process.env.NODE_ENV === "development") {
+        if (verified.status !== "processing" && verified.status !== "ready") {
+          console.warn(
+            "[submitTracksAndFinalize] unexpected status after ensure:",
+            verified.status
+          );
+        }
+      }
+
+      const storeOk = useCreateReleaseDraftStore.getState();
+      storeOk.setSubmitStatus("success");
+      storeOk.setSubmitStage("done");
+      storeOk.setSubmitProgress(100);
+      storeOk.setSuccessSummary({
+        artistName: verified.artist_name?.trim() || "Артист",
+        trackName: verified.track_name?.trim() || "Релиз"
+      });
+      // Очистить мастер только после подтверждённого статуса в БД; successSummary для /create/success.
+      // resetDraft() здесь не вызываем — он обнуляет successSummary.
+      storeOk.clearCreateFormKeepSummary();
+      try {
+        triggerHaptic("success");
+      } catch {}
+      return true;
+    } catch (e: unknown) {
+      const storeFail = useCreateReleaseDraftStore.getState();
+      storeFail.setSubmitStatus("error");
+      storeFail.setSubmitStage("error");
+      const detail = e instanceof Error ? e.message : JSON.stringify(e);
+      storeFail.setSubmitError(
+        detail.includes("Не удалось отправить релиз на модерацию")
+          ? detail
+          : `Ошибка отправки: ${detail}`
+      );
+      return false;
+    }
   } finally {
     submitTracksInFlight = false;
   }

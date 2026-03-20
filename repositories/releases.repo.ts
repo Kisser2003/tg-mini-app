@@ -464,6 +464,78 @@ async function finalizeReleaseFallback(params: SubmitReleaseParams): Promise<Rel
   return updated;
 }
 
+/**
+ * Гарантирует статус `processing` в БД после финализации (RPC может расходиться с фактом).
+ * Не трогает строки уже в `processing`/`ready`; для `draft` выполняет update по `id` + `client_request_id`.
+ */
+export async function ensureReleaseProcessing(
+  releaseId: string,
+  clientRequestId: string
+): Promise<ReleaseRecord> {
+  const parsed = z
+    .object({
+      releaseId: z.string().uuid(),
+      clientRequestId: z.string().uuid()
+    })
+    .safeParse({ releaseId, clientRequestId });
+
+  if (!parsed.success) {
+    throw new Error("Некорректные идентификаторы релиза.");
+  }
+
+  let row = await getReleaseById(parsed.data.releaseId);
+
+  if (row.client_request_id !== parsed.data.clientRequestId) {
+    throw new Error("Не удалось отправить релиз на модерацию. Статус не изменен.");
+  }
+
+  if (row.status === "processing" || row.status === "ready") {
+    return row;
+  }
+
+  if (row.status !== "draft") {
+    throw new Error(`Нельзя отправить релиз в модерацию из статуса «${row.status}».`);
+  }
+
+  const { data, error } = await withRetry(async () => {
+    return await supabase
+      .from("releases")
+      .update({ status: "processing", error_message: null })
+      .eq("id", parsed.data.releaseId)
+      .eq("client_request_id", parsed.data.clientRequestId)
+      .select("*");
+  });
+
+  if (error) {
+    console.error("Критическая ошибка смены статуса:", error);
+    throw new Error("Не удалось отправить релиз на модерацию. Статус не изменен.");
+  }
+
+  const rows = data as ReleaseRecord[] | null;
+  if (!rows || rows.length === 0) {
+    console.error("Критическая ошибка смены статуса: update returned 0 rows");
+    throw new Error("Не удалось отправить релиз на модерацию. Статус не изменен.");
+  }
+
+  const updated = rows[0];
+  if (updated.status !== "processing" && updated.status !== "ready") {
+    throw new Error("Не удалось отправить релиз на модерацию. Статус не изменен.");
+  }
+
+  await logReleaseEvent({
+    releaseId: parsed.data.releaseId,
+    stage: "finalize",
+    status: updated.status
+  }).catch(() => {});
+
+  row = await getReleaseById(parsed.data.releaseId);
+  if (row.status !== "processing" && row.status !== "ready") {
+    throw new Error("Не удалось отправить релиз на модерацию. Статус не изменен.");
+  }
+
+  return row;
+}
+
 function validateAudioFileStrict(file: File, maxSizeMb: number): void {
   const sizeMb = file.size / (1024 * 1024);
   if (sizeMb > maxSizeMb) {
