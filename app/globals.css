@@ -2,36 +2,32 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Глобальный скролл документа (window): без вложенного overflow-y-auto в layout.
+ * !important — перебить утилиты Tailwind на body при необходимости.
+ */
 html,
 body {
-  height: 100%;
   margin: 0;
   padding: 0;
   font-family: var(--font-inter), Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
   background-color: #030303;
   color: #fff;
   overflow-x: hidden;
+  overflow-y: auto !important;
+  height: auto !important;
+  min-height: 100%;
   scrollbar-width: none;
-  overscroll-behavior-y: none;
-  /* Не smooth: на мобильных даёт «залипание» и конфликт с инерционным скроллом */
-  -webkit-overflow-scrolling: touch;
-}
-
-/*
- * Единственный вертикальный скролл приложения (см. layout #app-main-scroll).
- * overscroll-behavior-y: none — без системного rubber-band, который ломает ощущение с BottomNav.
- */
-.app-main-scroll,
-#app-main-scroll {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: none;
   touch-action: pan-y pinch-zoom;
 }
 
-/*
- * В layout на body стоит overflow-hidden + flex — это единственный корневой скролл через #app-main-scroll.
- * Не добавлять touch-action: none / второй overflow-y-auto на формах create/*.
- */
+/* Обертка контента в layout: без собственного скролла, только отступы */
+#app-main-scroll,
+.app-main-scroll {
+  min-width: 0;
+}
 
 * {
   scrollbar-width: none;

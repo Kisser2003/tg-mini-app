@@ -28,7 +28,7 @@ export function CreateShell({
   }, [activeIndex]);
 
   return (
-    <div className="min-h-[100dvh] bg-background px-5 py-6 pb-10 text-text">
+    <div className="bg-background px-5 py-6 pb-10 text-text">
       <div className="mx-auto flex w-full max-w-[440px] flex-col gap-5 font-sans">
 
         {/* Static shell header — does not re-animate on step changes */}

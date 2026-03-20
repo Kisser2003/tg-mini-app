@@ -14,7 +14,7 @@ import { Music2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import { GlassCard } from "@/components/GlassCard";
-import { ReleaseCardSkeletonList } from "@/components/ReleaseCardSkeleton";
+import { LibraryReleaseSkeletonGrid } from "@/components/ui/Skeleton";
 import { debugInit } from "@/lib/debug";
 import { resumeDraftFromRelease } from "@/features/release/createRelease/actions";
 import { useCreateReleaseDraftStore } from "@/features/release/createRelease/store";
@@ -211,7 +211,7 @@ function LibraryPageInner() {
         </GlassCard>
 
         <div className="grid grid-cols-3 gap-2">
-          <div className="rounded-[16px] border border-emerald-500/30 bg-emerald-500/10 px-3 py-3 shadow-[0_0_20px_rgba(16,185,129,0.22)]">
+          <div className="rounded-[16px] border border-emerald-500/30 bg-emerald-500/10 px-3 py-3 shadow-[0_0_15px_rgba(34,197,94,0.3)]">
             <p className="text-[10px] uppercase tracking-[0.14em] text-emerald-200/80">Готово</p>
             <p className="mt-1 text-lg font-semibold text-emerald-100">{releaseStats.ready}</p>
           </div>
@@ -226,14 +226,22 @@ function LibraryPageInner() {
         </div>
 
         <div className="mt-2 flex flex-col gap-4">
-          {(showTelegramWait || showListSkeleton) && (
-            <div className="space-y-4">
-              <p className="text-[13px] text-text-muted">
-                {showTelegramWait ? "Подключаем Telegram…" : "Загружаем твои релизы из OMF…"}
-              </p>
-              <ReleaseCardSkeletonList count={3} />
-            </div>
-          )}
+          <AnimatePresence mode="wait">
+            {(showTelegramWait || showListSkeleton) && (
+              <motion.div
+                key="library-loading"
+                className="space-y-4"
+                initial={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+              >
+                <p className="text-[13px] text-text-muted">
+                  {showTelegramWait ? "Подключаем Telegram…" : "Загружаем твои релизы из OMF…"}
+                </p>
+                <LibraryReleaseSkeletonGrid count={6} />
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {errorMessage && (
             <div className="rounded-[20px] border border-red-500/30 bg-red-950/40 px-4 py-3 text-[13px] text-red-100">
@@ -261,6 +269,11 @@ function LibraryPageInner() {
           )}
 
           {userId != null && hasReleases && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.3 }}
+            >
             <motion.div
               className="space-y-3"
               variants={releaseListContainer}
@@ -429,6 +442,7 @@ function LibraryPageInner() {
                     </motion.button>
                   );
                 })}
+            </motion.div>
             </motion.div>
           )}
         </div>

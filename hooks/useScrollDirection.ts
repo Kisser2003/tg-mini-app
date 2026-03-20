@@ -2,8 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 
-export const APP_MAIN_SCROLL_ID = "app-main-scroll";
-
 type UseScrollDirectionOptions = {
   /** Если false — таббар всегда виден (например на `/create/success`). */
   enabled: boolean;
@@ -16,10 +14,19 @@ type UseScrollDirectionOptions = {
 /** Минимальный интервал между обработками (мс): меньше нагрузки на главный поток, плавнее скролл. */
 const SCROLL_THROTTLE_MS = 75;
 
+function getDocumentScrollTop(): number {
+  return (
+    window.scrollY ||
+    document.documentElement.scrollTop ||
+    document.body.scrollTop ||
+    0
+  );
+}
+
 /**
- * Определяет направление скролла основного контейнера приложения.
- * Вниз по контенту (scrollTop растёт) — скрыть таббар; вверх — показать.
- * passive: true + throttle + rAF — не блокируем нативный скролл и не пересчитываем таббар на каждый пиксель.
+ * Направление скролла по документу (window).
+ * Вниз — скрыть таббар; вверх — показать.
+ * passive + throttle + rAF; touchmove на document для тач-сценариев.
  */
 export function useScrollDirection({
   enabled,
@@ -43,12 +50,10 @@ export function useScrollDirection({
       return;
     }
 
-    const el = document.getElementById(APP_MAIN_SCROLL_ID);
-    if (!el) return;
+    const canScroll = () =>
+      document.documentElement.scrollHeight > window.innerHeight + 2;
 
-    const canScroll = () => el.scrollHeight > el.clientHeight + 2;
-
-    lastScrollTopRef.current = el.scrollTop;
+    lastScrollTopRef.current = getDocumentScrollTop();
 
     const runScrollLogic = () => {
       pendingScrollRef.current = false;
@@ -59,7 +64,7 @@ export function useScrollDirection({
         return;
       }
 
-      const st = el.scrollTop;
+      const st = getDocumentScrollTop();
       const delta = st - lastScrollTopRef.current;
       lastScrollTopRef.current = st;
 
@@ -81,10 +86,6 @@ export function useScrollDirection({
       rafRef.current = requestAnimationFrame(runScrollLogic);
     };
 
-    /**
-     * Источник — scrollTop #app-main-scroll (не window). Тот же throttle для scroll и touchmove:
-     * на таче иногда полезно ловить движение пальца, пока нативный scroll «догоняет».
-     */
     const onScroll = () => {
       const now = Date.now();
       const elapsed = now - lastThrottleAtRef.current;
@@ -113,15 +114,15 @@ export function useScrollDirection({
       if (!canScroll()) setIsVisible(true);
     };
 
-    el.addEventListener("scroll", onScroll, { passive: true, capture: false });
+    window.addEventListener("scroll", onScroll, { passive: true, capture: false });
     document.addEventListener("touchmove", onScroll, { passive: true, capture: false });
     const ro =
       typeof ResizeObserver !== "undefined" ? new ResizeObserver(onResize) : null;
-    ro?.observe(el);
+    ro?.observe(document.documentElement);
     onResize();
 
     return () => {
-      el.removeEventListener("scroll", onScroll);
+      window.removeEventListener("scroll", onScroll);
       document.removeEventListener("touchmove", onScroll);
       ro?.disconnect();
       if (throttleTrailingRef.current != null) {

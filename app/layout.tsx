@@ -53,7 +53,7 @@ export default function RootLayout({
         ) : null}
       </head>
       <body
-        className={`${inter.variable} flex min-h-[100dvh] flex-col overflow-hidden bg-[#030303] font-sans text-white antialiased`}
+        className={`${inter.variable} bg-[#030303] font-sans text-white antialiased`}
         style={{ backgroundColor: "#030303", color: "#fff" }}
       >
         <TelegramBootstrap />
@@ -62,14 +62,14 @@ export default function RootLayout({
           src="https://telegram.org/js/telegram-web-app.js"
           strategy="beforeInteractive"
         />
-        <div className="relative mx-auto flex min-h-0 w-full max-w-[450px] flex-1 flex-col">
+        <div className="relative mx-auto w-full max-w-[450px]">
           <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
             <div className="absolute inset-0 bg-[#030303]" />
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(29,78,216,0.15),transparent_55%),radial-gradient(circle_at_80%_25%,rgba(88,28,135,0.15),transparent_50%),radial-gradient(circle_at_50%_90%,rgba(37,99,235,0.1),transparent_45%)]" />
           </div>
           <div
             id="app-main-scroll"
-            className="app-main-scroll relative flex min-h-0 flex-1 flex-col overflow-y-auto px-3 pb-[calc(7rem+env(safe-area-inset-bottom,0px))] pt-4"
+            className="app-main-scroll relative px-3 pb-[calc(7rem+env(safe-area-inset-bottom,0px))] pt-4"
           >
             <NoiseOverlay />
             <AppProviders>
@@ -84,4 +84,3 @@ export default function RootLayout({
     </html>
   );
 }
-

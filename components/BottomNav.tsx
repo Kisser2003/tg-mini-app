@@ -54,7 +54,7 @@ export function BottomNav() {
         style={{ willChange: "transform" }}
       >
         <div
-          className="grid gap-1 rounded-[24px] border border-white/10 bg-white/[0.02] p-2 backdrop-blur-3xl"
+          className="grid gap-1 rounded-[24px] border-t border-white/10 border-x border-b border-white/[0.06] bg-black/60 p-2 backdrop-blur-xl shadow-[0_-8px_32px_rgba(0,0,0,0.45)]"
           style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}
         >
           {items.map((item) => {

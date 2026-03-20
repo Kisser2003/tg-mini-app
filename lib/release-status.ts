@@ -25,7 +25,8 @@ const STATUS_META: Record<CanonicalReleaseStatus, Omit<ReleaseStatusMeta, "canon
   ready: {
     label: "Готов",
     badgeClassName: "border-emerald-500/40 bg-emerald-500/15 text-emerald-300",
-    badgeGlowClassName: "shadow-[0_0_18px_rgba(16,185,129,0.35)]"
+    /** «Дыхание» свечения для премиального акцента статуса */
+    badgeGlowClassName: "shadow-[0_0_15px_rgba(34,197,94,0.3)] animate-pulse"
   },
   failed: {
     label: "Отклонено",

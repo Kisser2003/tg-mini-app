@@ -91,7 +91,7 @@ export function AdminReleaseCard({
       whileHover={{ scale: 0.995 }}
       whileTap={{ scale: 0.98 }}
       transition={{ type: "spring", stiffness: 280, damping: 24 }}
-      className="glass-card will-change-transform overflow-hidden rounded-[22px] border border-white/[0.08] bg-surface/80 p-4 shadow-[0_18px_40px_rgba(0,0,0,0.7)] backdrop-blur-2xl"
+      className="glass-card will-change-transform overflow-hidden rounded-[22px] border border-white/[0.08] bg-white/[0.03] p-4 shadow-[0_18px_40px_rgba(0,0,0,0.7)] backdrop-blur-2xl transition-shadow duration-300 hover:shadow-[0_0_48px_rgba(255,255,255,0.07),0_18px_40px_rgba(0,0,0,0.7)] focus-within:shadow-[0_0_52px_rgba(139,92,246,0.15),0_18px_40px_rgba(0,0,0,0.7)]"
     >
       <div className="flex gap-3">
         <div className="relative h-[72px] w-[72px] shrink-0 overflow-hidden rounded-xl border border-white/10 bg-white/5 shadow-inner">
