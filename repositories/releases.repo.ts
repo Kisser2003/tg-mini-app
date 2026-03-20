@@ -661,6 +661,35 @@ export async function cleanupReleaseTracks(releaseId: string): Promise<void> {
   });
 }
 
+export type ReleaseTrackRow = {
+  release_id: string;
+  index: number;
+  title: string;
+  explicit: boolean;
+  audio_url: string | null;
+};
+
+/**
+ * Треки релиза из БД (для резюме черновика и отладки).
+ * Сортировка по `index` по возрастанию.
+ */
+export async function getReleaseTracksByReleaseId(releaseId: string): Promise<ReleaseTrackRow[]> {
+  const { data, error } = await withRetry(async () => {
+    const response = await supabase
+      .from("release_tracks")
+      .select("release_id, index, title, explicit, audio_url")
+      .eq("release_id", releaseId)
+      .order("index", { ascending: true });
+    return response;
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []) as ReleaseTrackRow[];
+}
+
 export async function getReleaseById(id: string): Promise<ReleaseRecord> {
   const { data, error } = await withRetry(async () => {
     const response = await supabase
@@ -676,4 +705,44 @@ export async function getReleaseById(id: string): Promise<ReleaseRecord> {
   }
 
   return data as ReleaseRecord;
+}
+
+/**
+ * Очередь модерации: релизы, отправленные на проверку (`processing`).
+ * Сортировка: сначала более ранние по дате создания.
+ */
+export async function getPendingReleases(): Promise<ReleaseRecord[]> {
+  const { data, error } = await withRetry(async () => {
+    const response = await supabase
+      .from("releases")
+      .select("*")
+      .eq("status", "processing")
+      .order("created_at", { ascending: true });
+    return response;
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []) as ReleaseRecord[];
+}
+
+/**
+ * Обновление статуса релиза (модерация: одобрение / отклонение).
+ * Для `ready` очищает `error_message`; для `failed` записывает причину.
+ */
+export async function updateReleaseStatus(
+  id: string,
+  args: {
+    status: Extract<ReleaseStatus, "ready" | "failed">;
+    error_message?: string | null;
+  }
+): Promise<ReleaseRecord> {
+  if (args.status === "ready") {
+    return updateRelease(id, { status: "ready", error_message: null });
+  }
+  const msg =
+    (args.error_message && args.error_message.trim()) || "Отклонено модератором";
+  return updateRelease(id, { status: "failed", error_message: msg });
 }

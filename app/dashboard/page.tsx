@@ -1,11 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type KeyboardEvent
+} from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { ShieldCheck } from "lucide-react";
+import { toast } from "sonner";
 import { getExpectedAdminTelegramId } from "@/lib/admin";
 import { debugInit } from "@/lib/debug";
+import { resumeDraftFromRelease } from "@/features/release/createRelease/actions";
+import { useCreateReleaseDraftStore } from "@/features/release/createRelease/store";
 import { getReleaseStatusMeta, normalizeReleaseStatus } from "@/lib/release-status";
 import { supabase } from "@/lib/supabase";
 import {
@@ -31,6 +40,7 @@ export default function DashboardPage() {
   const [telegramName, setTelegramName] = useState<string | null>(null);
   const [userId, setUserId] = useState<number | null>(null);
   const [expandedErrorId, setExpandedErrorId] = useState<string | null>(null);
+  const [resumingId, setResumingId] = useState<string | null>(null);
 
   useEffect(() => {
     debugInit("dashboard", "init start");
@@ -71,6 +81,26 @@ export default function DashboardPage() {
     triggerHaptic("light");
     router.push("/create/metadata");
   };
+
+  const handleResumeDraft = useCallback(
+    async (release: ReleaseRow) => {
+      triggerHaptic("light");
+      setResumingId(release.id);
+      try {
+        const path = await resumeDraftFromRelease(release.id);
+        if (!path) {
+          const msg =
+            useCreateReleaseDraftStore.getState().submitError ?? "Не удалось открыть черновик.";
+          toast.error(msg);
+          return;
+        }
+        router.push(path);
+      } finally {
+        setResumingId(null);
+      }
+    },
+    [router]
+  );
 
   const hasReleases = useMemo(() => releases.length > 0, [releases]);
   const releaseStats = useMemo(() => {
@@ -198,7 +228,9 @@ export default function DashboardPage() {
                 const statusMeta = getReleaseStatusMeta(release.status);
 
                 const normalizedStatus = normalizeReleaseStatus(release.status);
+                const isDraft = normalizedStatus === "draft";
                 const isFailed = normalizedStatus === "failed";
+                const isResumingDraft = isDraft && resumingId === release.id;
                 const hasErrorText =
                   (release.error_message && release.error_message.trim().length > 0) ||
                   false;
@@ -213,7 +245,28 @@ export default function DashboardPage() {
                     initial={{ opacity: 0, y: 6 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -6 }}
-                    className="rounded-[20px] border border-white/[0.08] bg-surface/80 px-4 py-4 shadow-[0_18px_40px_rgba(0,0,0,0.7)] backdrop-blur-2xl"
+                    className={`rounded-[20px] border border-white/[0.08] bg-surface/80 px-4 py-4 shadow-[0_18px_40px_rgba(0,0,0,0.7)] backdrop-blur-2xl ${
+                      isDraft ? "cursor-pointer select-none" : ""
+                    } ${isResumingDraft ? "pointer-events-none opacity-70" : ""}`}
+                    {...(isDraft
+                      ? {
+                          role: "button" as const,
+                          tabIndex: 0,
+                          "aria-busy": isResumingDraft,
+                          "aria-label": `Продолжить заполнение черновика: ${release.track_name}`,
+                          whileHover: { scale: 1.01, opacity: 0.96 },
+                          whileTap: { scale: 0.985 },
+                          onClick: () => {
+                            void handleResumeDraft(release);
+                          },
+                          onKeyDown: (e: KeyboardEvent) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              void handleResumeDraft(release);
+                            }
+                          }
+                        }
+                      : {})}
                   >
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
@@ -232,7 +285,9 @@ export default function DashboardPage() {
                       <div className="flex flex-col items-end gap-2">
                         <button
                           type="button"
-                          className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[11px] font-medium ${statusMeta.badgeClassName}`}
+                          className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[11px] font-medium ${statusMeta.badgeClassName} ${
+                            isDraft ? "pointer-events-none" : ""
+                          }`}
                           onClick={() => {
                             if (!isFailed) return;
                             setExpandedErrorId((prev) =>

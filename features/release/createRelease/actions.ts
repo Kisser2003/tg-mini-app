@@ -12,13 +12,15 @@ import {
   createDraftRelease,
   deleteReleaseFiles,
   getReleaseById,
+  getReleaseTracksByReleaseId,
   submitRelease,
   updateRelease,
   uploadReleaseArtwork,
   uploadReleaseTrackAudio
 } from "@/repositories/releases.repo";
-import type { ReleaseRecord, ReleaseStep1Payload } from "@/repositories/releases.repo";
-import { metadataSchema, tracksSchema } from "./schemas";
+import type { ReleaseRecord, ReleaseStep1Payload, ReleaseTrackRow } from "@/repositories/releases.repo";
+import type { CreateMetadata, CreateTrack } from "./types";
+import { isAssetsComplete, isMetadataComplete, isTracksComplete, metadataSchema, tracksSchema } from "./schemas";
 import { useCreateReleaseDraftStore } from "./store";
 
 /** Защита от двойного сабмита (двойной тап в Telegram). */
@@ -86,21 +88,107 @@ export function initUserContextInStore() {
   store.setUserContext({ userId, telegramName });
 }
 
+/** Паспорт релиза из строки `releases` (общий маппинг для hydrate и резюме черновика). */
+export function createMetadataFromReleaseRecord(existing: ReleaseRecord): CreateMetadata {
+  return {
+    artists: [{ name: existing.artist_name, role: "primary" }],
+    releaseTitle: existing.track_name,
+    releaseType: existing.release_type,
+    genre: existing.genre,
+    subgenre: "",
+    language: "",
+    label: existing.artist_name,
+    releaseDate: existing.release_date,
+    explicit: Boolean(existing.explicit)
+  };
+}
+
+function buildTracksForResume(release: ReleaseRecord, rows: ReleaseTrackRow[]): CreateTrack[] {
+  if (rows.length > 0) {
+    return rows.map((r) => ({
+      title: r.title,
+      explicit: Boolean(r.explicit)
+    }));
+  }
+  if (release.release_type === "single") {
+    return [{ title: release.track_name, explicit: Boolean(release.explicit) }];
+  }
+  return [
+    { title: "", explicit: false },
+    { title: "", explicit: false }
+  ];
+}
+
+/**
+ * Следующий шаг мастера после резюме (как в useStepGuard): паспорт → обложка → треки → проверка.
+ */
+export function getResumeCreatePath(args: {
+  metadata: CreateMetadata;
+  artworkUrl: string | null;
+  tracks: CreateTrack[];
+}): "/create/metadata" | "/create/assets" | "/create/tracks" | "/create/review" {
+  const { metadata, artworkUrl, tracks } = args;
+  if (!isMetadataComplete(metadata)) return "/create/metadata";
+  if (!isAssetsComplete({ artworkUrl })) return "/create/assets";
+  if (!isTracksComplete({ tracks }, metadata.releaseType)) return "/create/tracks";
+  return "/create/review";
+}
+
+/**
+ * Загрузить черновик с сервера в стор и вернуть путь для router.push.
+ * При ошибке пишет в submitError и возвращает null.
+ */
+export async function resumeDraftFromRelease(releaseId: string): Promise<string | null> {
+  try {
+    initUserContextInStore();
+    const existing = await getReleaseById(releaseId);
+
+    if (existing.status !== "draft") {
+      useCreateReleaseDraftStore
+        .getState()
+        .setSubmitError("Продолжить можно только черновик.");
+      return null;
+    }
+
+    const store = useCreateReleaseDraftStore.getState();
+    const uid = store.userId;
+    if (uid != null && existing.user_id !== uid) {
+      useCreateReleaseDraftStore.getState().setSubmitError("Это не ваш релиз.");
+      return null;
+    }
+
+    const trackRows = await getReleaseTracksByReleaseId(releaseId);
+    const metadata = createMetadataFromReleaseRecord(existing);
+    metadataSchema.parse(metadata);
+    const tracks = buildTracksForResume(existing, trackRows);
+
+    store.resumeFromDraft({
+      releaseId: existing.id,
+      clientRequestId: existing.client_request_id ?? null,
+      metadata,
+      artworkUrl: existing.artwork_url ?? null,
+      tracks
+    });
+
+    const next = getResumeCreatePath({
+      metadata,
+      artworkUrl: existing.artwork_url ?? null,
+      tracks
+    });
+    return next;
+  } catch (e: unknown) {
+    useCreateReleaseDraftStore
+      .getState()
+      .setSubmitError(formatErrorMessage(e, "Не удалось открыть черновик."));
+    return null;
+  }
+}
+
 export async function hydrateFromReleaseId(releaseId: string): Promise<void> {
   try {
     initUserContextInStore();
     const existing = await getReleaseById(releaseId);
-    const metadata = {
-      artists: [{ name: existing.artist_name, role: "primary" as const }],
-      releaseTitle: existing.track_name,
-      releaseType: existing.release_type as any,
-      genre: existing.genre,
-      subgenre: "",
-      language: "",
-      label: existing.artist_name,
-      releaseDate: existing.release_date,
-      explicit: Boolean(existing.explicit)
-    };
+    const metadata = createMetadataFromReleaseRecord(existing);
     metadataSchema.parse(metadata);
 
     const store = useCreateReleaseDraftStore.getState();

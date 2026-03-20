@@ -59,6 +59,8 @@ type CreateReleaseDraftActions = {
   /** После успешной отправки: очистить черновик, оставить successSummary для экрана «Готово». */
   clearCreateFormKeepSummary: () => void;
   setHasHydrated: (value: boolean) => void;
+  /** Атомарно заполнить стор из черновика в БД; файлы сессии сбрасываются. */
+  resumeFromDraft: (payload: ResumeDraftPayload) => void;
 };
 
 export type CreateReleaseDraftStore = CreateReleaseDraftState & CreateReleaseDraftActions;
@@ -70,6 +72,15 @@ export const selectIsAssetsComplete = (s: CreateReleaseDraftStore) =>
   isAssetsComplete({ artworkUrl: s.artworkUrl });
 export const selectIsTracksComplete = (s: CreateReleaseDraftStore) =>
   isTracksComplete({ tracks: s.tracks }, s.metadata.releaseType);
+
+/** Данные для восстановления черновика из БД (Dashboard и др.). */
+export type ResumeDraftPayload = {
+  releaseId: string;
+  clientRequestId: string | null;
+  metadata: CreateMetadata;
+  artworkUrl: string | null;
+  tracks: CreateTrack[];
+};
 
 const EMPTY_METADATA: CreateMetadata = {
   releaseTitle: "",
@@ -246,7 +257,30 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
             hasHydrated: true
           }),
         setHasHydrated: (value) =>
-          set((state) => (state.hasHydrated === value ? state : { hasHydrated: value }))
+          set((state) => (state.hasHydrated === value ? state : { hasHydrated: value })),
+
+        resumeFromDraft: (payload) =>
+          set(() => {
+            const len = payload.tracks.length;
+            const trackFiles: (File | null)[] = [];
+            for (let i = 0; i < len; i += 1) trackFiles.push(null);
+            return {
+              releaseId: payload.releaseId,
+              clientRequestId: payload.clientRequestId,
+              metadata: payload.metadata,
+              artworkUrl: payload.artworkUrl,
+              tracks: payload.tracks,
+              artworkFile: null,
+              trackFiles,
+              submitError: null,
+              submitStatus: "idle" as SubmissionStatus,
+              submitStage: "idle" as SubmissionStage,
+              submitProgress: 0,
+              successSummary: null,
+              hasHydrated: true,
+              lastModified: Date.now()
+            };
+          })
       };
     },
     {
