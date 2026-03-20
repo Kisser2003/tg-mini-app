@@ -13,3 +13,21 @@ export function getCreateStepIndexFromPath(pathname: string): number {
   const idx = CREATE_FLOW_STEPS.findIndex((s) => s.key === (last as CreateFlowStepKey));
   return idx >= 0 ? idx : 0;
 }
+
+const CREATE_BACK_PATH: Partial<Record<CreateFlowStepKey, string>> = {
+  success: "/create/review",
+  review: "/create/tracks",
+  tracks: "/create/assets",
+  assets: "/create/metadata",
+  metadata: "/dashboard"
+};
+
+/**
+ * Куда вести по «Назад» в мастере создания (не history.back — чтобы после Dashboard → review
+ * возвращать на предыдущий шаг мастера, а не на Dashboard).
+ */
+export function getCreateBackPath(pathname: string): string {
+  const last = pathname.split("/").filter(Boolean).slice(-1)[0] ?? "metadata";
+  const key = last as CreateFlowStepKey;
+  return CREATE_BACK_PATH[key] ?? "/dashboard";
+}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useFieldArray, useForm } from "react-hook-form";
@@ -26,6 +26,15 @@ export default function CreateTracksPage() {
   const syncTrackFilesLength = useCreateReleaseDraftStore((s) => s.syncTrackFilesLength);
   const submitError = useCreateReleaseDraftStore((s) => s.submitError);
   const setSubmitError = useCreateReleaseDraftStore((s) => s.setSubmitError);
+  const trackAudioUrlsFromDb = useCreateReleaseDraftStore((s) => s.trackAudioUrlsFromDb);
+
+  const showResumeAudioBanner = useMemo(
+    () =>
+      trackAudioUrlsFromDb.some(
+        (url, i) => Boolean(url?.trim()) && !storeTrackFiles[i]
+      ),
+    [trackAudioUrlsFromDb, storeTrackFiles]
+  );
 
   const isSingle = releaseType === "single";
   const canAddTrack = !isSingle;
@@ -140,6 +149,14 @@ export default function CreateTracksPage() {
         />
       ) : (
         <form onSubmit={handleSubmit(handleNext)} className="space-y-4">
+          {showResumeAudioBanner && (
+            <div className="rounded-[18px] border border-sky-500/30 bg-sky-950/35 px-4 py-3 text-[12px] leading-relaxed text-sky-100/95">
+              В базе уже есть привязанные WAV для этого черновика, но после возврата из списка
+              релизов их нужно{" "}
+              <span className="font-semibold text-white">прикрепить заново в этой сессии</span> —
+              иначе отправка на модерацию будет недоступна.
+            </div>
+          )}
           {fields.map((field, index) => (
             <motion.div
               key={field.id}

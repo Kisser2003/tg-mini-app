@@ -120,6 +120,28 @@ function buildTracksForResume(release: ReleaseRecord, rows: ReleaseTrackRow[]): 
   ];
 }
 
+/** URL аудио из БД, по индексу трека (для подсказок после резюме). */
+function buildTrackAudioUrlsFromDb(
+  release: ReleaseRecord,
+  rows: ReleaseTrackRow[],
+  tracks: CreateTrack[]
+): (string | null)[] {
+  const len = tracks.length;
+  const out: (string | null)[] = Array.from({ length: len }, () => null);
+  if (rows.length > 0) {
+    for (const r of rows) {
+      if (r.index >= 0 && r.index < len) {
+        out[r.index] = r.audio_url ?? null;
+      }
+    }
+    return out;
+  }
+  if (len === 1 && release.audio_url) {
+    out[0] = release.audio_url;
+  }
+  return out;
+}
+
 /**
  * Следующий шаг мастера после резюме (как в useStepGuard): паспорт → обложка → треки → проверка.
  */
@@ -171,13 +193,15 @@ export async function resumeDraftFromRelease(releaseId: string): Promise<string 
     const metadata = createMetadataFromReleaseRecord(existing);
     metadataSchema.parse(metadata);
     const tracks = buildTracksForResume(existing, trackRows);
+    const trackAudioUrlsFromDb = buildTrackAudioUrlsFromDb(existing, trackRows, tracks);
 
     store.resumeFromDraft({
       releaseId: existing.id,
       clientRequestId: existing.client_request_id ?? null,
       metadata,
       artworkUrl: existing.artwork_url ?? null,
-      tracks
+      tracks,
+      trackAudioUrlsFromDb
     });
 
     const next = getResumeCreatePath({

@@ -1,14 +1,13 @@
 "use client";
 
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { toast } from "sonner";
 import { CreateShell } from "@/features/release/createRelease/components/CreateShell";
 import { StepGate } from "@/features/release/createRelease/components/StepGate";
 import { useStepGuard } from "@/features/release/createRelease/guards";
-import {
-  useCreateReleaseDraftStore
-} from "@/features/release/createRelease/store";
+import { useCreateReleaseDraftStore } from "@/features/release/createRelease/store";
 import { submitTracksAndFinalize } from "@/features/release/createRelease/actions";
 import { UploadProgress } from "@/components/UploadProgress";
 import { triggerHaptic } from "@/lib/telegram";
@@ -21,6 +20,7 @@ export default function CreateReviewPage() {
   const artworkUrl = useCreateReleaseDraftStore((s) => s.artworkUrl);
   const tracks = useCreateReleaseDraftStore((s) => s.tracks);
   const trackFiles = useCreateReleaseDraftStore((s) => s.trackFiles);
+  const trackAudioUrlsFromDb = useCreateReleaseDraftStore((s) => s.trackAudioUrlsFromDb);
   const submitError = useCreateReleaseDraftStore((s) => s.submitError);
   const setSubmitError = useCreateReleaseDraftStore((s) => s.setSubmitError);
   const submitStatus = useCreateReleaseDraftStore((s) => s.submitStatus);
@@ -28,8 +28,11 @@ export default function CreateReviewPage() {
   const submitProgress = useCreateReleaseDraftStore((s) => s.submitProgress);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const prevSubmitErrorRef = useRef<string | null>(null);
 
   const missingFiles = useMemo(() => tracks.some((_t, i) => !trackFiles[i]), [trackFiles, tracks]);
+  const submitBlocked = missingFiles || isSubmitting || submitStatus === "submitting";
+
   const stageLabel = useMemo(() => {
     if (submitStage === "preparing") return "Подготавливаем релиз";
     if (submitStage === "uploading_tracks") return "Загружаем WAV-файлы";
@@ -39,10 +42,23 @@ export default function CreateReviewPage() {
     return "Ожидание отправки";
   }, [submitStage]);
 
+  useEffect(() => {
+    if (submitError && submitError !== prevSubmitErrorRef.current) {
+      const isFileRelated =
+        /wav|файл|загруз/i.test(submitError);
+      if (isFileRelated) {
+        triggerHaptic("error");
+      }
+    }
+    prevSubmitErrorRef.current = submitError;
+  }, [submitError]);
+
   const handleSubmit = useCallback(async () => {
     setSubmitError(null);
     if (missingFiles) {
-      setSubmitError("Не хватает WAV-файлов. Вернитесь на шаг «Треки» и загрузите все файлы.");
+      const msg =
+        "Не хватает WAV-файлов в этой сессии. Загрузите их на шаге «Треки» — даже если в базе уже есть старые файлы.";
+      setSubmitError(msg);
       return;
     }
     triggerHaptic("medium");
@@ -98,29 +114,53 @@ export default function CreateReviewPage() {
               <div className="rounded-[18px] bg-black/30 px-4 py-3">
                 <p className="text-[11px] uppercase tracking-[0.18em] text-white/40">Треки</p>
                 <ul className="mt-2 space-y-1 text-white/80">
-                  {tracks.map((t, i) => (
-                    // eslint-disable-next-line react/no-array-index-key
-                    <li key={i} className="flex items-center justify-between gap-3">
-                      <span className="truncate">
-                        {i + 1}. {t.title || "Без названия"}
-                      </span>
-                      <span className="text-[11px] text-white/35">
-                        {trackFiles[i] ? "WAV ✓" : "WAV ✕"}
-                      </span>
-                    </li>
-                  ))}
+                  {tracks.map((t, i) => {
+                    const hasFile = Boolean(trackFiles[i]);
+                    const dbUrl = trackAudioUrlsFromDb[i] ?? null;
+                    const wavLabel = hasFile
+                      ? "WAV в сессии ✓"
+                      : dbUrl
+                        ? "В БД есть, для отправки загрузите WAV снова"
+                        : "WAV ✕";
+                    return (
+                      // eslint-disable-next-line react/no-array-index-key
+                      <li key={i} className="flex items-center justify-between gap-3">
+                        <span className="truncate">
+                          {i + 1}. {t.title || "Без названия"}
+                        </span>
+                        <span className="max-w-[140px] text-right text-[10px] leading-tight text-white/40">
+                          {wavLabel}
+                        </span>
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             </div>
           </div>
 
+          {missingFiles && (
+            <div className="rounded-[18px] border border-amber-500/30 bg-amber-950/30 px-4 py-3 text-[12px] text-amber-100/90">
+              <p>
+                Для отправки нужны WAV-файлы в этой сессии (после возврата из черновика их нужно
+                прикрепить заново).{" "}
+                <Link
+                  href="/create/tracks"
+                  className="font-medium text-amber-200 underline underline-offset-2"
+                >
+                  Вернуться и загрузить треки
+                </Link>
+              </p>
+            </div>
+          )}
+
           <button
             type="button"
-            disabled={isSubmitting || submitStatus === "submitting"}
+            disabled={submitBlocked}
             onClick={handleSubmit}
             className="inline-flex h-[56px] w-full items-center justify-center rounded-[20px] bg-gradient-to-tr from-[#4F46E5] to-[#7C3AED] text-[16px] font-semibold text-white shadow-[0_14px_40px_rgba(88,80,236,0.6)] disabled:opacity-60 disabled:shadow-none"
           >
-            {isSubmitting ? "Отправляем..." : "Отправить релиз"}
+            {isSubmitting || submitStatus === "submitting" ? "Отправляем..." : "Отправить релиз"}
           </button>
 
           {(submitStatus === "submitting" || submitStatus === "error") && (
@@ -129,7 +169,19 @@ export default function CreateReviewPage() {
 
           {submitError && (
             <p className="text-center text-[11px] text-red-400">
-              {submitError} Попробуйте повторно отправить релиз после исправления проблемы.
+              {submitError}{" "}
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic("light");
+                  router.push("/create/tracks");
+                }}
+                className="font-medium text-red-300 underline underline-offset-2"
+              >
+                Вернуться и загрузить треки
+              </button>
+              {" · "}
+              Попробуйте снова после загрузки файлов.
             </p>
           )}
         </div>
@@ -137,4 +189,3 @@ export default function CreateReviewPage() {
     </CreateShell>
   );
 }
-

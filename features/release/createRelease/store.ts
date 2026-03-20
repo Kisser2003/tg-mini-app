@@ -24,6 +24,8 @@ export type CreateReleaseDraftState = {
   // non-serializable files — kept in memory only, excluded from persist
   artworkFile: File | null;
   trackFiles: (File | null)[];
+  /** URL аудио из БД после резюме черновика (подсказки UX; не заменяют File при отправке). */
+  trackAudioUrlsFromDb: (string | null)[];
 
   // submission / status
   submitError: string | null;
@@ -80,6 +82,8 @@ export type ResumeDraftPayload = {
   metadata: CreateMetadata;
   artworkUrl: string | null;
   tracks: CreateTrack[];
+  /** Параллельно индексам `tracks`; для подсказок после резюме. */
+  trackAudioUrlsFromDb: (string | null)[];
 };
 
 const EMPTY_METADATA: CreateMetadata = {
@@ -146,6 +150,7 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
         artworkFile: null,
         tracks: [{ title: "", explicit: false }],
         trackFiles: [null],
+        trackAudioUrlsFromDb: [],
 
         submitError: null,
         submitStatus: "idle",
@@ -190,7 +195,10 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
         setTracks: (tracks) =>
           set((state) => {
             if (areTracksEqual(state.tracks, tracks)) return state;
-            return { tracks, ...stamp() };
+            const prevUrls = state.trackAudioUrlsFromDb;
+            const nextUrls = prevUrls.slice(0, tracks.length);
+            while (nextUrls.length < tracks.length) nextUrls.push(null);
+            return { tracks, trackAudioUrlsFromDb: nextUrls, ...stamp() };
           }),
         setTrackFile: (index, file) =>
           set((state) => {
@@ -232,6 +240,7 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
             artworkFile: null,
             tracks: [{ title: "", explicit: false }],
             trackFiles: [null],
+            trackAudioUrlsFromDb: [],
             submitError: null,
             submitStatus: "idle",
             submitStage: "idle",
@@ -249,6 +258,7 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
             artworkFile: null,
             tracks: [{ title: "", explicit: false }],
             trackFiles: [null],
+            trackAudioUrlsFromDb: [],
             submitError: null,
             submitStatus: "idle",
             submitStage: "idle",
@@ -264,6 +274,10 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
             const len = payload.tracks.length;
             const trackFiles: (File | null)[] = [];
             for (let i = 0; i < len; i += 1) trackFiles.push(null);
+            const trackAudioUrlsFromDb =
+              payload.trackAudioUrlsFromDb && payload.trackAudioUrlsFromDb.length === len
+                ? payload.trackAudioUrlsFromDb
+                : Array.from({ length: len }, () => null);
             return {
               releaseId: payload.releaseId,
               clientRequestId: payload.clientRequestId,
@@ -272,6 +286,7 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
               tracks: payload.tracks,
               artworkFile: null,
               trackFiles,
+              trackAudioUrlsFromDb,
               submitError: null,
               submitStatus: "idle" as SubmissionStatus,
               submitStage: "idle" as SubmissionStage,
@@ -284,7 +299,7 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
       };
     },
     {
-      name: "omf_create_release_draft_v1",
+      name: "omf_create_release_draft_v2",
       storage: createJSONStorage(() =>
         typeof window !== "undefined"
           ? window.localStorage
@@ -305,6 +320,7 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
         metadata: state.metadata,
         artworkUrl: state.artworkUrl,
         tracks: state.tracks,
+        trackAudioUrlsFromDb: state.trackAudioUrlsFromDb,
         lastModified: state.lastModified,
         successSummary: state.successSummary
       })

@@ -3,7 +3,11 @@
 import { useMemo } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { CREATE_FLOW_STEPS, getCreateStepIndexFromPath } from "@/lib/create-steps";
+import {
+  CREATE_FLOW_STEPS,
+  getCreateBackPath,
+  getCreateStepIndexFromPath
+} from "@/lib/create-steps";
 import { CreateStepTransition } from "@/features/release/createRelease/components/CreateStepTransition";
 import { triggerHaptic } from "@/lib/telegram";
 
@@ -34,7 +38,7 @@ export function CreateShell({
               type="button"
               onClick={() => {
                 triggerHaptic("light");
-                router.back();
+                router.push(getCreateBackPath(pathname));
               }}
               className="text-[12px] text-text-muted hover:text-white transition-colors"
             >
