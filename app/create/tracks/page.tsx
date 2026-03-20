@@ -195,7 +195,7 @@ export default function CreateTracksPage() {
                 <input
                   {...register(`tracks.${index}.title` as const)}
                   placeholder="Например, Track 1"
-                  className={`h-[48px] w-full rounded-[16px] bg-black/40 px-4 text-[16px] text-white placeholder:text-white/30 outline-none transition-colors focus:bg-black/60 ${
+                  className={`h-[48px] w-full rounded-[16px] bg-black/40 px-4 text-[16px] text-white placeholder:text-white/45 outline-none transition-colors focus:bg-black/60 ${
                     errors.tracks?.[index]?.title && dirtyFields.tracks?.[index]?.title
                       ? fieldErr
                       : ""

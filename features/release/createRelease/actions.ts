@@ -307,6 +307,7 @@ export async function ensureDraftRelease(): Promise<ReleaseRecord | null> {
     store.setSubmitError(`Ошибка черновика: ${detail}`);
     logClientError({
       error: e,
+      screenName: "CreateRelease_ensureDraft",
       route: "/create/assets",
       extra: { step: "ensureDraftRelease" }
     });
@@ -342,6 +343,7 @@ export async function uploadArtworkForDraft(file: File): Promise<string | null> 
     const up = getUploadErrorDetails(e);
     logClientError({
       error: e,
+      screenName: "CreateRelease_uploadArtwork",
       route: "/create/assets",
       extra: { step: "uploadArtworkForDraft", ...up }
     });
@@ -451,6 +453,7 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
       const up = getUploadErrorDetails(e);
       logClientError({
         error: e,
+        screenName: "CreateReview_submitUpload",
         route: "/create/review",
         extra: {
           flow: "submitTracksAndFinalize",
@@ -539,6 +542,7 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
     } catch (e: unknown) {
       logClientError({
         error: e,
+        screenName: "CreateReview_submitFinalize",
         route: "/create/review",
         extra: { flow: "submitTracksAndFinalize", uploadPhase: "finalizing_submit" }
       });

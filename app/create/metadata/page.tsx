@@ -3,7 +3,7 @@
 import { useEffect, useRef, useMemo, useState, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
-import { useForm, useFieldArray } from "react-hook-form";
+import { useForm, useFieldArray, type FieldErrors } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { motion } from "framer-motion";
 import { CreateShell } from "@/features/release/createRelease/components/CreateShell";
@@ -11,10 +11,26 @@ import { metadataSchema } from "@/features/release/createRelease/schemas";
 import type { CreateMetadata } from "@/features/release/createRelease/types";
 import { useCreateReleaseDraftStore } from "@/features/release/createRelease/store";
 import { hydrateFromReleaseId, initUserContextInStore } from "@/features/release/createRelease/actions";
+import { logClientError } from "@/lib/logger";
+import { firstRhfErrorMessage } from "@/lib/rhf-first-error";
 import { triggerHaptic } from "@/lib/telegram";
+import { toast } from "sonner";
 
 const fieldErr =
   "border border-red-500/45 ring-1 ring-red-500/30 focus:border-red-400/60 focus:ring-red-400/25";
+
+function borderForField(
+  hasError: boolean,
+  touched: boolean | undefined,
+  dirty: boolean | undefined
+): string {
+  if (!hasError) return "";
+  if (dirty) return fieldErr;
+  if (touched) {
+    return "border border-red-500/25 ring-1 ring-red-500/15 focus:border-red-400/40 focus:ring-red-400/20";
+  }
+  return "";
+}
 
 function CreateMetadataPageInner() {
   const router = useRouter();
@@ -41,6 +57,11 @@ function CreateMetadataPageInner() {
         await hydrateFromReleaseId(releaseIdParam);
       } catch (error) {
         console.error("[create/metadata] hydrateFromReleaseId failed", error);
+        logClientError({
+          error,
+          screenName: "CreateMetadata_hydrate",
+          route: "/create/metadata"
+        });
         if (!cancelled) {
           setHydrateError("Не удалось загрузить данные релиза. Попробуйте обновить страницу.");
         }
@@ -63,7 +84,7 @@ function CreateMetadataPageInner() {
     watch,
     setValue,
     reset,
-    formState: { errors, isValid, isDirty, dirtyFields }
+    formState: { errors, isDirty, dirtyFields, touchedFields }
   } = useForm<CreateMetadata>({
     resolver: zodResolver(metadataSchema),
     mode: "onChange",
@@ -125,13 +146,20 @@ function CreateMetadataPageInner() {
     router.push("/create/assets");
   }, [router, setMetadata]);
 
+  const onInvalid = useCallback((formErrors: FieldErrors<CreateMetadata>) => {
+    toast.error(firstRhfErrorMessage(formErrors));
+  }, []);
+
+  const canProceed =
+    Boolean(values.releaseTitle?.trim()) && Boolean(values.genre?.trim());
+
   return (
     <CreateShell title="Релиз · Паспорт">
       <div className="rounded-[24px] border border-white/[0.08] bg-surface/80 px-5 py-5 shadow-[0_18px_40px_rgba(0,0,0,0.7)] backdrop-blur-2xl">
         {isHydrating ? (
           <p className="text-[13px] text-text-muted">Загружаем данные релиза…</p>
         ) : (
-          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
+          <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="flex flex-col gap-4">
             {hydrateError && (
               <p className="rounded-[14px] border border-red-500/30 bg-red-950/40 px-3 py-2 text-[12px] text-red-100">
                 {hydrateError}
@@ -155,19 +183,22 @@ function CreateMetadataPageInner() {
                   <div
                     key={field.id}
                     className={`flex flex-col gap-2 rounded-[16px] bg-black/40 px-3 py-2.5 sm:flex-row sm:items-center ${
-                      errors.artists?.[idx]?.name && dirtyFields.artists?.[idx]?.name
-                        ? "ring-1 ring-red-500/35"
+                      errors.artists?.[idx]?.name &&
+                      (touchedFields.artists?.[idx]?.name || dirtyFields.artists?.[idx]?.name)
+                        ? dirtyFields.artists?.[idx]?.name
+                          ? "ring-1 ring-red-500/35"
+                          : "ring-1 ring-red-500/20"
                         : ""
                     }`}
                   >
                     <input
                       {...register(`artists.${idx}.name` as const)}
                       placeholder={idx === 0 ? "Основной артист" : "Feat / Remixer"}
-                      className={`w-full flex-1 bg-transparent text-[16px] text-white placeholder:text-white/30 outline-none ${
-                        errors.artists?.[idx]?.name && dirtyFields.artists?.[idx]?.name
-                          ? fieldErr
-                          : ""
-                      }`}
+                      className={`w-full flex-1 bg-transparent text-[16px] text-white placeholder:text-white/45 outline-none ${borderForField(
+                        Boolean(errors.artists?.[idx]?.name),
+                        touchedFields.artists?.[idx]?.name,
+                        dirtyFields.artists?.[idx]?.name
+                      )}`}
                     />
                     <div className="flex w-full items-center gap-2 sm:w-auto sm:justify-end">
                       <select
@@ -187,11 +218,12 @@ function CreateMetadataPageInner() {
                         </button>
                       )}
                     </div>
-                    {errors.artists?.[idx]?.name && dirtyFields.artists?.[idx]?.name && (
-                      <p className="w-full text-[11px] text-red-400 sm:order-last">
-                        {errors.artists[idx]?.name?.message}
-                      </p>
-                    )}
+                    {errors.artists?.[idx]?.name &&
+                      (touchedFields.artists?.[idx]?.name || dirtyFields.artists?.[idx]?.name) && (
+                        <p className="w-full text-[11px] text-red-400 sm:order-last">
+                          {errors.artists[idx]?.name?.message}
+                        </p>
+                      )}
                   </div>
                 ))}
               </div>
@@ -206,9 +238,11 @@ function CreateMetadataPageInner() {
               </label>
               <input
                 {...register("releaseTitle")}
-                className={`h-[56px] w-full rounded-[18px] bg-black/40 px-4 text-[16px] text-white placeholder:text-white/30 outline-none transition-colors focus:bg-black/60 ${
-                  errors.releaseTitle && dirtyFields.releaseTitle ? fieldErr : ""
-                }`}
+                className={`h-[56px] w-full rounded-[18px] bg-black/40 px-4 text-[16px] text-white placeholder:text-white/45 outline-none transition-colors focus:bg-black/60 ${borderForField(
+                  Boolean(errors.releaseTitle),
+                  touchedFields.releaseTitle,
+                  dirtyFields.releaseTitle
+                )}`}
                 placeholder="Основное название релиза"
               />
               {errors.releaseTitle && (
@@ -223,9 +257,11 @@ function CreateMetadataPageInner() {
                 </label>
                 <select
                   {...register("releaseType")}
-                  className={`h-[56px] w-full rounded-[18px] bg-black/40 px-4 text-[16px] text-white outline-none [color-scheme:dark] transition-colors focus:bg-black/60 ${
-                    errors.releaseType && dirtyFields.releaseType ? fieldErr : ""
-                  }`}
+                  className={`h-[56px] w-full rounded-[18px] bg-black/40 px-4 text-[16px] text-white outline-none [color-scheme:dark] transition-colors focus:bg-black/60 ${borderForField(
+                    Boolean(errors.releaseType),
+                    touchedFields.releaseType,
+                    dirtyFields.releaseType
+                  )}`}
                 >
                   <option value="single">Single</option>
                   <option value="ep">EP</option>
@@ -238,9 +274,11 @@ function CreateMetadataPageInner() {
                 </label>
                 <select
                   {...register("genre")}
-                  className={`h-[56px] w-full rounded-[18px] bg-black/40 px-4 text-[16px] text-white outline-none [color-scheme:dark] transition-colors focus:bg-black/60 ${
-                    errors.genre && dirtyFields.genre ? fieldErr : ""
-                  }`}
+                  className={`h-[56px] w-full rounded-[18px] bg-black/40 px-4 text-[16px] text-white outline-none [color-scheme:dark] transition-colors focus:bg-black/60 ${borderForField(
+                    Boolean(errors.genre),
+                    touchedFields.genre,
+                    dirtyFields.genre
+                  )}`}
                 >
                   <option value="">Выберите жанр</option>
                   <option value="Techno">Techno</option>
@@ -263,9 +301,11 @@ function CreateMetadataPageInner() {
                   type="date"
                   min={minReleaseDate}
                   {...register("releaseDate")}
-                  className={`h-[56px] w-full rounded-[18px] bg-black/40 px-4 text-[16px] text-white outline-none [color-scheme:dark] transition-colors focus:bg-black/60 ${
-                    errors.releaseDate && dirtyFields.releaseDate ? fieldErr : ""
-                  }`}
+                  className={`h-[56px] w-full rounded-[18px] bg-black/40 px-4 text-[16px] text-white outline-none [color-scheme:dark] transition-colors focus:bg-black/60 ${borderForField(
+                    Boolean(errors.releaseDate),
+                    touchedFields.releaseDate,
+                    dirtyFields.releaseDate
+                  )}`}
                 />
                 {errors.releaseDate && (
                   <p className="text-[11px] text-red-400">{errors.releaseDate.message}</p>
@@ -277,9 +317,11 @@ function CreateMetadataPageInner() {
                 </label>
                 <input
                   {...register("label")}
-                  className={`h-[56px] w-full rounded-[18px] bg-black/40 px-4 text-[16px] text-white outline-none transition-colors focus:bg-black/60 ${
-                    errors.label && dirtyFields.label ? fieldErr : ""
-                  }`}
+                  className={`h-[56px] w-full rounded-[18px] bg-black/40 px-4 text-[16px] text-white placeholder:text-white/45 outline-none transition-colors focus:bg-black/60 ${borderForField(
+                    Boolean(errors.label),
+                    touchedFields.label,
+                    dirtyFields.label
+                  )}`}
                   placeholder="Название лейбла"
                 />
                 {errors.label && <p className="text-[11px] text-red-400">{errors.label.message}</p>}
@@ -312,8 +354,8 @@ function CreateMetadataPageInner() {
 
             <button
               type="submit"
-              disabled={!isValid}
-              className="mt-1 inline-flex h-[56px] w-full items-center justify-center rounded-[20px] bg-gradient-to-tr from-[#4F46E5] to-[#7C3AED] text-[16px] font-semibold text-white shadow-[0_14px_40px_rgba(88,80,236,0.6)] disabled:opacity-60 disabled:shadow-none"
+              disabled={!canProceed}
+              className="mt-1 inline-flex h-[56px] w-full items-center justify-center rounded-[20px] bg-gradient-to-tr from-[#4F46E5] to-[#7C3AED] text-[16px] font-semibold text-white shadow-[0_14px_40px_rgba(88,80,236,0.6)] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
             >
               Далее
             </button>

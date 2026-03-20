@@ -111,6 +111,13 @@ export default function AdminReleaseDetailPage() {
 
   const handleReject = useCallback(async () => {
     if (!release) return;
+    if (
+      !window.confirm(
+        "Отклонить релиз? Артист увидит указанную причину в уведомлении."
+      )
+    ) {
+      return;
+    }
     setBusy(true);
     try {
       triggerHaptic("warning");
@@ -194,7 +201,7 @@ export default function AdminReleaseDetailPage() {
             <h1 className="text-xl font-semibold tracking-tight">{release.track_name}</h1>
             <p className="text-sm text-white/60">{release.artist_name}</p>
             <span
-              className={`mt-2 inline-flex rounded-full border px-2 py-0.5 text-[10px] ${statusMeta.badgeClassName}`}
+              className={`mt-2 inline-flex rounded-full border px-2 py-0.5 text-[10px] ${statusMeta.badgeClassName} ${statusMeta.badgeGlowClassName ?? ""}`}
             >
               {statusMeta.label}
             </span>
@@ -251,7 +258,7 @@ export default function AdminReleaseDetailPage() {
                 onChange={(e) => setRejectReason(e.target.value)}
                 rows={3}
                 placeholder="Причина отклонения"
-                className="w-full resize-none rounded-xl border border-white/15 bg-black/30 px-3 py-2 text-[16px] leading-relaxed text-white placeholder:text-white/35"
+                className="w-full resize-none rounded-xl border border-white/15 bg-black/30 px-3 py-2 text-[16px] leading-relaxed text-white placeholder:text-white/45"
               />
               <div className="flex justify-end gap-2">
                 <button

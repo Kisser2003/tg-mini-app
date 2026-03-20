@@ -104,6 +104,13 @@ export default function AdminPage() {
 
   const confirmReject = useCallback(
     async (id: string) => {
+      if (
+        !window.confirm(
+          "Отклонить релиз? Артист увидит указанную причину в уведомлении."
+        )
+      ) {
+        return;
+      }
       setBusyId(id);
       setActionError(null);
       try {

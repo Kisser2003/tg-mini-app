@@ -32,6 +32,12 @@ select {
   line-height: 1.4;
 }
 
+input::placeholder,
+textarea::placeholder {
+  color: rgba(255, 255, 255, 0.48);
+  opacity: 1;
+}
+
 button {
   -webkit-tap-highlight-color: transparent;
 }

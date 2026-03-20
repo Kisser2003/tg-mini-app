@@ -5,6 +5,7 @@ import { createClient } from "@supabase/supabase-js";
 const bodySchema = z.object({
   userId: z.number().int().nullable().optional(),
   route: z.string().nullable().optional(),
+  screenName: z.string().max(512).nullable().optional(),
   errorMessage: z.string().min(1).max(8000),
   stackTrace: z.string().max(32000).nullable().optional(),
   componentStack: z.string().max(32000).nullable().optional(),
@@ -24,7 +25,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false }, { status: 400 });
   }
 
-  const { userId, route, errorMessage, stackTrace, componentStack, extra } = parsed.data;
+  const { userId, route, screenName, errorMessage, stackTrace, componentStack, extra } =
+    parsed.data;
+
+  const resolvedScreenName = screenName?.trim() || route || "unknown";
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -37,6 +41,7 @@ export async function POST(req: Request) {
       const { error } = await admin.from("error_logs").insert({
         user_id: userId ?? null,
         route: route ?? null,
+        screen_name: resolvedScreenName,
         error_message: errorMessage,
         stack_trace: stackTrace ?? null,
         component_stack: componentStack ?? null,
@@ -52,6 +57,7 @@ export async function POST(req: Request) {
     console.error("[client-error] no service role, server log only:", {
       userId,
       route,
+      screen_name: resolvedScreenName,
       errorMessage
     });
   }

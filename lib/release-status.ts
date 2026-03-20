@@ -9,6 +9,8 @@ export type ReleaseStatusMeta = {
   canonical: CanonicalReleaseStatus;
   label: string;
   badgeClassName: string;
+  /** Лёгкий glow только для успешного статуса (UI). */
+  badgeGlowClassName?: string;
 };
 
 const STATUS_META: Record<CanonicalReleaseStatus, Omit<ReleaseStatusMeta, "canonical">> = {
@@ -22,7 +24,8 @@ const STATUS_META: Record<CanonicalReleaseStatus, Omit<ReleaseStatusMeta, "canon
   },
   ready: {
     label: "Готов",
-    badgeClassName: "border-emerald-500/40 bg-emerald-500/15 text-emerald-300"
+    badgeClassName: "border-emerald-500/40 bg-emerald-500/15 text-emerald-300",
+    badgeGlowClassName: "shadow-[0_0_18px_rgba(16,185,129,0.35)]"
   },
   failed: {
     label: "Отклонено",

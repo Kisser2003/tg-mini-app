@@ -5,6 +5,8 @@ export type ClientLogPayload = {
   error: unknown;
   /** Путь страницы, например /library */
   route?: string;
+  /** Человекочитаемый экран для error_logs.screen_name */
+  screenName?: string;
   componentStack?: string | null;
   extra?: Record<string, unknown>;
 };
@@ -22,9 +24,14 @@ export function logClientError(payload: ClientLogPayload): void {
   const stackTrace = getStack(payload.error);
   const userId = typeof window !== "undefined" ? getTelegramUserId() : null;
 
+  const route =
+    payload.route ?? (typeof window !== "undefined" ? window.location.pathname : null);
+  const screenName = payload.screenName ?? route ?? "unknown";
+
   const body = {
     userId,
-    route: payload.route ?? (typeof window !== "undefined" ? window.location.pathname : null),
+    route,
+    screenName,
     errorMessage,
     stackTrace: stackTrace || null,
     componentStack: payload.componentStack ?? null,

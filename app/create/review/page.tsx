@@ -93,6 +93,7 @@ export default function CreateReviewPage() {
       toast.error(msg);
       logClientError({
         error: new Error("review_precheck_missing_wav"),
+        screenName: "CreateReview_precheck",
         route: "/create/review",
         extra: { phase: "precheck", kind: "missing_session_wav" }
       });
@@ -110,6 +111,7 @@ export default function CreateReviewPage() {
       toast.error(toastText);
       logClientError({
         error: new Error(toastText),
+        screenName: "CreateReview_submitResult",
         route: "/create/review",
         extra: {
           phase: "after_submitTracksAndFinalize",

@@ -9,6 +9,7 @@ import { ensureDraftRelease, uploadArtworkForDraft } from "@/features/release/cr
 import { useCreateReleaseDraftStore } from "@/features/release/createRelease/store";
 import { FileUploader } from "@/components/FileUploader";
 import { debugInit } from "@/lib/debug";
+import { logClientError } from "@/lib/logger";
 import { triggerHaptic } from "@/lib/telegram";
 import { toast } from "sonner";
 
@@ -81,7 +82,15 @@ export default function CreateAssetsPage() {
       router.push("/create/tracks");
     } catch (e: unknown) {
       console.error("[CreateAssetsPage] Upload error:", e);
+      logClientError({
+        error: e,
+        screenName: "CreateAssets_upload",
+        route: "/create/assets"
+      });
       setSubmitError(
+        e instanceof Error ? e.message : "Произошла ошибка при загрузке обложки."
+      );
+      toast.error(
         e instanceof Error ? e.message : "Произошла ошибка при загрузке обложки."
       );
     } finally {

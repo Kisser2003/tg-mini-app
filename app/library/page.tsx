@@ -10,6 +10,7 @@ import {
 } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
+import { Music2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import { GlassCard } from "@/components/GlassCard";
@@ -193,7 +194,7 @@ function LibraryPageInner() {
         </GlassCard>
 
         <div className="grid grid-cols-3 gap-2">
-          <div className="rounded-[16px] border border-emerald-500/30 bg-emerald-500/10 px-3 py-3">
+          <div className="rounded-[16px] border border-emerald-500/30 bg-emerald-500/10 px-3 py-3 shadow-[0_0_20px_rgba(16,185,129,0.22)]">
             <p className="text-[10px] uppercase tracking-[0.14em] text-emerald-200/80">Готово</p>
             <p className="mt-1 text-lg font-semibold text-emerald-100">{releaseStats.ready}</p>
           </div>
@@ -224,19 +225,21 @@ function LibraryPageInner() {
           )}
 
           {userId != null && !showListSkeleton && !errorMessage && !hasReleases && (
-            <div className="flex flex-1 flex-col items-center justify-center gap-4 rounded-[24px] border border-white/[0.08] bg-surface/80 px-6 py-10 text-center shadow-[0_18px_40px_rgba(0,0,0,0.7)] backdrop-blur-2xl">
-              <div className="text-4xl">🎧</div>
-              <div className="space-y-1">
-                <p className="text-[16px] font-semibold">У тебя пока нет релизов</p>
-                <p className="text-[13px] text-text-muted">Загрузи свой первый трек.</p>
+            <div className="flex min-h-[52vh] flex-1 flex-col items-center justify-center px-2">
+              <div className="flex w-full max-w-[360px] flex-col items-center justify-center gap-5 rounded-[24px] border border-white/[0.08] bg-surface/80 px-6 py-12 text-center shadow-[0_18px_40px_rgba(0,0,0,0.7)] backdrop-blur-2xl">
+                <Music2 className="h-14 w-14 text-white/35" strokeWidth={1.25} aria-hidden />
+                <div className="space-y-1">
+                  <p className="text-[17px] font-semibold tracking-tight">У вас пока нет релизов</p>
+                  <p className="text-[13px] text-text-muted">Создайте первый релиз в пару шагов.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCreate}
+                  className="inline-flex h-[52px] w-full max-w-[280px] items-center justify-center rounded-[18px] bg-gradient-to-tr from-[#4F46E5] to-[#7C3AED] text-[15px] font-semibold text-white shadow-[0_14px_40px_rgba(88,80,236,0.6)]"
+                >
+                  Создать релиз
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={handleCreate}
-                className="mt-2 inline-flex h-[52px] w-full max-w-[320px] items-center justify-center rounded-[18px] bg-gradient-to-tr from-[#4F46E5] to-[#7C3AED] text-[15px] font-semibold text-white shadow-[0_14px_40px_rgba(88,80,236,0.6)]"
-              >
-                Загрузить первый релиз
-              </button>
             </div>
           )}
 
@@ -300,7 +303,7 @@ function LibraryPageInner() {
                           </p>
                         </div>
                         <span
-                          className={`inline-flex shrink-0 items-center self-start rounded-full border px-3 py-1 text-[11px] font-medium ${statusMeta.badgeClassName}`}
+                          className={`inline-flex shrink-0 items-center self-start rounded-full border px-3 py-1 text-[11px] font-medium ${statusMeta.badgeClassName} ${statusMeta.badgeGlowClassName ?? ""}`}
                         >
                           {statusMeta.label}
                         </span>
@@ -337,7 +340,7 @@ function LibraryPageInner() {
                           <div className="flex shrink-0 flex-col items-end gap-2">
                             <button
                               type="button"
-                              className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[11px] font-medium ${statusMeta.badgeClassName}`}
+                              className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[11px] font-medium ${statusMeta.badgeClassName} ${statusMeta.badgeGlowClassName ?? ""}`}
                               onClick={() => {
                                 setExpandedErrorId((prev) =>
                                   prev === release.id ? null : release.id
@@ -403,7 +406,7 @@ function LibraryPageInner() {
                         </p>
                       </div>
                       <span
-                        className={`rounded-full border px-2 py-1 text-[10px] ${statusMeta.badgeClassName}`}
+                        className={`rounded-full border px-2 py-1 text-[10px] ${statusMeta.badgeClassName} ${statusMeta.badgeGlowClassName ?? ""}`}
                       >
                         {statusMeta.label}
                       </span>

@@ -216,7 +216,9 @@ export default function ReleaseDetailsPage() {
           <ShieldCheck className="h-4 w-4" />
           Статус модерации
         </p>
-        <span className={`inline-flex rounded-full border px-3 py-1 text-xs ${statusMeta.badgeClassName}`}>
+        <span
+          className={`inline-flex rounded-full border px-3 py-1 text-xs ${statusMeta.badgeClassName} ${statusMeta.badgeGlowClassName ?? ""}`}
+        >
           {statusMeta.label}
         </span>
         <p className="mt-3 text-sm text-white/70">

@@ -43,6 +43,7 @@ export function AppErrorBoundary({ children }: { children: React.ReactNode }) {
         const route = typeof window !== "undefined" ? window.location.pathname : "";
         logClientError({
           error,
+          screenName: "AppErrorBoundary",
           route,
           componentStack: info.componentStack ?? null,
           extra: { source: "react-error-boundary" }

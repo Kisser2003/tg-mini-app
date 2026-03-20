@@ -59,7 +59,7 @@
 
 - `lib/admin.ts`: `ADMIN_TELEGRAM_ID` из env, иначе **захардкоженный fallback** — важно задать env в проде.
 - `.env.local.example`: `NEXT_PUBLIC_SUPABASE_*`, `SUPABASE_SERVICE_ROLE_KEY`, `ADMIN_TELEGRAM_ID`, `TELEGRAM_BOT_TOKEN`, `ADMIN_CHAT_ID`.
-- **Логи ошибок UI:** `lib/logger.ts` в production шлёт POST на [`app/api/client-error/route.ts`](app/api/client-error/route.ts). При наличии `SUPABASE_SERVICE_ROLE_KEY` строки пишутся в таблицу **`error_logs`** (миграция `supabase/migrations/20260321120000_error_logs.sql`). Без service role ошибки только в server `console.error`.
+- **Логи ошибок UI:** `lib/logger.ts` в production шлёт POST на [`app/api/client-error/route.ts`](app/api/client-error/route.ts). При наличии `SUPABASE_SERVICE_ROLE_KEY` строки пишутся в таблицу **`error_logs`** (миграции `20260321120000_error_logs.sql`, `20260321130000_error_logs_screen_name.sql`). Поля включают `user_id`, `error_message`, **`screen_name`** (контекст экрана, напр. `CreateMetadata_hydrate`), **`created_at`** (время записи), `route`, `stack_trace`, `extra`. Без service role ошибки только в server `console.error`.
 
 ## API и уведомления
 

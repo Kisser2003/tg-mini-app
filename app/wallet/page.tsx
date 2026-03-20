@@ -179,7 +179,9 @@ export default function WalletPage() {
                 <p className="text-sm">{item.track_name}</p>
                 <p className="text-xs text-white/55">{new Date(item.created_at).toLocaleDateString("ru-RU")}</p>
               </div>
-              <span className={`rounded-full border px-2 py-1 text-[10px] ${statusMeta.badgeClassName}`}>
+              <span
+                className={`rounded-full border px-2 py-1 text-[10px] ${statusMeta.badgeClassName} ${statusMeta.badgeGlowClassName ?? ""}`}
+              >
                 {statusMeta.label}
               </span>
             </motion.div>
