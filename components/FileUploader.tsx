@@ -1,7 +1,10 @@
+"use client";
+
 import { useState, useEffect, useRef } from "react";
 import { motion, useMotionValue, useSpring } from "framer-motion";
 import { Music2, Image as ImageIcon } from "lucide-react";
 import confetti from "canvas-confetti";
+import { FormFieldError } from "@/components/FormFieldError";
 import { triggerHaptic } from "@/lib/telegram";
 
 type Props = {
@@ -33,6 +36,7 @@ export function FileUploader({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const successFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const initialFileRef = useRef(initialFile);
   const initialPreviewUrlRef = useRef(initialPreviewUrl);
@@ -84,6 +88,29 @@ export function FileUploader({
       if (previewUrl) URL.revokeObjectURL(previewUrl);
     };
   }, [previewUrl]);
+
+  useEffect(() => {
+    return () => {
+      if (successFlashTimerRef.current != null) {
+        clearTimeout(successFlashTimerRef.current);
+        successFlashTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  const scheduleSuccessFlash = () => {
+    if (successFlashTimerRef.current != null) {
+      clearTimeout(successFlashTimerRef.current);
+    }
+    setIsUploading(true);
+    setUploadSuccess(true);
+    triggerHaptic("success");
+    successFlashTimerRef.current = setTimeout(() => {
+      successFlashTimerRef.current = null;
+      setIsUploading(false);
+      setUploadSuccess(false);
+    }, 1200);
+  };
 
   const handleChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const selected = event.target.files?.[0] ?? null;
@@ -153,13 +180,7 @@ export function FileUploader({
           setPreviewUrl(objectUrl);
           setFile(selected);
           onFileChange(selected);
-          setIsUploading(true);
-          setUploadSuccess(true);
-          triggerHaptic("success");
-          setTimeout(() => {
-            setIsUploading(false);
-            setUploadSuccess(false);
-          }, 1200);
+          scheduleSuccessFlash();
           confetti({ particleCount: 30, spread: 50, origin: { y: 0.4 } });
         }
       };
@@ -174,13 +195,7 @@ export function FileUploader({
 
     setFile(selected);
     onFileChange(selected);
-    setIsUploading(true);
-    setUploadSuccess(true);
-    triggerHaptic("success");
-    setTimeout(() => {
-      setIsUploading(false);
-      setUploadSuccess(false);
-    }, 1200);
+    scheduleSuccessFlash();
     confetti({ particleCount: 30, spread: 50, origin: { y: 0.4 } });
   };
 
@@ -208,10 +223,10 @@ export function FileUploader({
           x: magneticX,
           y: magneticY
         }}
-        className={`flex min-h-[140px] cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-4 py-5 text-center text-xs text-text-muted transition-colors ${
+        className={`flex min-h-[140px] cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-4 py-5 text-center text-xs text-text-muted transition-[border-color,background-color,box-shadow] duration-200 focus-within:ring-2 focus-within:ring-violet-500/20 focus-within:ring-offset-0 ${
           invalid || error
             ? "border-red-500/55 bg-red-950/20 ring-2 ring-red-500/25 hover:border-red-400/60"
-            : "border-border bg-surface/70 hover:border-primary hover:bg-surface"
+            : "border-border bg-surface/70 ring-2 ring-transparent hover:border-primary hover:bg-surface"
         }`}
       >
         <input
@@ -243,9 +258,11 @@ export function FileUploader({
           )}
           {file && (
             <div className="mt-1 w-full max-w-full space-y-1 text-[11px] text-text">
-              <div className="flex items-center justify-center gap-1 text-emerald-400">
-                <span className="text-base leading-none">✓</span>
-                <span>{file.name}</span>
+              <div className="flex max-w-full items-center justify-center gap-1 text-emerald-400">
+                <span className="shrink-0 text-base leading-none">✓</span>
+                <span className="min-w-0 truncate text-left" title={file.name}>
+                  {file.name}
+                </span>
               </div>
               <p className="text-[10px] text-white/45">
                 Локальная проверка файла завершена. Фактическая загрузка начнется на шаге отправки релиза.
@@ -295,7 +312,7 @@ export function FileUploader({
         </div>
       </motion.label>
 
-      {error && <p className="text-xs text-red-400">{error}</p>}
+      <FormFieldError message={error ?? undefined} />
     </div>
   );
 }

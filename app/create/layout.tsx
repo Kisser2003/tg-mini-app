@@ -1,5 +1,6 @@
 "use client";
 
+import { CreateStepTransition } from "@/components/CreateStepTransition";
 import { useCreateReleaseDraftStore } from "@/features/release/createRelease/store";
 
 // Holds all /create/* pages behind a single hydration gate.
@@ -39,5 +40,5 @@ export default function CreateLayout({ children }: { children: React.ReactNode }
     );
   }
 
-  return <>{children}</>;
+  return <CreateStepTransition>{children}</CreateStepTransition>;
 }

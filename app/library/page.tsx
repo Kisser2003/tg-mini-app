@@ -9,7 +9,7 @@ import {
   type KeyboardEvent
 } from "react";
 import Image from "next/image";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion, type Variants } from "framer-motion";
 import { Music2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
@@ -36,6 +36,23 @@ type ReleaseRow = {
 
 const ARTWORK_SIZES = "(max-width: 768px) 100vw, 33vw";
 const RELEASES_LIST_TIMEOUT_MS = 12000;
+
+const releaseListContainer: Variants = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: { staggerChildren: 0.05 }
+  }
+};
+
+const releaseListItem: Variants = {
+  hidden: { opacity: 0, y: 8 },
+  show: {
+    opacity: 1,
+    y: 0,
+    transition: { type: "spring", stiffness: 280, damping: 24 }
+  }
+};
 
 function ArtworkThumb({
   url,
@@ -244,9 +261,13 @@ function LibraryPageInner() {
           )}
 
           {userId != null && hasReleases && (
-            <div className="space-y-3">
-              <AnimatePresence>
-                {releases.map((release, listIndex) => {
+            <motion.div
+              className="space-y-3"
+              variants={releaseListContainer}
+              initial="hidden"
+              animate="show"
+            >
+              {releases.map((release, listIndex) => {
                   const statusMeta = getReleaseStatusMeta(release.status);
                   const normalizedStatus = normalizeReleaseStatus(release.status);
                   const isDraft = normalizedStatus === "draft";
@@ -264,9 +285,7 @@ function LibraryPageInner() {
                     return (
                       <motion.div
                         key={release.id}
-                        initial={{ opacity: 0, y: 6 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -6 }}
+                        variants={releaseListItem}
                         className={`flex w-full gap-3 rounded-[20px] border border-white/[0.08] bg-surface/80 px-4 py-4 shadow-[0_18px_40px_rgba(0,0,0,0.7)] backdrop-blur-2xl ${
                           isResumingDraft ? "pointer-events-none opacity-70" : "cursor-pointer select-none"
                         }`}
@@ -315,9 +334,7 @@ function LibraryPageInner() {
                     return (
                       <motion.div
                         key={release.id}
-                        initial={{ opacity: 0, y: 6 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -6 }}
+                        variants={releaseListItem}
                         className="rounded-[20px] border border-white/[0.08] bg-surface/80 px-4 py-4 shadow-[0_18px_40px_rgba(0,0,0,0.7)] backdrop-blur-2xl"
                       >
                         <div className="flex gap-3">
@@ -386,9 +403,8 @@ function LibraryPageInner() {
                     <motion.button
                       key={release.id}
                       type="button"
+                      variants={releaseListItem}
                       onClick={() => router.push(`/release/${release.id}`)}
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
                       whileHover={{ scale: 0.995 }}
                       whileTap={{ scale: 0.98 }}
                       transition={{ type: "spring", stiffness: 280, damping: 24 }}
@@ -413,8 +429,7 @@ function LibraryPageInner() {
                     </motion.button>
                   );
                 })}
-              </AnimatePresence>
-            </div>
+            </motion.div>
           )}
         </div>
       </div>

@@ -42,6 +42,18 @@ button {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Нативный date внутри flex: локализованная строка не вылезает за карточку */
+.glass-date-native {
+  flex: 1 1 0%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.glass-date-native::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.75;
+}
+
 .will-change-transform-opacity {
   will-change: transform, opacity;
 }

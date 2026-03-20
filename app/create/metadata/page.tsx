@@ -5,7 +5,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { useForm, useFieldArray, type FieldErrors } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Calendar } from "lucide-react";
 import { motion } from "framer-motion";
+import { FormFieldError } from "@/components/FormFieldError";
 import { CreateShell } from "@/features/release/createRelease/components/CreateShell";
 import { metadataSchema } from "@/features/release/createRelease/schemas";
 import type { CreateMetadata } from "@/features/release/createRelease/types";
@@ -15,9 +17,17 @@ import { logClientError } from "@/lib/logger";
 import { firstRhfErrorMessage } from "@/lib/rhf-first-error";
 import { triggerHaptic } from "@/lib/telegram";
 import { toast } from "sonner";
+import {
+  GLASS_DATE_WRAP_BASE,
+  GLASS_DATE_WRAP_ERROR_SOFT,
+  GLASS_DATE_WRAP_ERROR_STRONG,
+  GLASS_FIELD_BASE,
+  GLASS_FIELD_ERROR_SOFT,
+  GLASS_FIELD_ERROR_STRONG
+} from "@/lib/glass-form-classes";
 
-const fieldErr =
-  "border border-red-500/45 ring-1 ring-red-500/30 focus:border-red-400/60 focus:ring-red-400/25";
+const artistInputBase =
+  "min-h-[48px] min-w-0 w-full flex-1 rounded-[14px] border border-white/[0.08] bg-black/30 px-4 py-3 text-[16px] leading-normal text-white outline-none transition-[background-color,box-shadow,border-color] duration-200 focus:bg-black/45 focus:ring-2 focus:ring-violet-500/25 focus:ring-offset-0 placeholder:text-white/45";
 
 function borderForField(
   hasError: boolean,
@@ -25,12 +35,22 @@ function borderForField(
   dirty: boolean | undefined
 ): string {
   if (!hasError) return "";
-  if (dirty) return fieldErr;
-  if (touched) {
-    return "border border-red-500/25 ring-1 ring-red-500/15 focus:border-red-400/40 focus:ring-red-400/20";
-  }
+  if (dirty) return GLASS_FIELD_ERROR_STRONG;
+  if (touched) return GLASS_FIELD_ERROR_SOFT;
   return "";
 }
+
+function borderForDateWrap(
+  hasError: boolean,
+  touched: boolean | undefined,
+  dirty: boolean | undefined
+): string {
+  if (!hasError) return "";
+  if (dirty) return GLASS_DATE_WRAP_ERROR_STRONG;
+  if (touched) return GLASS_DATE_WRAP_ERROR_SOFT;
+  return "";
+}
+
 
 function CreateMetadataPageInner() {
   const router = useRouter();
@@ -161,7 +181,7 @@ function CreateMetadataPageInner() {
         ) : (
           <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="flex flex-col gap-4">
             {hydrateError && (
-              <p className="rounded-[14px] border border-red-500/30 bg-red-950/40 px-3 py-2 text-[12px] text-red-100">
+              <p className="break-words rounded-[14px] border border-red-500/30 bg-red-950/40 px-3 py-2 text-[12px] leading-relaxed text-red-100">
                 {hydrateError}
               </p>
             )}
@@ -182,82 +202,75 @@ function CreateMetadataPageInner() {
                 {artistFields.map((field, idx) => (
                   <div
                     key={field.id}
-                    className={`flex flex-col gap-2 rounded-[16px] bg-black/40 px-3 py-2.5 sm:flex-row sm:items-center ${
-                      errors.artists?.[idx]?.name &&
-                      (touchedFields.artists?.[idx]?.name || dirtyFields.artists?.[idx]?.name)
-                        ? dirtyFields.artists?.[idx]?.name
-                          ? "ring-1 ring-red-500/35"
-                          : "ring-1 ring-red-500/20"
-                        : ""
-                    }`}
+                    className="flex flex-col gap-2 rounded-[16px] border border-white/[0.06] bg-black/35 px-3 py-3 sm:px-4"
                   >
-                    <input
-                      {...register(`artists.${idx}.name` as const)}
-                      placeholder={idx === 0 ? "Основной артист" : "Feat / Remixer"}
-                      className={`w-full flex-1 bg-transparent text-[16px] text-white placeholder:text-white/45 outline-none ${borderForField(
-                        Boolean(errors.artists?.[idx]?.name),
-                        touchedFields.artists?.[idx]?.name,
-                        dirtyFields.artists?.[idx]?.name
-                      )}`}
-                    />
-                    <div className="flex w-full items-center gap-2 sm:w-auto sm:justify-end">
-                      <select
-                        {...register(`artists.${idx}.role` as const)}
-                        className="h-8 w-full max-w-[120px] rounded-[999px] bg-black/60 px-3 text-[16px] text-white/80 outline-none transition-colors [color-scheme:dark] focus:bg-black/80 sm:w-auto"
-                      >
-                        <option value="primary">Primary</option>
-                        <option value="featuring">Featuring</option>
-                      </select>
-                      {idx > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => remove(idx)}
-                          className="text-[11px] text-white/40 self-end sm:self-auto"
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                      <input
+                        {...register(`artists.${idx}.name` as const)}
+                        placeholder={idx === 0 ? "Основной артист" : "Feat / Remixer"}
+                        className={`${artistInputBase} ${borderForField(
+                          Boolean(errors.artists?.[idx]?.name),
+                          touchedFields.artists?.[idx]?.name,
+                          dirtyFields.artists?.[idx]?.name
+                        )}`}
+                      />
+                      <div className="flex w-full shrink-0 items-center gap-2 sm:w-auto sm:justify-end">
+                        <select
+                          {...register(`artists.${idx}.role` as const)}
+                          className="h-11 min-h-[44px] w-full max-w-[140px] rounded-full border border-white/[0.08] bg-black/50 px-4 text-[16px] text-white/90 outline-none transition-[background-color,box-shadow] duration-200 [color-scheme:dark] focus:bg-black/70 focus:ring-2 focus:ring-violet-500/25 focus:ring-offset-0 sm:w-auto"
                         >
-                          ✕
-                        </button>
-                      )}
+                          <option value="primary">Primary</option>
+                          <option value="featuring">Featuring</option>
+                        </select>
+                        {idx > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => remove(idx)}
+                            className="shrink-0 self-end text-[11px] text-white/40 sm:self-auto"
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    {errors.artists?.[idx]?.name &&
-                      (touchedFields.artists?.[idx]?.name || dirtyFields.artists?.[idx]?.name) && (
-                        <p className="w-full text-[11px] text-red-400 sm:order-last">
-                          {errors.artists[idx]?.name?.message}
-                        </p>
-                      )}
+                    <FormFieldError
+                      message={
+                        errors.artists?.[idx]?.name &&
+                        (touchedFields.artists?.[idx]?.name || dirtyFields.artists?.[idx]?.name)
+                          ? errors.artists[idx]?.name?.message
+                          : undefined
+                      }
+                    />
                   </div>
                 ))}
               </div>
-              {errors.artists?.root && (
-                <p className="text-[11px] text-red-400">{errors.artists.root.message}</p>
-              )}
+              <FormFieldError message={errors.artists?.root?.message} />
             </div>
 
-            <div className="space-y-1.5">
+            <div className="min-w-0 space-y-1.5">
               <label className="block text-[11px] font-medium uppercase tracking-[0.18em] text-white/60">
                 Название релиза
               </label>
               <input
                 {...register("releaseTitle")}
-                className={`h-[56px] w-full rounded-[18px] bg-black/40 px-4 text-[16px] text-white placeholder:text-white/45 outline-none transition-colors focus:bg-black/60 ${borderForField(
+                className={`${GLASS_FIELD_BASE} ${borderForField(
                   Boolean(errors.releaseTitle),
                   touchedFields.releaseTitle,
                   dirtyFields.releaseTitle
                 )}`}
                 placeholder="Основное название релиза"
               />
-              {errors.releaseTitle && (
-                <p className="text-[11px] text-red-400">{errors.releaseTitle.message}</p>
-              )}
+              <FormFieldError message={errors.releaseTitle?.message} />
             </div>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
+              <div className="min-w-0 space-y-1.5">
                 <label className="block text-[11px] font-medium uppercase tracking-[0.18em] text-white/60">
                   Тип релиза
                 </label>
                 <select
                   {...register("releaseType")}
-                  className={`h-[56px] w-full rounded-[18px] bg-black/40 px-4 text-[16px] text-white outline-none [color-scheme:dark] transition-colors focus:bg-black/60 ${borderForField(
+                  className={`${GLASS_FIELD_BASE} [color-scheme:dark] ${borderForField(
                     Boolean(errors.releaseType),
                     touchedFields.releaseType,
                     dirtyFields.releaseType
@@ -268,13 +281,13 @@ function CreateMetadataPageInner() {
                   <option value="album">Album</option>
                 </select>
               </div>
-              <div className="space-y-1.5">
+              <div className="min-w-0 space-y-1.5">
                 <label className="block text-[11px] font-medium uppercase tracking-[0.18em] text-white/60">
                   Жанр
                 </label>
                 <select
                   {...register("genre")}
-                  className={`h-[56px] w-full rounded-[18px] bg-black/40 px-4 text-[16px] text-white outline-none [color-scheme:dark] transition-colors focus:bg-black/60 ${borderForField(
+                  className={`${GLASS_FIELD_BASE} [color-scheme:dark] ${borderForField(
                     Boolean(errors.genre),
                     touchedFields.genre,
                     dirtyFields.genre
@@ -288,50 +301,57 @@ function CreateMetadataPageInner() {
                   <option value="Electronic">Electronic</option>
                   <option value="Other">Другое</option>
                 </select>
-                {errors.genre && <p className="text-[11px] text-red-400">{errors.genre.message}</p>}
+                <FormFieldError message={errors.genre?.message} />
               </div>
             </div>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
+              <div className="min-w-0 space-y-1.5">
                 <label className="block text-[11px] font-medium uppercase tracking-[0.18em] text-white/60">
                   Дата релиза
                 </label>
-                <input
-                  type="date"
-                  min={minReleaseDate}
-                  {...register("releaseDate")}
-                  className={`h-[56px] w-full rounded-[18px] bg-black/40 px-4 text-[16px] text-white outline-none [color-scheme:dark] transition-colors focus:bg-black/60 ${borderForField(
+                <div
+                  className={`${GLASS_DATE_WRAP_BASE} ${borderForDateWrap(
                     Boolean(errors.releaseDate),
                     touchedFields.releaseDate,
                     dirtyFields.releaseDate
                   )}`}
-                />
-                {errors.releaseDate && (
-                  <p className="text-[11px] text-red-400">{errors.releaseDate.message}</p>
-                )}
+                >
+                  <input
+                    type="date"
+                    min={minReleaseDate}
+                    {...register("releaseDate")}
+                    className="glass-date-native cursor-pointer bg-transparent text-[16px] text-white [color-scheme:dark]"
+                  />
+                  <Calendar
+                    className="pointer-events-none h-5 w-5 shrink-0 text-white/35"
+                    strokeWidth={1.5}
+                    aria-hidden
+                  />
+                </div>
+                <FormFieldError message={errors.releaseDate?.message} />
               </div>
-              <div className="space-y-1.5">
+              <div className="min-w-0 space-y-1.5">
                 <label className="block text-[11px] font-medium uppercase tracking-[0.18em] text-white/60">
                   Лейбл
                 </label>
                 <input
                   {...register("label")}
-                  className={`h-[56px] w-full rounded-[18px] bg-black/40 px-4 text-[16px] text-white placeholder:text-white/45 outline-none transition-colors focus:bg-black/60 ${borderForField(
+                  className={`${GLASS_FIELD_BASE} ${borderForField(
                     Boolean(errors.label),
                     touchedFields.label,
                     dirtyFields.label
                   )}`}
                   placeholder="Название лейбла"
                 />
-                {errors.label && <p className="text-[11px] text-red-400">{errors.label.message}</p>}
+                <FormFieldError message={errors.label?.message} />
               </div>
             </div>
 
-            <div className="flex items-center justify-between gap-4 rounded-[18px] bg-black/40 px-4 py-3">
-              <div className="space-y-0.5">
+            <div className="flex items-center justify-between gap-4 rounded-[18px] border border-white/[0.08] bg-black/40 px-4 py-3">
+              <div className="min-w-0 flex-1 space-y-0.5">
                 <p className="text-[13px] font-medium">Explicit (18+)</p>
-                <p className="text-[11px] text-white/50">
+                <p className="break-words text-[11px] leading-relaxed text-white/50">
                   Отметьте, если в тексте есть ненормативная лексика.
                 </p>
               </div>

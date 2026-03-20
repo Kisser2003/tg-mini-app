@@ -166,10 +166,10 @@ export default function CreateReviewPage() {
             <div className="mt-4 space-y-3 text-[13px]">
               <div className="rounded-[18px] bg-black/30 px-4 py-3">
                 <p className="text-[11px] uppercase tracking-[0.18em] text-white/40">Паспорт</p>
-                <p className="mt-1 text-white">
+                <p className="mt-1 break-words text-white">
                   {metadata.artists?.[0]?.name || "Артист"} — {metadata.releaseTitle || "Релиз"}
                 </p>
-                <p className="mt-1 text-white/55 text-[12px]">
+                <p className="mt-1 break-words text-[12px] text-white/55">
                   {metadata.releaseType} · {metadata.genre || "жанр"} · {metadata.releaseDate || "дата"}
                 </p>
               </div>
@@ -194,11 +194,11 @@ export default function CreateReviewPage() {
                         : "WAV ✕";
                     return (
                       // eslint-disable-next-line react/no-array-index-key
-                      <li key={i} className="flex items-center justify-between gap-3">
-                        <span className="truncate">
+                      <li key={i} className="flex min-w-0 items-center justify-between gap-3">
+                        <span className="min-w-0 flex-1 truncate">
                           {i + 1}. {t.title || "Без названия"}
                         </span>
-                        <span className="max-w-[140px] text-right text-[10px] leading-tight text-white/40">
+                        <span className="max-w-[min(46%,140px)] shrink-0 text-right text-[10px] leading-tight text-white/40">
                           {wavLabel}
                         </span>
                       </li>
@@ -248,7 +248,7 @@ export default function CreateReviewPage() {
           </AnimatePresence>
 
           {submitError && (
-            <p className="text-center text-[11px] text-red-400">
+            <p className="break-words text-center text-[11px] leading-relaxed text-red-400">
               {submitError}{" "}
               <button
                 type="button"
@@ -256,7 +256,7 @@ export default function CreateReviewPage() {
                   triggerHaptic("light");
                   router.push("/create/tracks");
                 }}
-                className="font-medium text-red-300 underline underline-offset-2"
+                className="inline font-medium text-red-300 underline underline-offset-2"
               >
                 Вернуться и загрузить треки
               </button>

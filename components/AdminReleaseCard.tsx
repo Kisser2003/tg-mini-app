@@ -2,12 +2,13 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { motion, type Variants } from "framer-motion";
 import { CheckCircle2, ExternalLink, Headphones, XCircle } from "lucide-react";
 import { AudioPlayerLazy } from "@/components/AudioPlayerLazy";
 import type { ReleaseRecord, ReleaseTrackRow } from "@/repositories/releases.repo";
 import { getReleaseStatusMeta } from "@/lib/release-status";
 import { Badge } from "@/components/Badge";
+import { triggerHaptic } from "@/lib/telegram";
 
 function releaseTypeLabel(type: ReleaseRecord["release_type"]): string {
   if (type === "single") return "Single";
@@ -40,7 +41,10 @@ function buildAudioItems(release: ReleaseRecord, tracks: ReleaseTrackRow[]) {
 type AdminReleaseCardProps = {
   release: ReleaseRecord;
   tracks: ReleaseTrackRow[];
+  /** Индекс в списке (приоритет обложки для первых карточек). */
   index: number;
+  /** Варианты для stagger-анимации очереди (родитель задаёт staggerChildren). */
+  listVariants?: Variants;
   busy: boolean;
   rejectExpanded: boolean;
   rejectReason: string;
@@ -61,6 +65,7 @@ export function AdminReleaseCard({
   release,
   tracks,
   index,
+  listVariants,
   busy,
   rejectExpanded,
   rejectReason,
@@ -77,11 +82,15 @@ export function AdminReleaseCard({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
+      {...(listVariants
+        ? { variants: listVariants }
+        : {
+            initial: { opacity: 0, y: 8 },
+            animate: { opacity: 1, y: 0 }
+          })}
       whileHover={{ scale: 0.995 }}
       whileTap={{ scale: 0.98 }}
-      transition={{ delay: index * 0.06, type: "spring", stiffness: 280, damping: 24 }}
+      transition={{ type: "spring", stiffness: 280, damping: 24 }}
       className="glass-card will-change-transform overflow-hidden rounded-[22px] border border-white/[0.08] bg-surface/80 p-4 shadow-[0_18px_40px_rgba(0,0,0,0.7)] backdrop-blur-2xl"
     >
       <div className="flex gap-3">
@@ -115,17 +124,17 @@ export function AdminReleaseCard({
             )}
           </div>
           <p className="truncate text-[13px] text-white/60">{release.artist_name}</p>
-          <div className="flex flex-wrap items-center gap-2 pt-0.5">
-            <Badge className="border-emerald-400/25 bg-emerald-500/10 text-emerald-100/90">
+          <div className="flex min-w-0 flex-wrap items-center gap-2 pt-0.5">
+            <Badge className="shrink-0 border-emerald-400/25 bg-emerald-500/10 text-emerald-100/90">
               {releaseTypeLabel(release.release_type)}
             </Badge>
             <span
-              className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] ${statusMeta.badgeClassName} ${statusMeta.badgeGlowClassName ?? ""}`}
+              className={`inline-flex min-w-0 max-w-full truncate rounded-full border px-2 py-0.5 text-[10px] ${statusMeta.badgeClassName} ${statusMeta.badgeGlowClassName ?? ""}`}
             >
               {statusMeta.label}
             </span>
           </div>
-          <p className="text-[11px] text-white/45">
+          <p className="truncate text-[11px] text-white/45" title={release.genre ?? undefined}>
             Отправлено:{" "}
             {new Date(release.created_at).toLocaleString("ru-RU", {
               day: "2-digit",
@@ -161,7 +170,10 @@ export function AdminReleaseCard({
         <motion.button
           type="button"
           disabled={busy}
-          onClick={onApprove}
+          onClick={() => {
+            triggerHaptic("light");
+            onApprove();
+          }}
           whileHover={{ scale: 0.99 }}
           whileTap={{ scale: 0.98 }}
           transition={{ type: "spring", stiffness: 320, damping: 22 }}
@@ -173,7 +185,10 @@ export function AdminReleaseCard({
         <motion.button
           type="button"
           disabled={busy}
-          onClick={onToggleReject}
+          onClick={() => {
+            triggerHaptic("light");
+            onToggleReject();
+          }}
           whileHover={{ scale: 0.99 }}
           whileTap={{ scale: 0.98 }}
           transition={{ type: "spring", stiffness: 320, damping: 22 }}
@@ -192,7 +207,7 @@ export function AdminReleaseCard({
             onChange={(e) => onRejectReasonChange(e.target.value)}
             rows={3}
             placeholder="Например: проблема с правами, невалидная обложка, шум в WAV."
-            className="w-full resize-none rounded-xl border border-white/15 bg-black/30 px-3 py-2 text-[16px] leading-relaxed text-white placeholder:text-white/45"
+            className="w-full resize-none break-words rounded-xl border border-white/[0.08] bg-black/30 px-4 py-3 text-[16px] leading-relaxed text-white outline-none transition-[box-shadow] duration-200 placeholder:text-white/45 focus:ring-2 focus:ring-violet-500/25 focus:ring-offset-0"
           />
           <div className="flex justify-end gap-2">
             <button
@@ -205,7 +220,10 @@ export function AdminReleaseCard({
             <button
               type="button"
               disabled={busy}
-              onClick={onConfirmReject}
+              onClick={() => {
+                triggerHaptic("light");
+                onConfirmReject();
+              }}
               className="rounded-lg border border-rose-300/35 bg-rose-500/20 px-3 py-1.5 text-xs text-rose-100 disabled:opacity-60"
             >
               Подтвердить отклонение

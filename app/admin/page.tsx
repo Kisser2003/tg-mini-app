@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
+import { motion, type Variants } from "framer-motion";
 import { Info, RefreshCcw } from "lucide-react";
 import useSWR from "swr";
 import { toast } from "sonner";
@@ -27,6 +27,23 @@ type ModerationQueueRow = {
 };
 
 const ADMIN_QUEUE_TIMEOUT_MS = 12000;
+
+const adminQueueContainer: Variants = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: { staggerChildren: 0.05 }
+  }
+};
+
+const adminQueueItem: Variants = {
+  hidden: { opacity: 0, y: 8 },
+  show: {
+    opacity: 1,
+    y: 0,
+    transition: { type: "spring", stiffness: 280, damping: 24 }
+  }
+};
 
 export default function AdminPage() {
   const router = useRouter();
@@ -80,8 +97,8 @@ export default function AdminPage() {
       setBusyId(release.id);
       setActionError(null);
       try {
-        triggerHaptic("success");
         const updated = await approveRelease(release.id);
+        triggerHaptic("success");
         setExpandedRejectId(null);
         try {
           await sendApprovalNotification(updated);
@@ -114,8 +131,8 @@ export default function AdminPage() {
       setBusyId(id);
       setActionError(null);
       try {
-        triggerHaptic("warning");
         await rejectRelease(id, rejectReasons[id] ?? "");
+        triggerHaptic("warning");
         setExpandedRejectId(null);
         await mutate();
         toast.success("Релиз отклонён");
@@ -195,13 +212,19 @@ export default function AdminPage() {
       )}
 
       {moderationQueue.length > 0 && (
-        <div className="grid grid-cols-1 gap-3">
+        <motion.div
+          className="grid grid-cols-1 gap-3"
+          variants={adminQueueContainer}
+          initial="hidden"
+          animate="show"
+        >
           {moderationQueue.map((row, index) => (
             <AdminReleaseCard
               key={row.release.id}
               release={row.release}
               tracks={row.tracks}
               index={index}
+              listVariants={adminQueueItem}
               busy={busyId === row.release.id}
               rejectExpanded={expandedRejectId === row.release.id}
               rejectReason={rejectReasons[row.release.id] ?? ""}
@@ -218,7 +241,7 @@ export default function AdminPage() {
               artworkPriority={index < 3}
             />
           ))}
-        </div>
+        </motion.div>
       )}
     </div>
   );

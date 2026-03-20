@@ -7,7 +7,9 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
     <SWRConfig
       value={{
         revalidateOnFocus: false,
-        dedupingInterval: 5000
+        revalidateOnReconnect: true,
+        dedupingInterval: 5000,
+        isPaused: () => typeof document !== "undefined" && !document.hasFocus()
       }}
     >
       {children}

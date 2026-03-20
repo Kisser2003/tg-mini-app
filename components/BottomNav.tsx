@@ -6,7 +6,7 @@ import { motion } from "framer-motion";
 import type { LucideIcon } from "lucide-react";
 import { Library, Shield, Wallet } from "lucide-react";
 import { isAdminUi } from "@/lib/admin";
-import { initTelegramWebApp } from "@/lib/telegram";
+import { initTelegramWebApp, triggerHaptic } from "@/lib/telegram";
 
 type NavItem = {
   label: string;
@@ -53,7 +53,10 @@ export function BottomNav() {
               whileHover={{ scale: 0.99 }}
               whileTap={{ scale: 0.98 }}
               transition={{ type: "spring", stiffness: 320, damping: 22 }}
-              onClick={() => router.push(item.href)}
+              onClick={() => {
+                if (!active) triggerHaptic();
+                router.push(item.href);
+              }}
               className={`flex flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 text-[11px] transition-colors ${
                 active ? "bg-white/15 text-white" : "text-white/60 hover:text-white"
               }`}

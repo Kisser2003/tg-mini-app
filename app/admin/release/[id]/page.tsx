@@ -92,8 +92,8 @@ export default function AdminReleaseDetailPage() {
     if (!release) return;
     setBusy(true);
     try {
-      triggerHaptic("success");
       const updated = await approveRelease(release.id);
+      triggerHaptic("success");
       try {
         await sendApprovalNotification(updated);
       } catch (e) {
@@ -120,8 +120,8 @@ export default function AdminReleaseDetailPage() {
     }
     setBusy(true);
     try {
-      triggerHaptic("warning");
       await rejectRelease(release.id, rejectReason);
+      triggerHaptic("warning");
       toast.success("Релиз отклонён");
       router.push("/admin");
     } catch (e: unknown) {
@@ -198,8 +198,8 @@ export default function AdminReleaseDetailPage() {
             )}
           </div>
           <div className="min-w-0">
-            <h1 className="text-xl font-semibold tracking-tight">{release.track_name}</h1>
-            <p className="text-sm text-white/60">{release.artist_name}</p>
+            <h1 className="break-words text-xl font-semibold tracking-tight">{release.track_name}</h1>
+            <p className="break-words text-sm text-white/60">{release.artist_name}</p>
             <span
               className={`mt-2 inline-flex rounded-full border px-2 py-0.5 text-[10px] ${statusMeta.badgeClassName} ${statusMeta.badgeGlowClassName ?? ""}`}
             >
@@ -230,7 +230,10 @@ export default function AdminReleaseDetailPage() {
             <motion.button
               type="button"
               disabled={busy}
-              onClick={() => void handleApprove()}
+              onClick={() => {
+                triggerHaptic("light");
+                void handleApprove();
+              }}
               whileHover={{ scale: 0.99 }}
               whileTap={{ scale: 0.98 }}
               className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-300/40 bg-emerald-500/20 px-3 py-2.5 text-sm text-emerald-100 disabled:opacity-60"
@@ -241,7 +244,10 @@ export default function AdminReleaseDetailPage() {
             <motion.button
               type="button"
               disabled={busy}
-              onClick={() => setRejectOpen((v) => !v)}
+              onClick={() => {
+                triggerHaptic("light");
+                setRejectOpen((v) => !v);
+              }}
               whileHover={{ scale: 0.99 }}
               whileTap={{ scale: 0.98 }}
               className="inline-flex items-center justify-center gap-2 rounded-xl border border-rose-300/40 bg-rose-500/20 px-3 py-2.5 text-sm text-rose-100 disabled:opacity-60"
@@ -258,7 +264,7 @@ export default function AdminReleaseDetailPage() {
                 onChange={(e) => setRejectReason(e.target.value)}
                 rows={3}
                 placeholder="Причина отклонения"
-                className="w-full resize-none rounded-xl border border-white/15 bg-black/30 px-3 py-2 text-[16px] leading-relaxed text-white placeholder:text-white/45"
+                className="w-full resize-none break-words rounded-xl border border-white/[0.08] bg-black/30 px-4 py-3 text-[16px] leading-relaxed text-white outline-none transition-[box-shadow] duration-200 placeholder:text-white/45 focus:ring-2 focus:ring-violet-500/25 focus:ring-offset-0"
               />
               <div className="flex justify-end gap-2">
                 <button
@@ -271,7 +277,10 @@ export default function AdminReleaseDetailPage() {
                 <button
                   type="button"
                   disabled={busy}
-                  onClick={() => void handleReject()}
+                  onClick={() => {
+                    triggerHaptic("light");
+                    void handleReject();
+                  }}
                   className="rounded-lg border border-rose-300/35 bg-rose-500/20 px-3 py-1.5 text-xs text-rose-100 disabled:opacity-60"
                 >
                   Подтвердить

@@ -8,6 +8,7 @@ import { useStepGuard } from "@/features/release/createRelease/guards";
 import { ensureDraftRelease, uploadArtworkForDraft } from "@/features/release/createRelease/actions";
 import { useCreateReleaseDraftStore } from "@/features/release/createRelease/store";
 import { FileUploader } from "@/components/FileUploader";
+import { FormFieldError } from "@/components/FormFieldError";
 import { debugInit } from "@/lib/debug";
 import { logClientError } from "@/lib/logger";
 import { triggerHaptic } from "@/lib/telegram";
@@ -142,7 +143,7 @@ export default function CreateAssetsPage() {
             {isUploading ? "Загружаем..." : "Далее"}
           </button>
 
-          {submitError && <p className="text-center text-[11px] text-red-400">{submitError}</p>}
+          <FormFieldError message={submitError ?? undefined} messageClassName="text-center" />
         </div>
       )}
     </CreateShell>

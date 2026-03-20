@@ -12,11 +12,10 @@ import { tracksSchema } from "@/features/release/createRelease/schemas";
 import type { CreateTracks } from "@/features/release/createRelease/types";
 import { useCreateReleaseDraftStore } from "@/features/release/createRelease/store";
 import { FileUploader } from "@/components/FileUploader";
+import { FormFieldError } from "@/components/FormFieldError";
+import { GLASS_FIELD_BASE, GLASS_FIELD_ERROR_STRONG } from "@/lib/glass-form-classes";
 import { triggerHaptic } from "@/lib/telegram";
 import { toast } from "sonner";
-
-const fieldErr =
-  "border border-red-500/45 ring-1 ring-red-500/30 focus:border-red-400/60 focus:ring-red-400/25";
 
 export default function CreateTracksPage() {
   const router = useRouter();
@@ -171,7 +170,7 @@ export default function CreateTracksPage() {
               className="rounded-[24px] border border-white/[0.08] bg-surface/80 px-5 py-5 shadow-[0_18px_40px_rgba(0,0,0,0.7)] backdrop-blur-2xl space-y-3"
             >
               <div className="flex items-center justify-between gap-2">
-                <span className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/60">
+                <span className="min-w-0 truncate text-[11px] font-medium uppercase tracking-[0.18em] text-white/60">
                   Трек {index + 1}
                 </span>
                 {canAddTrack && fields.length > 1 && (
@@ -195,17 +194,13 @@ export default function CreateTracksPage() {
                 <input
                   {...register(`tracks.${index}.title` as const)}
                   placeholder="Например, Track 1"
-                  className={`h-[48px] w-full rounded-[16px] bg-black/40 px-4 text-[16px] text-white placeholder:text-white/45 outline-none transition-colors focus:bg-black/60 ${
+                  className={`${GLASS_FIELD_BASE} rounded-[16px] ${
                     errors.tracks?.[index]?.title && dirtyFields.tracks?.[index]?.title
-                      ? fieldErr
+                      ? GLASS_FIELD_ERROR_STRONG
                       : ""
                   }`}
                 />
-                {errors.tracks?.[index]?.title && (
-                  <p className="text-[11px] text-red-400">
-                    {errors.tracks[index]?.title?.message}
-                  </p>
-                )}
+                <FormFieldError message={errors.tracks?.[index]?.title?.message} />
               </div>
 
               {/* Pass the stored File reference so the uploader shows "file selected"
@@ -219,9 +214,13 @@ export default function CreateTracksPage() {
                 onFileChange={(file) => setTrackFile(index, file)}
                 invalid={submitAttempted && !storeTrackFiles[index]}
               />
-              {submitAttempted && !storeTrackFiles[index] && (
-                <p className="text-[11px] text-red-400">Загрузите WAV-файл для этого трека.</p>
-              )}
+              <FormFieldError
+                message={
+                  submitAttempted && !storeTrackFiles[index]
+                    ? "Загрузите WAV-файл для этого трека."
+                    : undefined
+                }
+              />
             </motion.div>
           ))}
 
@@ -246,7 +245,7 @@ export default function CreateTracksPage() {
             Далее
           </button>
 
-          {submitError && <p className="text-center text-[11px] text-red-400">{submitError}</p>}
+          <FormFieldError message={submitError ?? undefined} messageClassName="text-center" />
         </form>
       )}
     </CreateShell>
