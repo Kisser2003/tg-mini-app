@@ -32,6 +32,7 @@ export default function CreateReviewPage() {
   const [progressDismissed, setProgressDismissed] = useState(false);
   const prevSubmitErrorRef = useRef<string | null>(null);
   const pendingSuccessNavRef = useRef(false);
+  const successNavFallbackTimerRef = useRef<number | null>(null);
 
   const missingFiles = useMemo(() => tracks.some((_t, i) => !trackFiles[i]), [trackFiles, tracks]);
   const submitBlocked =
@@ -61,6 +62,14 @@ export default function CreateReviewPage() {
     }
     return undefined;
   }, [submitStatus]);
+
+  useEffect(() => {
+    return () => {
+      if (successNavFallbackTimerRef.current != null) {
+        window.clearTimeout(successNavFallbackTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (submitError && submitError !== prevSubmitErrorRef.current) {
@@ -95,9 +104,23 @@ export default function CreateReviewPage() {
       return;
     }
     pendingSuccessNavRef.current = true;
-  }, [missingFiles, setSubmitError, trackFiles]);
+    if (successNavFallbackTimerRef.current != null) {
+      window.clearTimeout(successNavFallbackTimerRef.current);
+    }
+    successNavFallbackTimerRef.current = window.setTimeout(() => {
+      successNavFallbackTimerRef.current = null;
+      if (pendingSuccessNavRef.current) {
+        pendingSuccessNavRef.current = false;
+        router.push("/create/success");
+      }
+    }, 2800);
+  }, [missingFiles, setSubmitError, trackFiles, router]);
 
   const handleProgressExitComplete = useCallback(() => {
+    if (successNavFallbackTimerRef.current != null) {
+      window.clearTimeout(successNavFallbackTimerRef.current);
+      successNavFallbackTimerRef.current = null;
+    }
     if (pendingSuccessNavRef.current) {
       pendingSuccessNavRef.current = false;
       router.push("/create/success");
@@ -114,7 +137,7 @@ export default function CreateReviewPage() {
           onAction={() => router.push(`/create/${guard.redirectTo}`)}
         />
       ) : (
-        <div className="space-y-4">
+        <div className="min-h-[min(100dvh,720px)] space-y-4">
           <div className="rounded-[24px] border border-white/[0.08] bg-surface/80 px-5 py-5 shadow-[0_18px_40px_rgba(0,0,0,0.7)] backdrop-blur-2xl">
             <p className="text-[13px] text-text-muted leading-relaxed">
               Проверьте данные перед отправкой. Отправка начнёт загрузку WAV и передачу релиза в

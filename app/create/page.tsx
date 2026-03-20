@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 // instead of a server redirect() avoids the blank-page flicker that occurs
 // when Next.js has to make an extra server round-trip for the redirect during
 // client-side navigation (e.g. when the user clicks "New Release" on the
-// dashboard).  useLayoutEffect fires before the browser paints, so the user
+// library page).  useLayoutEffect fires before the browser paints, so the user
 // sees the spinner (rendered below) for at most one frame.
 export default function CreateEntryPage() {
   const router = useRouter();

@@ -19,15 +19,15 @@ const CREATE_BACK_PATH: Partial<Record<CreateFlowStepKey, string>> = {
   review: "/create/tracks",
   tracks: "/create/assets",
   assets: "/create/metadata",
-  metadata: "/dashboard"
+  metadata: "/library"
 };
 
 /**
- * Куда вести по «Назад» в мастере создания (не history.back — чтобы после Dashboard → review
- * возвращать на предыдущий шаг мастера, а не на Dashboard).
+ * Куда вести по «Назад» в мастере создания (не history.back — чтобы после Library → review
+ * возвращать на предыдущий шаг мастера, а не на список релизов).
  */
 export function getCreateBackPath(pathname: string): string {
   const last = pathname.split("/").filter(Boolean).slice(-1)[0] ?? "metadata";
   const key = last as CreateFlowStepKey;
-  return CREATE_BACK_PATH[key] ?? "/dashboard";
+  return CREATE_BACK_PATH[key] ?? "/library";
 }

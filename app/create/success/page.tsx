@@ -64,7 +64,7 @@ export default function CreateSuccessPage() {
           onGoHome={() => {
             leavingRef.current = "home";
             resetDraft();
-            router.push("/dashboard?fromCreate=1");
+            router.push("/library?fromCreate=1");
           }}
           onUploadAnother={() => {
             leavingRef.current = "create";

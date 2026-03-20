@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { motion } from "framer-motion";
-import { CheckCircle2, Headphones, XCircle } from "lucide-react";
+import { CheckCircle2, ExternalLink, Headphones, XCircle } from "lucide-react";
+import { AudioPlayer } from "@/components/AudioPlayer";
 import type { ReleaseRecord, ReleaseTrackRow } from "@/repositories/releases.repo";
 import { getReleaseStatusMeta } from "@/lib/release-status";
 import { Badge } from "@/components/Badge";
@@ -46,6 +48,8 @@ type AdminReleaseCardProps = {
   onRejectReasonChange: (value: string) => void;
   onCancelReject: () => void;
   onConfirmReject: () => void;
+  /** Ссылка на страницу детали модерации */
+  detailHref?: string;
 };
 
 export function AdminReleaseCard({
@@ -59,7 +63,8 @@ export function AdminReleaseCard({
   onToggleReject,
   onRejectReasonChange,
   onCancelReject,
-  onConfirmReject
+  onConfirmReject,
+  detailHref
 }: AdminReleaseCardProps) {
   const statusMeta = getReleaseStatusMeta(release.status);
   const audioItems = buildAudioItems(release, tracks);
@@ -89,7 +94,18 @@ export function AdminReleaseCard({
           )}
         </div>
         <div className="min-w-0 flex-1 space-y-1">
-          <p className="truncate text-[15px] font-semibold leading-tight">{release.track_name}</p>
+          <div className="flex items-start justify-between gap-2">
+            <p className="truncate text-[15px] font-semibold leading-tight">{release.track_name}</p>
+            {detailHref && (
+              <Link
+                href={detailHref}
+                className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-white/15 bg-white/5 px-2 py-1 text-[10px] text-white/70 hover:bg-white/10"
+              >
+                <ExternalLink className="h-3 w-3" />
+                Карточка
+              </Link>
+            )}
+          </div>
           <p className="truncate text-[13px] text-white/60">{release.artist_name}</p>
           <div className="flex flex-wrap items-center gap-2 pt-0.5">
             <Badge className="border-emerald-400/25 bg-emerald-500/10 text-emerald-100/90">
@@ -125,19 +141,7 @@ export function AdminReleaseCard({
         ) : (
           <div className="space-y-2">
             {audioItems.map((item) => (
-              <div
-                key={item.key}
-                className="rounded-xl border border-white/10 bg-white/[0.04] p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl"
-              >
-                <p className="mb-1.5 truncate text-[11px] text-white/55">{item.label}</p>
-                <audio
-                  controls
-                  controlsList="nodownload"
-                  preload="metadata"
-                  src={item.src}
-                  className="h-10 w-full rounded-lg [&::-webkit-media-controls-panel]:bg-white/10 [&::-webkit-media-controls-panel]:backdrop-blur-md [&::-webkit-media-controls-enclosure]:rounded-lg"
-                />
-              </div>
+              <AudioPlayer key={item.key} src={item.src} label={item.label} />
             ))}
           </div>
         )}

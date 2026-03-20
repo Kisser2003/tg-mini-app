@@ -223,10 +223,24 @@ export async function hydrateFromReleaseId(releaseId: string): Promise<void> {
   try {
     initUserContextInStore();
     const existing = await getReleaseById(releaseId);
+    const store = useCreateReleaseDraftStore.getState();
+    const uid = store.userId;
+    if (uid != null) {
+      const ownerId = Number(existing.user_id);
+      const sessionId = Number(uid);
+      const isOwner =
+        Number.isFinite(ownerId) &&
+        Number.isFinite(sessionId) &&
+        ownerId === sessionId;
+      const isAdminUser = sessionId === getExpectedAdminTelegramId();
+      if (!isOwner && !isAdminUser) {
+        useCreateReleaseDraftStore.getState().setSubmitError("Это не ваш релиз.");
+        return;
+      }
+    }
     const metadata = createMetadataFromReleaseRecord(existing);
     metadataSchema.parse(metadata);
 
-    const store = useCreateReleaseDraftStore.getState();
     store.setReleaseId(existing.id);
     store.setClientRequestId(existing.client_request_id ?? null);
     store.setMetadata(metadata);
@@ -450,8 +464,6 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
       storeAfterUpload.setSubmitProgress(92);
 
       await submitRelease({ releaseId, clientRequestId });
-
-      console.log("Попытка смены статуса на processing для ID:", releaseId);
 
       const verified = await ensureReleaseProcessing(releaseId, clientRequestId);
 

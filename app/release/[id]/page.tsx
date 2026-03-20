@@ -7,6 +7,7 @@ import { ArrowLeft, Check, Link2, ShieldCheck } from "lucide-react";
 import { GlassCard } from "@/components/GlassCard";
 import { debugInit } from "@/lib/debug";
 import { getReleaseStatusMeta, normalizeReleaseStatus } from "@/lib/release-status";
+import { isAdminUi } from "@/lib/admin";
 import { supabase } from "@/lib/supabase";
 import { getTelegramUserId, initTelegramWebApp } from "@/lib/telegram";
 
@@ -43,7 +44,7 @@ export default function ReleaseDetailsPage() {
 
   useEffect(() => {
     if (!params.id) return;
-    if (userId == null) {
+    if (userId == null && process.env.NODE_ENV === "production") {
       setLoading(false);
       return;
     }
@@ -56,16 +57,15 @@ export default function ReleaseDetailsPage() {
       const startedAt = Date.now();
       debugInit("release/details", "load start", { releaseId: params.id, userId });
       try {
-        const queryPromise = Promise.resolve(
-          supabase
+        const isAdminView = isAdminUi();
+        const base = supabase
           .from("releases")
           .select(
             "id, user_id, artist_name, track_name, artwork_url, audio_url, release_type, genre, status, error_message, created_at"
           )
-          .eq("id", params.id)
-          .eq("user_id", userId)
-          .maybeSingle()
-        );
+          .eq("id", params.id);
+        const filtered = isAdminView ? base : base.eq("user_id", userId!);
+        const queryPromise = Promise.resolve(filtered.maybeSingle());
         queryPromise.catch(() => {});
         const timeoutPromise = new Promise<Awaited<typeof queryPromise>>((_, reject) => {
           timeoutId = window.setTimeout(() => {
@@ -131,7 +131,7 @@ export default function ReleaseDetailsPage() {
     [release]
   );
 
-  if (userId == null) {
+  if (userId == null && process.env.NODE_ENV === "production") {
     return (
       <GlassCard className="p-5">
         <h1 className="text-xl font-semibold tracking-tight">Карточка релиза</h1>

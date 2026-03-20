@@ -1,16 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Info, RefreshCcw } from "lucide-react";
+import { toast } from "sonner";
 import { AdminReleaseCard } from "@/components/AdminReleaseCard";
 import { GlassCard } from "@/components/GlassCard";
-import { getExpectedAdminTelegramId } from "@/lib/admin";
+import { approveRelease, rejectRelease } from "@/features/admin/actions";
+import { isAdminUi } from "@/lib/admin";
 import { debugInit } from "@/lib/debug";
 import {
   getPendingReleases,
   getReleaseTracksByReleaseId,
-  updateReleaseStatus,
   type ReleaseRecord,
   type ReleaseTrackRow
 } from "@/repositories/releases.repo";
@@ -24,13 +26,13 @@ type ModerationQueueRow = {
 };
 
 export default function AdminPage() {
+  const router = useRouter();
   const [userId, setUserId] = useState<number | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [expandedRejectId, setExpandedRejectId] = useState<string | null>(null);
   const [rejectReasons, setRejectReasons] = useState<Record<string, string>>({});
-  const expectedAdminId = useMemo(() => getExpectedAdminTelegramId(), []);
-  const isAdmin = userId === expectedAdminId;
+  const isAdmin = isAdminUi();
 
   useEffect(() => {
     debugInit("admin", "init start");
@@ -73,8 +75,8 @@ export default function AdminPage() {
       setBusyId(release.id);
       setActionError(null);
       try {
-        triggerHaptic("medium");
-        const updated = await updateReleaseStatus(release.id, { status: "ready" });
+        triggerHaptic("success");
+        const updated = await approveRelease(release.id);
         setExpandedRejectId(null);
         try {
           await sendApprovalNotification(updated);
@@ -82,41 +84,42 @@ export default function AdminPage() {
           console.error("sendApprovalNotification failed:", e);
         }
         await reloadQueue();
+        toast.success("Релиз одобрен");
+        router.replace("/admin");
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : "Не удалось обновить статус релиза.";
         setActionError(msg);
+        toast.error(msg);
       } finally {
         setBusyId(null);
       }
     },
-    [reloadQueue]
+    [reloadQueue, router]
   );
 
-  const updateStatus = useCallback(
-    async (id: string, status: "ready" | "failed") => {
+  const confirmReject = useCallback(
+    async (id: string) => {
       setBusyId(id);
       setActionError(null);
       try {
-        triggerHaptic("medium");
-        const rejectReason = (rejectReasons[id] ?? "").trim();
-        await updateReleaseStatus(id, {
-          status,
-          error_message:
-            status === "failed" ? rejectReason || "Отклонено модератором" : null
-        });
+        triggerHaptic("warning");
+        await rejectRelease(id, rejectReasons[id] ?? "");
         setExpandedRejectId(null);
         await reloadQueue();
+        toast.success("Релиз отклонён");
+        router.replace("/admin");
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : "Не удалось обновить статус релиза.";
         setActionError(msg);
+        toast.error(msg);
       } finally {
         setBusyId(null);
       }
     },
-    [rejectReasons, reloadQueue]
+    [rejectReasons, reloadQueue, router]
   );
 
-  if (userId == null) {
+  if (userId == null && process.env.NODE_ENV === "production") {
     return (
       <GlassCard className="p-5">
         <h1 className="text-xl font-semibold tracking-tight">Панель модерации</h1>
@@ -194,7 +197,8 @@ export default function AdminPage() {
                 setRejectReasons((prev) => ({ ...prev, [row.release.id]: value }))
               }
               onCancelReject={() => setExpandedRejectId(null)}
-              onConfirmReject={() => void updateStatus(row.release.id, "failed")}
+              onConfirmReject={() => void confirmReject(row.release.id)}
+              detailHref={`/admin/release/${row.release.id}`}
             />
           ))}
         </div>

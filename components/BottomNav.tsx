@@ -3,33 +3,32 @@
 import { useMemo } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Home, Library, Settings, Shield, Wallet } from "lucide-react";
-import { getExpectedAdminTelegramId } from "@/lib/admin";
-import { getTelegramUserId, initTelegramWebApp } from "@/lib/telegram";
+import type { LucideIcon } from "lucide-react";
+import { Library, Shield, Wallet } from "lucide-react";
+import { isAdminUi } from "@/lib/admin";
+import { initTelegramWebApp } from "@/lib/telegram";
 
 type NavItem = {
   label: string;
   href: string;
-  icon: typeof Home;
+  icon: LucideIcon;
 };
 
 export function BottomNav() {
   const pathname = usePathname();
   const router = useRouter();
-  const isAdmin = useMemo(() => {
+  const showAdminTab = useMemo(() => {
     initTelegramWebApp();
-    return getTelegramUserId() === getExpectedAdminTelegramId();
+    return isAdminUi();
   }, []);
 
   const items = useMemo<NavItem[]>(
     () => [
-      { label: "Главная", href: "/", icon: Home },
       { label: "Мои релизы", href: "/library", icon: Library },
       { label: "Кошелек", href: "/wallet", icon: Wallet },
-      { label: "Настройки", href: "/settings", icon: Settings },
-      ...(isAdmin ? [{ label: "Админ", href: "/admin", icon: Shield }] : [])
+      ...(showAdminTab ? [{ label: "Админ", href: "/admin", icon: Shield }] : [])
     ],
-    [isAdmin]
+    [showAdminTab]
   );
 
   return (
@@ -42,7 +41,10 @@ export function BottomNav() {
       >
         {items.map((item) => {
           const Icon = item.icon;
-          const active = pathname === item.href;
+          const active =
+            item.href === "/library"
+              ? pathname === "/library" || pathname === "/"
+              : pathname === item.href;
 
           return (
             <motion.button
