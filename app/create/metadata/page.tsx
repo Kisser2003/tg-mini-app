@@ -156,12 +156,12 @@ function CreateMetadataPageInner() {
                     <input
                       {...register(`artists.${idx}.name` as const)}
                       placeholder={idx === 0 ? "Основной артист" : "Feat / Remixer"}
-                      className="w-full flex-1 bg-transparent text-[14px] text-white placeholder:text-white/30 outline-none"
+                      className="w-full flex-1 bg-transparent text-[16px] text-white placeholder:text-white/30 outline-none"
                     />
                     <div className="flex w-full items-center gap-2 sm:w-auto sm:justify-end">
                       <select
                         {...register(`artists.${idx}.role` as const)}
-                        className="h-8 w-full max-w-[120px] rounded-[999px] bg-black/60 px-3 text-[11px] text-white/80 outline-none transition-colors [color-scheme:dark] focus:bg-black/80 sm:w-auto"
+                        className="h-8 w-full max-w-[120px] rounded-[999px] bg-black/60 px-3 text-[16px] text-white/80 outline-none transition-colors [color-scheme:dark] focus:bg-black/80 sm:w-auto"
                       >
                         <option value="primary">Primary</option>
                         <option value="featuring">Featuring</option>
@@ -190,7 +190,7 @@ function CreateMetadataPageInner() {
               </label>
               <input
                 {...register("releaseTitle")}
-                className="h-[56px] w-full rounded-[18px] bg-black/40 px-4 text-[15px] sm:text-[16px] text-white placeholder:text-white/30 outline-none transition-colors focus:bg-black/60"
+                className="h-[56px] w-full rounded-[18px] bg-black/40 px-4 text-[16px] text-white placeholder:text-white/30 outline-none transition-colors focus:bg-black/60"
                 placeholder="Основное название релиза"
               />
               {errors.releaseTitle && (
@@ -205,7 +205,7 @@ function CreateMetadataPageInner() {
                 </label>
                 <select
                   {...register("releaseType")}
-                  className="h-[56px] w-full rounded-[18px] bg-black/40 px-4 text-[15px] text-white outline-none [color-scheme:dark] transition-colors focus:bg-black/60"
+                  className="h-[56px] w-full rounded-[18px] bg-black/40 px-4 text-[16px] text-white outline-none [color-scheme:dark] transition-colors focus:bg-black/60"
                 >
                   <option value="single">Single</option>
                   <option value="ep">EP</option>
@@ -218,7 +218,7 @@ function CreateMetadataPageInner() {
                 </label>
                 <select
                   {...register("genre")}
-                  className="h-[56px] w-full rounded-[18px] bg-black/40 px-4 text-[15px] text-white outline-none [color-scheme:dark] transition-colors focus:bg-black/60"
+                  className="h-[56px] w-full rounded-[18px] bg-black/40 px-4 text-[16px] text-white outline-none [color-scheme:dark] transition-colors focus:bg-black/60"
                 >
                   <option value="">Выберите жанр</option>
                   <option value="Techno">Techno</option>
@@ -241,7 +241,7 @@ function CreateMetadataPageInner() {
                   type="date"
                   min={minReleaseDate}
                   {...register("releaseDate")}
-                  className="h-[56px] w-full rounded-[18px] bg-black/40 px-4 text-[15px] text-white outline-none [color-scheme:dark] transition-colors focus:bg-black/60"
+                  className="h-[56px] w-full rounded-[18px] bg-black/40 px-4 text-[16px] text-white outline-none [color-scheme:dark] transition-colors focus:bg-black/60"
                 />
                 {errors.releaseDate && (
                   <p className="text-[11px] text-red-400">{errors.releaseDate.message}</p>
@@ -253,7 +253,7 @@ function CreateMetadataPageInner() {
                 </label>
                 <input
                   {...register("label")}
-                  className="h-[56px] w-full rounded-[18px] bg-black/40 px-4 text-[15px] text-white outline-none transition-colors focus:bg-black/60"
+                  className="h-[56px] w-full rounded-[18px] bg-black/40 px-4 text-[16px] text-white outline-none transition-colors focus:bg-black/60"
                   placeholder="Название лейбла"
                 />
               </div>

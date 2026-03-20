@@ -1,13 +1,15 @@
 "use client";
 
 import {
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
   useState,
   type KeyboardEvent
 } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
@@ -35,8 +37,9 @@ type ReleaseRow = {
   error_message?: string | null;
 };
 
-export default function DashboardPage() {
+function DashboardPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [telegramName, setTelegramName] = useState<string | null>(null);
   const [userId, setUserId] = useState<number | null>(null);
   const [expandedErrorId, setExpandedErrorId] = useState<string | null>(null);
@@ -67,7 +70,8 @@ export default function DashboardPage() {
   const {
     data: releases,
     loading,
-    error
+    error,
+    reload
   } = useSafePolling<ReleaseRow[]>({
     enabled: userId != null,
     intervalMs: 7000,
@@ -76,6 +80,12 @@ export default function DashboardPage() {
     requestTimeoutMs: 12000,
     debugName: "dashboard.releases"
   });
+
+  useEffect(() => {
+    if (searchParams.get("fromCreate") !== "1") return;
+    void reload(true);
+    router.replace("/dashboard");
+  }, [searchParams, reload, router]);
 
   const handleCreate = () => {
     triggerHaptic("light");
@@ -103,6 +113,7 @@ export default function DashboardPage() {
   );
 
   const hasReleases = useMemo(() => releases.length > 0, [releases]);
+  const recentReleases = useMemo(() => releases.slice(0, 3), [releases]);
   const releaseStats = useMemo(() => {
     return releases.reduce(
       (acc, release) => {
@@ -223,8 +234,13 @@ export default function DashboardPage() {
 
         {userId != null && !loading && hasReleases && (
           <div className="space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-text-muted">
+                Последняя активность
+              </p>
+            </div>
             <AnimatePresence>
-              {releases.map((release) => {
+              {recentReleases.map((release) => {
                 const statusMeta = getReleaseStatusMeta(release.status);
 
                 const normalizedStatus = normalizeReleaseStatus(release.status);
@@ -336,6 +352,14 @@ export default function DashboardPage() {
                 );
               })}
             </AnimatePresence>
+            <div className="flex justify-center pt-1">
+              <Link
+                href="/library"
+                className="text-[13px] font-medium text-[#A5B4FC] underline underline-offset-2 hover:text-white/90"
+              >
+                Показать все
+              </Link>
+            </div>
           </div>
         )}
       </div>
@@ -343,3 +367,22 @@ export default function DashboardPage() {
   );
 }
 
+export default function DashboardPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-background px-5 py-6 text-text">
+          <div className="flex flex-col items-center gap-4">
+            <div
+              className="h-9 w-9 animate-spin rounded-full border-2 border-white/10 border-t-[#7C3AED]"
+              aria-hidden="true"
+            />
+            <p className="text-[13px] text-text-muted">Загрузка…</p>
+          </div>
+        </div>
+      }
+    >
+      <DashboardPageInner />
+    </Suspense>
+  );
+}

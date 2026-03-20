@@ -33,7 +33,9 @@ export function BottomNav() {
   );
 
   return (
-    <nav className="fixed bottom-4 left-1/2 z-40 w-[calc(100%-1.5rem)] max-w-[450px] -translate-x-1/2">
+    <nav
+      className="fixed bottom-4 left-1/2 z-40 w-[calc(100%-1.5rem)] max-w-[450px] -translate-x-1/2 pb-[env(safe-area-inset-bottom,0px)]"
+    >
       <div
         className="grid gap-1 rounded-[24px] border border-white/10 bg-white/[0.02] p-2 backdrop-blur-3xl"
         style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}

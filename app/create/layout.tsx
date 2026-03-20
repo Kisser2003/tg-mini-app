@@ -11,6 +11,10 @@ import { useCreateReleaseDraftStore } from "@/features/release/createRelease/sto
 // During client-side navigation (e.g. Dashboard → /create/metadata) the store
 // is already hydrated, so hasHydrated is true immediately and children render
 // without any loading flash.
+//
+// If you add redirect logic here (e.g. router.replace when the draft store is
+// empty), exclude /create/success — after submit the form may be cleared while
+// the user still sees the success screen or navigates away.
 export default function CreateLayout({ children }: { children: React.ReactNode }) {
   const hasHydrated = useCreateReleaseDraftStore((s) => s.hasHydrated);
 

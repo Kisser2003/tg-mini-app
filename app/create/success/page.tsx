@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { CreateShell } from "@/features/release/createRelease/components/CreateShell";
 import { StepGate } from "@/features/release/createRelease/components/StepGate";
@@ -8,8 +8,11 @@ import { useCreateReleaseDraftStore } from "@/features/release/createRelease/sto
 import { SuccessScreen } from "@/components/SuccessScreen";
 import { triggerHaptic } from "@/lib/telegram";
 
+type LeavingIntent = "home" | "create" | null;
+
 export default function CreateSuccessPage() {
   const router = useRouter();
+  const leavingRef = useRef<LeavingIntent>(null);
   const summary = useCreateReleaseDraftStore((s) => s.successSummary);
   const resetDraft = useCreateReleaseDraftStore((s) => s.resetDraft);
   const resetSubmissionUi = useCreateReleaseDraftStore((s) => s.resetSubmissionUi);
@@ -28,6 +31,24 @@ export default function CreateSuccessPage() {
     }
   }, [summary]);
 
+  const leaving = leavingRef.current;
+
+  if (leaving) {
+    return (
+      <CreateShell title="Релиз · Готово">
+        <div className="flex min-h-[40vh] flex-col items-center justify-center gap-4 px-4">
+          <div
+            className="h-9 w-9 animate-spin rounded-full border-2 border-white/10 border-t-[#7C3AED]"
+            aria-hidden="true"
+          />
+          <p className="text-center text-[13px] text-text-muted">
+            {leaving === "home" ? "Переход на главную…" : "Открываем новый релиз…"}
+          </p>
+        </div>
+      </CreateShell>
+    );
+  }
+
   return (
     <CreateShell title="Релиз · Готово">
       {!summary ? (
@@ -41,10 +62,12 @@ export default function CreateSuccessPage() {
         <SuccessScreen
           summary={summary}
           onGoHome={() => {
+            leavingRef.current = "home";
             resetDraft();
-            router.push("/dashboard");
+            router.push("/dashboard?fromCreate=1");
           }}
           onUploadAnother={() => {
+            leavingRef.current = "create";
             resetDraft();
             router.push("/create/metadata");
           }}

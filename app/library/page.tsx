@@ -62,8 +62,7 @@ export default function LibraryPage() {
       <GlassCard className="p-5">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-white/55">Мои релизы</p>
-            <h1 className="mt-2 text-2xl font-semibold tracking-tight">Список релизов</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">Мои релизы</h1>
           </div>
           <motion.button
             type="button"

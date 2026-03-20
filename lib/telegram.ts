@@ -69,6 +69,7 @@ export function initTelegramWebApp() {
 
   try {
     webApp.ready?.();
+    /** Развернуть WebApp на весь экран (меньше «дёрганий» от системной шапки Telegram). */
     webApp.expand?.();
     webApp.setHeaderColor?.("bg_color");
     if (webApp.initData) {

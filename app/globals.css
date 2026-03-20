@@ -22,11 +22,14 @@ body {
   display: none;
 }
 
+/* iOS: не увеличивать viewport при фокусе в полях < 16px */
 input,
 textarea,
 select {
   outline: none;
   color: #fff;
+  font-size: 16px;
+  line-height: 1.4;
 }
 
 button {

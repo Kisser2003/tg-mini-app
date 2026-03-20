@@ -22,6 +22,7 @@ export type GuardResult =
 export function useStepGuard(step: CreateStep): GuardResult {
   const hasHydrated = useCreateReleaseDraftStore((s) => s.hasHydrated);
   const releaseId = useCreateReleaseDraftStore((s) => s.releaseId);
+  const successSummary = useCreateReleaseDraftStore((s) => s.successSummary);
   const releaseType = useCreateReleaseDraftStore((s) => s.metadata.releaseType);
   const isMetadataComplete = useCreateReleaseDraftStore(selectIsMetadataComplete);
   const isAssetsComplete = useCreateReleaseDraftStore(selectIsAssetsComplete);
@@ -40,6 +41,9 @@ export function useStepGuard(step: CreateStep): GuardResult {
     }
     if (step === "metadata") return { allowed: true };
 
+    // Экран «Готово» после сабмита: метаданные в сторе могут быть уже очищены, но summary есть.
+    if (step === "success" && successSummary) return { allowed: true };
+
     if (!isMetadataComplete) {
       return {
         allowed: false,
@@ -53,7 +57,10 @@ export function useStepGuard(step: CreateStep): GuardResult {
 
     if (step === "assets") return { allowed: true };
 
-    if (!releaseId && (step === "tracks" || step === "review" || step === "success")) {
+    if (
+      !releaseId &&
+      (step === "tracks" || step === "review" || (step === "success" && !successSummary))
+    ) {
       return {
         allowed: false,
         title: "Черновик релиза ещё не создан",
@@ -94,5 +101,14 @@ export function useStepGuard(step: CreateStep): GuardResult {
 
     // success is reachable only after explicit submit, but we allow if successSummary exists
     return { allowed: true };
-  }, [hasHydrated, isAssetsComplete, isMetadataComplete, isTracksComplete, releaseId, releaseType, step]);
+  }, [
+    hasHydrated,
+    isAssetsComplete,
+    isMetadataComplete,
+    isTracksComplete,
+    releaseId,
+    releaseType,
+    step,
+    successSummary
+  ]);
 }

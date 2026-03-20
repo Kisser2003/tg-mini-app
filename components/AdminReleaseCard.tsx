@@ -178,7 +178,7 @@ export function AdminReleaseCard({
             onChange={(e) => onRejectReasonChange(e.target.value)}
             rows={3}
             placeholder="Например: проблема с правами, невалидная обложка, шум в WAV."
-            className="w-full resize-none rounded-xl border border-white/15 bg-black/30 px-3 py-2 text-xs text-white placeholder:text-white/35"
+            className="w-full resize-none rounded-xl border border-white/15 bg-black/30 px-3 py-2 text-[16px] leading-relaxed text-white placeholder:text-white/35"
           />
           <div className="flex justify-end gap-2">
             <button
