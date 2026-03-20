@@ -13,6 +13,10 @@ import type { CreateTracks } from "@/features/release/createRelease/types";
 import { useCreateReleaseDraftStore } from "@/features/release/createRelease/store";
 import { FileUploader } from "@/components/FileUploader";
 import { triggerHaptic } from "@/lib/telegram";
+import { toast } from "sonner";
+
+const fieldErr =
+  "border border-red-500/45 ring-1 ring-red-500/30 focus:border-red-400/60 focus:ring-red-400/25";
 
 export default function CreateTracksPage() {
   const router = useRouter();
@@ -56,7 +60,7 @@ export default function CreateTracksPage() {
     handleSubmit,
     watch,
     reset,
-    formState: { errors, isValid, isDirty }
+    formState: { errors, isValid, isDirty, dirtyFields }
   } = useForm<CreateTracks>({
     resolver: zodResolver(tracksSchema),
     mode: "onChange",
@@ -130,7 +134,9 @@ export default function CreateTracksPage() {
       const currentFiles = useCreateReleaseDraftStore.getState().trackFiles;
       const missing = data.tracks.some((_t, idx) => !currentFiles[idx]);
       if (missing) {
-        setSubmitError("Загрузите WAV-файл для каждого трека.");
+        const msg = "Загрузите WAV-файл для каждого трека.";
+        setSubmitError(msg);
+        toast.error(msg);
         return;
       }
       router.push("/create/review");
@@ -189,7 +195,11 @@ export default function CreateTracksPage() {
                 <input
                   {...register(`tracks.${index}.title` as const)}
                   placeholder="Например, Track 1"
-                  className="h-[48px] w-full rounded-[16px] bg-black/40 px-4 text-[16px] text-white placeholder:text-white/30 outline-none transition-colors focus:bg-black/60"
+                  className={`h-[48px] w-full rounded-[16px] bg-black/40 px-4 text-[16px] text-white placeholder:text-white/30 outline-none transition-colors focus:bg-black/60 ${
+                    errors.tracks?.[index]?.title && dirtyFields.tracks?.[index]?.title
+                      ? fieldErr
+                      : ""
+                  }`}
                 />
                 {errors.tracks?.[index]?.title && (
                   <p className="text-[11px] text-red-400">
@@ -207,6 +217,7 @@ export default function CreateTracksPage() {
                 type="wav"
                 initialFile={storeTrackFiles[index] ?? null}
                 onFileChange={(file) => setTrackFile(index, file)}
+                invalid={submitAttempted && !storeTrackFiles[index]}
               />
               {submitAttempted && !storeTrackFiles[index] && (
                 <p className="text-[11px] text-red-400">Загрузите WAV-файл для этого трека.</p>

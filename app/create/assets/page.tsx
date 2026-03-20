@@ -10,6 +10,7 @@ import { useCreateReleaseDraftStore } from "@/features/release/createRelease/sto
 import { FileUploader } from "@/components/FileUploader";
 import { debugInit } from "@/lib/debug";
 import { triggerHaptic } from "@/lib/telegram";
+import { toast } from "sonner";
 
 export default function CreateAssetsPage() {
   const router = useRouter();
@@ -62,6 +63,8 @@ export default function CreateAssetsPage() {
         const draft = await ensureDraftRelease();
         if (!draft) {
           debugInit("create/assets", "ensureDraftRelease returned null");
+          const errMsg = useCreateReleaseDraftStore.getState().submitError;
+          if (errMsg) toast.error(errMsg);
           return;
         }
         debugInit("create/assets", "ensureDraftRelease success", { releaseId: draft.id });
@@ -70,6 +73,8 @@ export default function CreateAssetsPage() {
       const url = await uploadArtworkForDraft(artworkFile);
       if (!url) {
         debugInit("create/assets", "uploadArtworkForDraft returned empty URL");
+        const errMsg = useCreateReleaseDraftStore.getState().submitError;
+        if (errMsg) toast.error(errMsg);
         return;
       }
       debugInit("create/assets", "uploadArtworkForDraft success", { hasUrl: true });

@@ -18,19 +18,20 @@
 | Состояние черновика релиза | **zustand** + persist (`features/release/createRelease/store.ts`) |
 | Бэкенд данных | **Supabase** (`@supabase/supabase-js`), клиент в браузере: `lib/supabase.ts` с `NEXT_PUBLIC_SUPABASE_URL` и `NEXT_PUBLIC_SUPABASE_ANON_KEY` |
 | Уведомления UI | **sonner** (тосты в layout) |
+| Кэш / списки | **SWR** — см. `AppProviders`, страницы `/library` и `/admin` |
 | Иконки | **lucide-react** |
 
 ## Структура приложения (экраны и навигация)
 
 - Нижняя навигация: `components/BottomNav.tsx` — **Мои релизы** (`/library`), **Кошелек** (`/wallet`), **Настройки** (`/settings`). Пункт **Админ** (`/admin`) показывается только если `getTelegramUserId() === getExpectedAdminTelegramId()` (проверка на клиенте).
 - **Основные страницы:**
-  - **Мои релизы** (`/library`) — полный список релизов из Supabase, опрос (`lib/useSafePolling.ts`), статистика по статусам (Готово/Проверка/Ошибки), черновики и ошибки с действиями как раньше на отдельном Dashboard, переход к созданию.
+  - **Мои релизы** (`/library`) — полный список релизов из Supabase, **SWR** (`swr`) с интервальной ревалидацией и глобальным `SWRConfig` в `components/AppProviders.tsx` (`revalidateOnFocus: false`, `dedupingInterval: 5000`), статистика по статусам (Готово/Проверка/Ошибки), черновики и ошибки с действиями как раньше на отдельном Dashboard, переход к созданию.
   - **Поток создания релиза** — под `/create/...`: метаданные, треки, обложка/файлы, ревью; после успешной отправки — переход на **`/library`**; логика в `features/release/` + `repositories/releases.repo.ts`.
   - **Деталь релиза** — `/release/[id]`.
   - **Кошелек** — `/wallet`: UI с условными суммами (оценка по «готовым» релизам, минимальный вывод и т.д. — см. константы в файле).
   - **Настройки** — `/settings`: в основном **статичные** пункты без реального переключения настроек.
   - **Онбординг** — `/onboarding`.
-  - **Админ** — `/admin`: загрузка очереди релизов из Supabase, действия модерации (привязка к `user_id` админа на клиенте).
+  - **Админ** — `/admin`: очередь модерации через **SWR** (как `/library`), действия модерации (привязка к `user_id` админа на клиенте). **Кошелёк** (`/wallet`) по-прежнему использует `lib/useSafePolling.ts`.
 
 ## Данные и доменная модель (по коду)
 
@@ -58,6 +59,7 @@
 
 - `lib/admin.ts`: `ADMIN_TELEGRAM_ID` из env, иначе **захардкоженный fallback** — важно задать env в проде.
 - `.env.local.example`: `NEXT_PUBLIC_SUPABASE_*`, `SUPABASE_SERVICE_ROLE_KEY`, `ADMIN_TELEGRAM_ID`, `TELEGRAM_BOT_TOKEN`, `ADMIN_CHAT_ID`.
+- **Логи ошибок UI:** `lib/logger.ts` в production шлёт POST на [`app/api/client-error/route.ts`](app/api/client-error/route.ts). При наличии `SUPABASE_SERVICE_ROLE_KEY` строки пишутся в таблицу **`error_logs`** (миграция `supabase/migrations/20260321120000_error_logs.sql`). Без service role ошибки только в server `console.error`.
 
 ## API и уведомления
 

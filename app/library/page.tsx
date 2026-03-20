@@ -8,8 +8,10 @@ import {
   useState,
   type KeyboardEvent
 } from "react";
+import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter, useSearchParams } from "next/navigation";
+import useSWR from "swr";
 import { GlassCard } from "@/components/GlassCard";
 import { ReleaseCardSkeletonList } from "@/components/ReleaseCardSkeleton";
 import { debugInit } from "@/lib/debug";
@@ -18,7 +20,7 @@ import { useCreateReleaseDraftStore } from "@/features/release/createRelease/sto
 import { getReleaseStatusMeta, normalizeReleaseStatus } from "@/lib/release-status";
 import { supabase } from "@/lib/supabase";
 import { getTelegramUserId, initTelegramWebApp, triggerHaptic } from "@/lib/telegram";
-import { useSafePolling } from "@/lib/useSafePolling";
+import { withRequestTimeout } from "@/lib/withRequestTimeout";
 import { toast } from "sonner";
 import type { ReleaseStatus } from "@/lib/db-enums";
 
@@ -31,17 +33,29 @@ type ReleaseRow = {
   error_message?: string | null;
 };
 
+const ARTWORK_SIZES = "(max-width: 768px) 100vw, 33vw";
+const RELEASES_LIST_TIMEOUT_MS = 12000;
+
 function ArtworkThumb({
   url,
-  title
+  title,
+  priority = false
 }: {
   url: string | null;
   title: string;
+  priority?: boolean;
 }) {
   return (
-    <div className="h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-white/5">
+    <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-white/5">
       {url ? (
-        <img src={url} alt={title} className="h-full w-full object-cover" />
+        <Image
+          src={url}
+          alt={title}
+          fill
+          sizes={ARTWORK_SIZES}
+          className="object-cover"
+          priority={priority}
+        />
       ) : (
         <div className="flex h-full w-full items-center justify-center text-[10px] text-white/50">
           NO ART
@@ -49,6 +63,27 @@ function ArtworkThumb({
       )}
     </div>
   );
+}
+
+async function fetchReleasesForUser([, uid]: readonly ["releases", number]): Promise<ReleaseRow[]> {
+  debugInit("library", "loadReleases start", { userId: uid });
+  const queryPromise = (async () => {
+    const { data, error: dbError } = await supabase
+      .from("releases")
+      .select("id, track_name, artwork_url, status, error_message, created_at")
+      .eq("user_id", uid)
+      .order("created_at", { ascending: false });
+    if (dbError) throw dbError;
+    return (data ?? []) as ReleaseRow[];
+  })();
+
+  const rows = await withRequestTimeout(
+    queryPromise,
+    RELEASES_LIST_TIMEOUT_MS,
+    `Запрос превысил таймаут (${RELEASES_LIST_TIMEOUT_MS} мс).`
+  );
+  debugInit("library", "loadReleases success", { count: rows.length });
+  return rows;
 }
 
 function LibraryPageInner() {
@@ -65,39 +100,26 @@ function LibraryPageInner() {
     debugInit("library", "init done");
   }, []);
 
-  const loadReleases = useCallback(async () => {
-    if (userId == null) return [] as ReleaseRow[];
-    debugInit("library", "loadReleases start", { userId });
-    const { data, error: dbError } = await supabase
-      .from("releases")
-      .select("id, track_name, artwork_url, status, error_message, created_at")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false });
-    if (dbError) throw dbError;
-    debugInit("library", "loadReleases success", { count: (data ?? []).length });
-    return (data ?? []) as ReleaseRow[];
-  }, [userId]);
+  const swrKey = userId != null ? (["releases", userId] as const) : null;
 
-  const {
-    data: releases,
-    loading,
-    refreshing,
-    error,
-    reload
-  } = useSafePolling<ReleaseRow[]>({
-    enabled: userId != null,
-    intervalMs: 7000,
-    load: loadReleases,
-    initialData: [],
-    requestTimeoutMs: 12000,
-    debugName: "library.releases"
-  });
+  const { data, error, isLoading, isValidating, mutate } = useSWR(
+    swrKey,
+    fetchReleasesForUser,
+    {
+      refreshInterval: 7000,
+      keepPreviousData: true
+    }
+  );
+
+  const releases = useMemo(() => data ?? [], [data]);
+  const errorMessage =
+    error instanceof Error ? error.message : error != null ? String(error) : null;
 
   useEffect(() => {
     if (searchParams.get("fromCreate") !== "1") return;
-    void reload(true);
+    void mutate(undefined, { revalidate: true });
     router.replace("/library");
-  }, [searchParams, reload, router]);
+  }, [searchParams, mutate, router]);
 
   const handleCreate = () => {
     triggerHaptic("light");
@@ -138,6 +160,9 @@ function LibraryPageInner() {
     );
   }, [releases]);
 
+  const showTelegramWait = userId === null;
+  const showListSkeleton = userId != null && isLoading && data === undefined;
+
   return (
     <div className="min-h-screen bg-background px-5 py-6 pb-10 text-text">
       <div className="mx-auto flex w-full max-w-[440px] flex-col gap-6 font-sans">
@@ -150,11 +175,11 @@ function LibraryPageInner() {
                 whileHover={{ scale: 0.99 }}
                 whileTap={{ scale: 0.98 }}
                 transition={{ type: "spring", stiffness: 320, damping: 22 }}
-                onClick={() => void reload(true)}
-                disabled={refreshing}
+                onClick={() => void mutate(undefined, { revalidate: true })}
+                disabled={isValidating}
                 className="rounded-full border border-white/20 bg-white/5 px-3 py-1.5 text-xs text-white/80 disabled:opacity-60"
               >
-                {refreshing ? "Обновляем..." : "Обновить"}
+                {isValidating ? "Обновляем..." : "Обновить"}
               </motion.button>
               <button
                 type="button"
@@ -183,22 +208,22 @@ function LibraryPageInner() {
         </div>
 
         <div className="mt-2 flex flex-col gap-4">
-          {(userId === null || loading) && (
+          {(showTelegramWait || showListSkeleton) && (
             <div className="space-y-4">
               <p className="text-[13px] text-text-muted">
-                {userId === null ? "Подключаем Telegram…" : "Загружаем твои релизы из OMF…"}
+                {showTelegramWait ? "Подключаем Telegram…" : "Загружаем твои релизы из OMF…"}
               </p>
               <ReleaseCardSkeletonList count={3} />
             </div>
           )}
 
-          {error && (
+          {errorMessage && (
             <div className="rounded-[20px] border border-red-500/30 bg-red-950/40 px-4 py-3 text-[13px] text-red-100">
-              {error}
+              {errorMessage}
             </div>
           )}
 
-          {userId != null && !loading && !error && !hasReleases && (
+          {userId != null && !showListSkeleton && !errorMessage && !hasReleases && (
             <div className="flex flex-1 flex-col items-center justify-center gap-4 rounded-[24px] border border-white/[0.08] bg-surface/80 px-6 py-10 text-center shadow-[0_18px_40px_rgba(0,0,0,0.7)] backdrop-blur-2xl">
               <div className="text-4xl">🎧</div>
               <div className="space-y-1">
@@ -215,10 +240,10 @@ function LibraryPageInner() {
             </div>
           )}
 
-          {userId != null && !loading && hasReleases && (
+          {userId != null && hasReleases && (
             <div className="space-y-3">
               <AnimatePresence>
-                {releases.map((release) => {
+                {releases.map((release, listIndex) => {
                   const statusMeta = getReleaseStatusMeta(release.status);
                   const normalizedStatus = normalizeReleaseStatus(release.status);
                   const isDraft = normalizedStatus === "draft";
@@ -230,6 +255,7 @@ function LibraryPageInner() {
                     ? release.error_message!
                     : "Причина ошибки не указана";
                   const isExpanded = expandedErrorId === release.id;
+                  const thumbPriority = listIndex < 3 && Boolean(release.artwork_url);
 
                   if (isDraft) {
                     return (
@@ -257,7 +283,11 @@ function LibraryPageInner() {
                           }
                         }}
                       >
-                        <ArtworkThumb url={release.artwork_url} title={release.track_name} />
+                        <ArtworkThumb
+                          url={release.artwork_url}
+                          title={release.track_name}
+                          priority={thumbPriority}
+                        />
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-[15px] font-semibold">{release.track_name}</p>
                           <p className="mt-0.5 text-[11px] text-text-muted">
@@ -288,7 +318,11 @@ function LibraryPageInner() {
                         className="rounded-[20px] border border-white/[0.08] bg-surface/80 px-4 py-4 shadow-[0_18px_40px_rgba(0,0,0,0.7)] backdrop-blur-2xl"
                       >
                         <div className="flex gap-3">
-                          <ArtworkThumb url={release.artwork_url} title={release.track_name} />
+                          <ArtworkThumb
+                            url={release.artwork_url}
+                            title={release.track_name}
+                            priority={thumbPriority}
+                          />
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-[15px] font-semibold">{release.track_name}</p>
                             <p className="mt-0.5 text-[11px] text-text-muted">
@@ -357,7 +391,11 @@ function LibraryPageInner() {
                       transition={{ type: "spring", stiffness: 280, damping: 24 }}
                       className="glass-card flex w-full items-center gap-3 p-4 text-left"
                     >
-                      <ArtworkThumb url={release.artwork_url} title={release.track_name} />
+                      <ArtworkThumb
+                        url={release.artwork_url}
+                        title={release.track_name}
+                        priority={thumbPriority}
+                      />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium">{release.track_name}</p>
                         <p className="text-xs text-white/60">

@@ -70,14 +70,21 @@ export function uploadToSupabaseStorageObject(
         resolve();
         return;
       }
+      const rawBody = xhr.responseText || "";
       let message = `HTTP ${xhr.status}`;
       try {
-        const parsed = JSON.parse(xhr.responseText || "{}") as { message?: string; error?: string };
+        const parsed = JSON.parse(rawBody || "{}") as { message?: string; error?: string };
         message = parsed.message || parsed.error || message;
       } catch {
         message = xhr.statusText || message;
       }
-      reject(new Error(message));
+      const err = new Error(message) as Error & {
+        statusCode: number;
+        responseBody: string;
+      };
+      err.statusCode = xhr.status;
+      err.responseBody = rawBody.slice(0, 800);
+      reject(err);
     };
 
     xhr.onerror = () => reject(new Error("Сетевая ошибка при загрузке файла."));

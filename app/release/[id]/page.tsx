@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowLeft, Check, Link2, ShieldCheck } from "lucide-react";
@@ -26,6 +27,7 @@ type ReleaseDetailsRow = {
 };
 
 const RELEASE_DETAILS_TIMEOUT_MS = 12000;
+const ARTWORK_SIZES = "(max-width: 768px) 100vw, 33vw";
 
 export default function ReleaseDetailsPage() {
   const params = useParams<{ id: string }>();
@@ -175,7 +177,16 @@ export default function ReleaseDetailsPage() {
         </motion.button>
         <div className="flex items-center gap-3">
           {release.artwork_url ? (
-            <img src={release.artwork_url} alt={release.track_name} className="h-16 w-16 rounded-2xl object-cover" />
+            <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-2xl border border-white/15">
+              <Image
+                src={release.artwork_url}
+                alt={release.track_name}
+                fill
+                sizes={ARTWORK_SIZES}
+                className="object-cover"
+                priority
+              />
+            </div>
           ) : (
             <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-white/15 bg-black/30 text-[10px] text-white/45">
               NO ART

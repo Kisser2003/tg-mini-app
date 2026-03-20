@@ -11,6 +11,7 @@ import { useStepGuard } from "@/features/release/createRelease/guards";
 import { useCreateReleaseDraftStore } from "@/features/release/createRelease/store";
 import { submitTracksAndFinalize } from "@/features/release/createRelease/actions";
 import { UploadProgress } from "@/components/UploadProgress";
+import { logClientError } from "@/lib/logger";
 import { triggerHaptic } from "@/lib/telegram";
 
 export default function CreateReviewPage() {
@@ -89,6 +90,12 @@ export default function CreateReviewPage() {
       const msg =
         "Не хватает WAV-файлов в этой сессии. Загрузите их на шаге «Треки» — даже если в базе уже есть старые файлы.";
       setSubmitError(msg);
+      toast.error(msg);
+      logClientError({
+        error: new Error("review_precheck_missing_wav"),
+        route: "/create/review",
+        extra: { phase: "precheck", kind: "missing_session_wav" }
+      });
       return;
     }
     triggerHaptic("medium");
@@ -97,10 +104,20 @@ export default function CreateReviewPage() {
     const ok = await submitTracksAndFinalize({ files });
     setIsSubmitting(false);
     if (!ok) {
-      const msg = useCreateReleaseDraftStore.getState().submitError;
-      toast.error(
-        msg ?? "Не удалось отправить релиз на модерацию. Статус не изменён."
-      );
+      const st = useCreateReleaseDraftStore.getState();
+      const msg = st.submitError;
+      const toastText = msg ?? "Не удалось отправить релиз на модерацию. Статус не изменён.";
+      toast.error(toastText);
+      logClientError({
+        error: new Error(toastText),
+        route: "/create/review",
+        extra: {
+          phase: "after_submitTracksAndFinalize",
+          submitStage: st.submitStage,
+          submitStatus: st.submitStatus,
+          detailLoggedInActions: true
+        }
+      });
       return;
     }
     pendingSuccessNavRef.current = true;

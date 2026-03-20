@@ -1,9 +1,10 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { CheckCircle2, ExternalLink, Headphones, XCircle } from "lucide-react";
-import { AudioPlayer } from "@/components/AudioPlayer";
+import { AudioPlayerLazy } from "@/components/AudioPlayerLazy";
 import type { ReleaseRecord, ReleaseTrackRow } from "@/repositories/releases.repo";
 import { getReleaseStatusMeta } from "@/lib/release-status";
 import { Badge } from "@/components/Badge";
@@ -50,7 +51,11 @@ type AdminReleaseCardProps = {
   onConfirmReject: () => void;
   /** Ссылка на страницу детали модерации */
   detailHref?: string;
+  /** LCP / приоритет загрузки для первых карточек в списке */
+  artworkPriority?: boolean;
 };
+
+const ARTWORK_SIZES = "(max-width: 768px) 100vw, 33vw";
 
 export function AdminReleaseCard({
   release,
@@ -64,7 +69,8 @@ export function AdminReleaseCard({
   onRejectReasonChange,
   onCancelReject,
   onConfirmReject,
-  detailHref
+  detailHref,
+  artworkPriority = false
 }: AdminReleaseCardProps) {
   const statusMeta = getReleaseStatusMeta(release.status);
   const audioItems = buildAudioItems(release, tracks);
@@ -76,16 +82,18 @@ export function AdminReleaseCard({
       whileHover={{ scale: 0.995 }}
       whileTap={{ scale: 0.98 }}
       transition={{ delay: index * 0.06, type: "spring", stiffness: 280, damping: 24 }}
-      className="glass-card overflow-hidden rounded-[22px] border border-white/[0.08] bg-surface/80 p-4 shadow-[0_18px_40px_rgba(0,0,0,0.7)] backdrop-blur-2xl"
+      className="glass-card will-change-transform overflow-hidden rounded-[22px] border border-white/[0.08] bg-surface/80 p-4 shadow-[0_18px_40px_rgba(0,0,0,0.7)] backdrop-blur-2xl"
     >
       <div className="flex gap-3">
-        <div className="h-[72px] w-[72px] shrink-0 overflow-hidden rounded-xl border border-white/10 bg-white/5 shadow-inner">
+        <div className="relative h-[72px] w-[72px] shrink-0 overflow-hidden rounded-xl border border-white/10 bg-white/5 shadow-inner">
           {release.artwork_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
+            <Image
               src={release.artwork_url}
               alt={release.track_name}
-              className="h-full w-full object-cover"
+              fill
+              sizes={ARTWORK_SIZES}
+              className="object-cover"
+              priority={artworkPriority}
             />
           ) : (
             <div className="flex h-full w-full items-center justify-center text-[10px] text-white/45">
@@ -141,7 +149,7 @@ export function AdminReleaseCard({
         ) : (
           <div className="space-y-2">
             {audioItems.map((item) => (
-              <AudioPlayer key={item.key} src={item.src} label={item.label} />
+              <AudioPlayerLazy key={item.key} src={item.src} label={item.label} />
             ))}
           </div>
         )}

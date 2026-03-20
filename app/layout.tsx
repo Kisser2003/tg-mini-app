@@ -3,10 +3,22 @@ import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 import { Toaster } from "sonner";
 import { Inter } from "next/font/google";
+import { AppProviders } from "@/components/AppProviders";
+import { AppErrorBoundary } from "@/components/ErrorBoundary";
 import { PageTransition } from "@/components/PageTransition";
 import { TelegramBootstrap } from "@/components/TelegramBootstrap";
 import { BottomNav } from "@/components/BottomNav";
 import { NoiseOverlay } from "@/components/NoiseOverlay";
+
+function supabasePreconnectOrigin(): string | null {
+  const raw = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!raw) return null;
+  try {
+    return new URL(raw).origin;
+  } catch {
+    return null;
+  }
+}
 
 const inter = Inter({
   subsets: ["latin", "cyrillic"],
@@ -31,8 +43,15 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const supabaseOrigin = supabasePreconnectOrigin();
+
   return (
     <html lang="ru" className="dark">
+      <head>
+        {supabaseOrigin ? (
+          <link rel="preconnect" href={supabaseOrigin} crossOrigin="anonymous" />
+        ) : null}
+      </head>
       <body
         className={`${inter.variable} flex min-h-[100dvh] flex-col overflow-hidden bg-[#030303] font-sans text-white antialiased`}
       >
@@ -49,7 +68,11 @@ export default function RootLayout({
           </div>
           <div className="app-main-scroll relative flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-y-contain px-3 pb-[calc(7rem+env(safe-area-inset-bottom,0px))] pt-4 [-webkit-overflow-scrolling:touch]">
             <NoiseOverlay />
-            <PageTransition>{children}</PageTransition>
+            <AppProviders>
+              <AppErrorBoundary>
+                <PageTransition>{children}</PageTransition>
+              </AppErrorBoundary>
+            </AppProviders>
           </div>
           <BottomNav />
         </div>

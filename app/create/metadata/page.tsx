@@ -13,6 +13,9 @@ import { useCreateReleaseDraftStore } from "@/features/release/createRelease/sto
 import { hydrateFromReleaseId, initUserContextInStore } from "@/features/release/createRelease/actions";
 import { triggerHaptic } from "@/lib/telegram";
 
+const fieldErr =
+  "border border-red-500/45 ring-1 ring-red-500/30 focus:border-red-400/60 focus:ring-red-400/25";
+
 function CreateMetadataPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -60,7 +63,7 @@ function CreateMetadataPageInner() {
     watch,
     setValue,
     reset,
-    formState: { errors, isValid, isDirty }
+    formState: { errors, isValid, isDirty, dirtyFields }
   } = useForm<CreateMetadata>({
     resolver: zodResolver(metadataSchema),
     mode: "onChange",
@@ -151,12 +154,20 @@ function CreateMetadataPageInner() {
                 {artistFields.map((field, idx) => (
                   <div
                     key={field.id}
-                    className="flex flex-col gap-2 rounded-[16px] bg-black/40 px-3 py-2.5 sm:flex-row sm:items-center"
+                    className={`flex flex-col gap-2 rounded-[16px] bg-black/40 px-3 py-2.5 sm:flex-row sm:items-center ${
+                      errors.artists?.[idx]?.name && dirtyFields.artists?.[idx]?.name
+                        ? "ring-1 ring-red-500/35"
+                        : ""
+                    }`}
                   >
                     <input
                       {...register(`artists.${idx}.name` as const)}
                       placeholder={idx === 0 ? "Основной артист" : "Feat / Remixer"}
-                      className="w-full flex-1 bg-transparent text-[16px] text-white placeholder:text-white/30 outline-none"
+                      className={`w-full flex-1 bg-transparent text-[16px] text-white placeholder:text-white/30 outline-none ${
+                        errors.artists?.[idx]?.name && dirtyFields.artists?.[idx]?.name
+                          ? fieldErr
+                          : ""
+                      }`}
                     />
                     <div className="flex w-full items-center gap-2 sm:w-auto sm:justify-end">
                       <select
@@ -176,11 +187,16 @@ function CreateMetadataPageInner() {
                         </button>
                       )}
                     </div>
+                    {errors.artists?.[idx]?.name && dirtyFields.artists?.[idx]?.name && (
+                      <p className="w-full text-[11px] text-red-400 sm:order-last">
+                        {errors.artists[idx]?.name?.message}
+                      </p>
+                    )}
                   </div>
                 ))}
               </div>
-              {errors.artists && (
-                <p className="text-[11px] text-red-400">{errors.artists.message as any}</p>
+              {errors.artists?.root && (
+                <p className="text-[11px] text-red-400">{errors.artists.root.message}</p>
               )}
             </div>
 
@@ -190,7 +206,9 @@ function CreateMetadataPageInner() {
               </label>
               <input
                 {...register("releaseTitle")}
-                className="h-[56px] w-full rounded-[18px] bg-black/40 px-4 text-[16px] text-white placeholder:text-white/30 outline-none transition-colors focus:bg-black/60"
+                className={`h-[56px] w-full rounded-[18px] bg-black/40 px-4 text-[16px] text-white placeholder:text-white/30 outline-none transition-colors focus:bg-black/60 ${
+                  errors.releaseTitle && dirtyFields.releaseTitle ? fieldErr : ""
+                }`}
                 placeholder="Основное название релиза"
               />
               {errors.releaseTitle && (
@@ -205,7 +223,9 @@ function CreateMetadataPageInner() {
                 </label>
                 <select
                   {...register("releaseType")}
-                  className="h-[56px] w-full rounded-[18px] bg-black/40 px-4 text-[16px] text-white outline-none [color-scheme:dark] transition-colors focus:bg-black/60"
+                  className={`h-[56px] w-full rounded-[18px] bg-black/40 px-4 text-[16px] text-white outline-none [color-scheme:dark] transition-colors focus:bg-black/60 ${
+                    errors.releaseType && dirtyFields.releaseType ? fieldErr : ""
+                  }`}
                 >
                   <option value="single">Single</option>
                   <option value="ep">EP</option>
@@ -218,7 +238,9 @@ function CreateMetadataPageInner() {
                 </label>
                 <select
                   {...register("genre")}
-                  className="h-[56px] w-full rounded-[18px] bg-black/40 px-4 text-[16px] text-white outline-none [color-scheme:dark] transition-colors focus:bg-black/60"
+                  className={`h-[56px] w-full rounded-[18px] bg-black/40 px-4 text-[16px] text-white outline-none [color-scheme:dark] transition-colors focus:bg-black/60 ${
+                    errors.genre && dirtyFields.genre ? fieldErr : ""
+                  }`}
                 >
                   <option value="">Выберите жанр</option>
                   <option value="Techno">Techno</option>
@@ -241,7 +263,9 @@ function CreateMetadataPageInner() {
                   type="date"
                   min={minReleaseDate}
                   {...register("releaseDate")}
-                  className="h-[56px] w-full rounded-[18px] bg-black/40 px-4 text-[16px] text-white outline-none [color-scheme:dark] transition-colors focus:bg-black/60"
+                  className={`h-[56px] w-full rounded-[18px] bg-black/40 px-4 text-[16px] text-white outline-none [color-scheme:dark] transition-colors focus:bg-black/60 ${
+                    errors.releaseDate && dirtyFields.releaseDate ? fieldErr : ""
+                  }`}
                 />
                 {errors.releaseDate && (
                   <p className="text-[11px] text-red-400">{errors.releaseDate.message}</p>
@@ -253,9 +277,12 @@ function CreateMetadataPageInner() {
                 </label>
                 <input
                   {...register("label")}
-                  className="h-[56px] w-full rounded-[18px] bg-black/40 px-4 text-[16px] text-white outline-none transition-colors focus:bg-black/60"
+                  className={`h-[56px] w-full rounded-[18px] bg-black/40 px-4 text-[16px] text-white outline-none transition-colors focus:bg-black/60 ${
+                    errors.label && dirtyFields.label ? fieldErr : ""
+                  }`}
                   placeholder="Название лейбла"
                 />
+                {errors.label && <p className="text-[11px] text-red-400">{errors.label.message}</p>}
               </div>
             </div>
 

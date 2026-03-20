@@ -22,7 +22,10 @@ export function UploadProgress({ label, progress, className = "" }: Props) {
   const widthSpring = useSpring(progressMv, { stiffness: 110, damping: 20, mass: 0.45 });
   const numberSpring = useSpring(progressMv, { stiffness: 130, damping: 24, mass: 0.35 });
 
-  const widthPct = useTransform(widthSpring, (v) => `${Math.max(0, Math.min(100, v))}%`);
+  const scaleX = useTransform(widthSpring, (v) => {
+    const t = Math.max(0, Math.min(100, v));
+    return t / 100;
+  });
 
   const [displayPct, setDisplayPct] = useState(Math.round(clamped));
   useMotionValueEvent(numberSpring, "change", (v) => {
@@ -43,9 +46,9 @@ export function UploadProgress({ label, progress, className = "" }: Props) {
       </div>
       <div className="relative h-2.5 overflow-hidden rounded-full bg-white/10 backdrop-blur-sm">
         <motion.div
-          className="h-full max-w-full rounded-full bg-gradient-to-r from-sky-400 via-violet-400 to-fuchsia-400"
+          className="absolute inset-y-0 left-0 w-full origin-left rounded-full bg-gradient-to-r from-sky-400 via-violet-400 to-fuchsia-400 will-change-transform"
           style={{
-            width: widthPct,
+            scaleX,
             boxShadow:
               "0 0 24px rgba(56, 189, 248, 0.65), 0 0 16px rgba(167, 139, 250, 0.5), 0 0 8px rgba(232, 121, 249, 0.45)"
           }}

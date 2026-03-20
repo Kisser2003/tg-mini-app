@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Info, RefreshCcw } from "lucide-react";
+import useSWR from "swr";
 import { toast } from "sonner";
 import { AdminReleaseCard } from "@/components/AdminReleaseCard";
 import { GlassCard } from "@/components/GlassCard";
@@ -18,12 +19,14 @@ import {
 } from "@/repositories/releases.repo";
 import { sendApprovalNotification } from "@/lib/bot-api";
 import { getTelegramUserId, initTelegramWebApp, triggerHaptic } from "@/lib/telegram";
-import { useSafePolling } from "@/lib/useSafePolling";
+import { withRequestTimeout } from "@/lib/withRequestTimeout";
 
 type ModerationQueueRow = {
   release: ReleaseRecord;
   tracks: ReleaseTrackRow[];
 };
+
+const ADMIN_QUEUE_TIMEOUT_MS = 12000;
 
 export default function AdminPage() {
   const router = useRouter();
@@ -41,10 +44,9 @@ export default function AdminPage() {
     debugInit("admin", "init done");
   }, []);
 
-  const loadQueue = useCallback(async (): Promise<ModerationQueueRow[]> => {
-    if (!isAdmin) {
-      return [];
-    }
+  const swrKey = isAdmin ? (["admin-moderation-queue"] as const) : null;
+
+  const loadQueueCore = useCallback(async (): Promise<ModerationQueueRow[]> => {
     const releases = await getPendingReleases();
     const rows = await Promise.all(
       releases.map(async (release) => ({
@@ -53,22 +55,25 @@ export default function AdminPage() {
       }))
     );
     return rows;
-  }, [isAdmin]);
+  }, []);
 
-  const {
-    data: moderationQueue,
-    loading,
-    refreshing,
-    error,
-    reload: reloadQueue
-  } = useSafePolling<ModerationQueueRow[]>({
-    enabled: isAdmin,
-    intervalMs: 8000,
-    load: loadQueue,
-    initialData: [],
-    requestTimeoutMs: 12000,
-    debugName: "admin.queue"
-  });
+  const { data, error, isLoading, isValidating, mutate } = useSWR(
+    swrKey,
+    () =>
+      withRequestTimeout(
+        loadQueueCore(),
+        ADMIN_QUEUE_TIMEOUT_MS,
+        `Запрос превысил таймаут (${ADMIN_QUEUE_TIMEOUT_MS} мс).`
+      ),
+    {
+      refreshInterval: 8000,
+      keepPreviousData: true
+    }
+  );
+
+  const moderationQueue = data ?? [];
+  const errorMessage =
+    error instanceof Error ? error.message : error != null ? String(error) : null;
 
   const handleApprove = useCallback(
     async (release: ReleaseRecord) => {
@@ -83,7 +88,7 @@ export default function AdminPage() {
         } catch (e: unknown) {
           console.error("sendApprovalNotification failed:", e);
         }
-        await reloadQueue();
+        await mutate();
         toast.success("Релиз одобрен");
         router.replace("/admin");
       } catch (e: unknown) {
@@ -94,7 +99,7 @@ export default function AdminPage() {
         setBusyId(null);
       }
     },
-    [reloadQueue, router]
+    [mutate, router]
   );
 
   const confirmReject = useCallback(
@@ -105,7 +110,7 @@ export default function AdminPage() {
         triggerHaptic("warning");
         await rejectRelease(id, rejectReasons[id] ?? "");
         setExpandedRejectId(null);
-        await reloadQueue();
+        await mutate();
         toast.success("Релиз отклонён");
         router.replace("/admin");
       } catch (e: unknown) {
@@ -116,7 +121,7 @@ export default function AdminPage() {
         setBusyId(null);
       }
     },
-    [rejectReasons, reloadQueue, router]
+    [rejectReasons, mutate, router]
   );
 
   if (userId == null && process.env.NODE_ENV === "production") {
@@ -139,6 +144,8 @@ export default function AdminPage() {
     );
   }
 
+  const showQueueSkeleton = isLoading && data === undefined;
+
   return (
     <div className="flex max-h-[min(100dvh,900px)] flex-col gap-4 overflow-y-auto pb-10">
       <GlassCard className="p-5">
@@ -155,21 +162,23 @@ export default function AdminPage() {
             whileHover={{ scale: 0.99 }}
             whileTap={{ scale: 0.98 }}
             transition={{ type: "spring", stiffness: 320, damping: 22 }}
-            onClick={() => void reloadQueue(true)}
-            disabled={refreshing}
+            onClick={() => void mutate(undefined, { revalidate: true })}
+            disabled={isValidating}
             className="inline-flex shrink-0 items-center gap-1 rounded-full border border-white/20 bg-white/5 px-3 py-1.5 text-xs text-white/80 disabled:opacity-60"
           >
-            <RefreshCcw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
-            {refreshing ? "Обновляем..." : "Обновить"}
+            <RefreshCcw className={`h-3.5 w-3.5 ${isValidating ? "animate-spin" : ""}`} />
+            {isValidating ? "Обновляем..." : "Обновить"}
           </motion.button>
         </div>
       </GlassCard>
 
-      {loading && <GlassCard className="p-4 text-sm text-white/70">Загружаем очередь...</GlassCard>}
-      {error && <GlassCard className="p-4 text-sm text-rose-200">{error}</GlassCard>}
+      {showQueueSkeleton && (
+        <GlassCard className="p-4 text-sm text-white/70">Загружаем очередь...</GlassCard>
+      )}
+      {errorMessage && <GlassCard className="p-4 text-sm text-rose-200">{errorMessage}</GlassCard>}
       {actionError && <GlassCard className="p-4 text-sm text-rose-200">{actionError}</GlassCard>}
 
-      {!loading && !error && moderationQueue.length === 0 && (
+      {!showQueueSkeleton && !errorMessage && moderationQueue.length === 0 && (
         <GlassCard className="p-4">
           <div className="flex items-center gap-2 text-white/60">
             <Info className="h-4 w-4 shrink-0" />
@@ -178,7 +187,7 @@ export default function AdminPage() {
         </GlassCard>
       )}
 
-      {!loading && moderationQueue.length > 0 && (
+      {moderationQueue.length > 0 && (
         <div className="grid grid-cols-1 gap-3">
           {moderationQueue.map((row, index) => (
             <AdminReleaseCard
@@ -199,6 +208,7 @@ export default function AdminPage() {
               onCancelReject={() => setExpandedRejectId(null)}
               onConfirmReject={() => void confirmReject(row.release.id)}
               detailHref={`/admin/release/${row.release.id}`}
+              artworkPriority={index < 3}
             />
           ))}
         </div>

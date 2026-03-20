@@ -1,4 +1,5 @@
 import { formatErrorMessage } from "@/lib/errors";
+import { getUploadErrorDetails, logClientError } from "@/lib/logger";
 import { getExpectedAdminTelegramId } from "@/lib/admin";
 import {
   getTelegramUserDisplayName,
@@ -259,7 +260,9 @@ export async function ensureDraftRelease(): Promise<ReleaseRecord | null> {
 
   const parsed = metadataSchema.safeParse(store.metadata);
   if (!parsed.success) {
-    store.setSubmitError("Заполните паспорт релиза корректно.");
+    const msg =
+      parsed.error.issues[0]?.message ?? "Заполните паспорт релиза корректно.";
+    store.setSubmitError(msg);
     return null;
   }
 
@@ -302,6 +305,11 @@ export async function ensureDraftRelease(): Promise<ReleaseRecord | null> {
   } catch (e: unknown) {
     const detail = e instanceof Error ? e.message : JSON.stringify(e);
     store.setSubmitError(`Ошибка черновика: ${detail}`);
+    logClientError({
+      error: e,
+      route: "/create/assets",
+      extra: { step: "ensureDraftRelease" }
+    });
     return null;
   }
 }
@@ -330,7 +338,13 @@ export async function uploadArtworkForDraft(file: File): Promise<string | null> 
     return artworkUrl;
   } catch (e: unknown) {
     const detail = e instanceof Error ? e.message : JSON.stringify(e);
-    store.setSubmitError(`Ошибка загрузки: ${detail}`);
+    store.setSubmitError(`Ошибка загрузки обложки: ${detail}`);
+    const up = getUploadErrorDetails(e);
+    logClientError({
+      error: e,
+      route: "/create/assets",
+      extra: { step: "uploadArtworkForDraft", ...up }
+    });
     return null;
   }
 }
@@ -358,7 +372,9 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
 
   const parsedTracks = tracksSchema.safeParse({ tracks: store.tracks });
   if (!parsedTracks.success) {
-    store.setSubmitError("Проверьте данные треков.");
+    const msg =
+      parsedTracks.error.issues[0]?.message ?? "Проверьте данные треков.";
+    store.setSubmitError(msg);
     return false;
   }
 
@@ -382,22 +398,34 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
     store.setSubmitProgress(15 + segment * 70);
   };
 
+  let uploadPhase:
+    | "preparing"
+    | "db_artwork_url"
+    | "storage_track_wav"
+    | "db_release_track"
+    | "finalizing_submit" = "preparing";
+  let uploadTrackIndex: number | null = null;
+
   try {
     try {
+      uploadPhase = "preparing";
       const existing = await getReleaseById(releaseId);
       if (existing.status === "failed") {
         await updateRelease(releaseId, { status: "draft", error_message: null });
       }
 
       if (store.artworkUrl) {
+        uploadPhase = "db_artwork_url";
         await updateRelease(releaseId, { artwork_url: store.artworkUrl });
         store.setSubmitProgress(15);
       }
 
       for (let index = 0; index < parsedTracks.data.tracks.length; index += 1) {
+        uploadTrackIndex = index;
         store.setSubmitStage("uploading_tracks");
         const track = parsedTracks.data.tracks[index];
         const file = args.files[index];
+        uploadPhase = "storage_track_wav";
         const audioUrl = await uploadReleaseTrackAudio({
           userId: store.userId,
           releaseId,
@@ -408,6 +436,7 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
             onProgress: (pct) => setTrackUploadProgress(index, pct)
           }
         });
+        uploadPhase = "db_release_track";
         await addReleaseTrack({
           releaseId,
           index,
@@ -417,7 +446,20 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
         });
         setTrackUploadProgress(index + 1, 0);
       }
+      uploadTrackIndex = null;
     } catch (e: unknown) {
+      const up = getUploadErrorDetails(e);
+      logClientError({
+        error: e,
+        route: "/create/review",
+        extra: {
+          flow: "submitTracksAndFinalize",
+          uploadPhase,
+          trackIndex: uploadTrackIndex,
+          httpStatus: up.httpStatus,
+          supabaseStorageHint: up.supabaseHint
+        }
+      });
       let cleanupFailed = false;
       let existingMessage: string | null = null;
       try {
@@ -459,6 +501,7 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
     }
 
     try {
+      uploadPhase = "finalizing_submit";
       const storeAfterUpload = useCreateReleaseDraftStore.getState();
       storeAfterUpload.setSubmitStage("finalizing");
       storeAfterUpload.setSubmitProgress(92);
@@ -494,6 +537,11 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
       } catch {}
       return true;
     } catch (e: unknown) {
+      logClientError({
+        error: e,
+        route: "/create/review",
+        extra: { flow: "submitTracksAndFinalize", uploadPhase: "finalizing_submit" }
+      });
       const storeFail = useCreateReleaseDraftStore.getState();
       storeFail.setSubmitStatus("error");
       storeFail.setSubmitStage("error");

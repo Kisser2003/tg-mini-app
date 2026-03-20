@@ -14,9 +14,20 @@ type Props = {
   initialFile?: File | null;
   /** Persisted remote URL shown as preview when initialFile is unavailable (e.g. after F5). */
   initialPreviewUrl?: string | null;
+  /** Подсветка ошибки валидации с родителя (glass + красная обводка). */
+  invalid?: boolean;
 };
 
-export function FileUploader({ label, accept, maxSizeMb, type, onFileChange, initialFile, initialPreviewUrl }: Props) {
+export function FileUploader({
+  label,
+  accept,
+  maxSizeMb,
+  type,
+  onFileChange,
+  initialFile,
+  initialPreviewUrl,
+  invalid = false
+}: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -197,7 +208,11 @@ export function FileUploader({ label, accept, maxSizeMb, type, onFileChange, ini
           x: magneticX,
           y: magneticY
         }}
-        className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border bg-surface/70 px-4 py-5 text-center text-xs text-text-muted hover:border-primary hover:bg-surface transition-colors min-h-[140px]"
+        className={`flex min-h-[140px] cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-4 py-5 text-center text-xs text-text-muted transition-colors ${
+          invalid || error
+            ? "border-red-500/55 bg-red-950/20 ring-2 ring-red-500/25 hover:border-red-400/60"
+            : "border-border bg-surface/70 hover:border-primary hover:bg-surface"
+        }`}
       >
         <input
           type="file"

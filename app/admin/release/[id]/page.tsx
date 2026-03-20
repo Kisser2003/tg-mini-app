@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowLeft, CheckCircle2, XCircle } from "lucide-react";
 import { toast } from "sonner";
-import { AudioPlayer } from "@/components/AudioPlayer";
+import { AudioPlayerLazy } from "@/components/AudioPlayerLazy";
 import { GlassCard } from "@/components/GlassCard";
 import { approveRelease, rejectRelease } from "@/features/admin/actions";
 import { isAdminUi } from "@/lib/admin";
@@ -19,6 +20,8 @@ import {
   type ReleaseTrackRow
 } from "@/repositories/releases.repo";
 import { getTelegramUserId, initTelegramWebApp, triggerHaptic } from "@/lib/telegram";
+
+const ARTWORK_SIZES = "(max-width: 768px) 100vw, 33vw";
 
 function buildAudioItems(release: ReleaseRecord, tracks: ReleaseTrackRow[]) {
   if (tracks.length > 0) {
@@ -172,13 +175,14 @@ export default function AdminReleaseDetailPage() {
           К очереди
         </Link>
         <div className="flex gap-3">
-          <div className="h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-white/5">
+          <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-white/5">
             {release.artwork_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
+              <Image
                 src={release.artwork_url}
                 alt=""
-                className="h-full w-full object-cover"
+                fill
+                sizes={ARTWORK_SIZES}
+                className="object-cover"
               />
             ) : (
               <div className="flex h-full items-center justify-center text-[10px] text-white/40">
@@ -207,7 +211,7 @@ export default function AdminReleaseDetailPage() {
         ) : (
           <div className="space-y-3">
             {audioItems.map((item) => (
-              <AudioPlayer key={item.key} src={item.src} label={item.label} />
+              <AudioPlayerLazy key={item.key} src={item.src} label={item.label} />
             ))}
           </div>
         )}
