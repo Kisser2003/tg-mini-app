@@ -25,7 +25,7 @@
 - Нижняя навигация: `components/BottomNav.tsx` — **Главная** (`/`), **Мои релизы** (`/library`), **Кошелек** (`/wallet`), **Настройки** (`/settings`). Пункт **Админ** (`/admin`) показывается только если `getTelegramUserId() === getExpectedAdminTelegramId()` (проверка на клиенте).
 - **Основные страницы:**
   - **Dashboard** — список релизов пользователя из Supabase, опрос каждые ~7 с (`lib/useSafePolling.ts`), статистика по статусам, переход к созданию.
-  - **Поток создания релиза** — под `/create/...`: метаданные, треки, обложка/файлы, ревью, успех; логика в `features/release/` + `repositories/releases.repo.ts`.
+  - **Поток создания релиза** — под `/create/...`: метаданные, треки, обложка/файлы, ревью; после успешной отправки — тост и переход на **дашборд** (`/`); логика в `features/release/` + `repositories/releases.repo.ts`.
   - **Деталь релиза** — `/release/[id]`.
   - **Библиотека** — `/library`.
   - **Кошелек** — `/wallet`: UI с условными суммами (оценка по «готовым» релизам, минимальный вывод и т.д. — см. константы в файле).
@@ -43,6 +43,8 @@
   - `release_logs` — логирование этапов (`release_id`, `stage`, `status`, `error_message`).
 - **Storage Supabase:** бакеты **`audio`** и **`artwork`** (пути в `lib/storagePaths.ts`); загрузки и удаления — в `repositories/releases.repo.ts` (WAV, лимиты размера, JPG/PNG для обложки).
 - **RPC:** при сабмите вызывается `finalize_release` с фолбэком на простое обновление статуса, если функции нет (`repositories/releases.repo.ts`, `submitRelease`).
+
+**Чеклист для облачного Supabase (прод):** миграция `supabase/migrations/20250320120000_finalize_release_transaction.sql` должна быть применена; в SQL Editor проверьте наличие функции `finalize_release` и что для роли **`anon`** есть **`GRANT EXECUTE`** на эту функцию (иначе клиент не сможет финализировать релиз и сработает только фолбэк при доступных правах на `UPDATE`).
 
 **Важно:** корневой `README.md` ранее мог описывать упрощённую схему. **Фактическая реализация в коде** — отдельные бакеты `audio`/`artwork`, треки, логи. Опирайтесь на этот документ, `repositories/releases.repo.ts` и SQL в Supabase.
 

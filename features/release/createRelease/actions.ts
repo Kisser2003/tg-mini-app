@@ -248,6 +248,18 @@ export async function ensureDraftRelease(): Promise<ReleaseRecord | null> {
     return null;
   }
 
+  if (store.releaseId) {
+    try {
+      const row = await getReleaseById(store.releaseId);
+      if (row.status === "processing" || row.status === "ready") {
+        store.setSubmitError("Этот релиз уже отправлен на проверку.");
+        return null;
+      }
+    } catch {
+      // ignore — продолжаем создание черновика при ошибке загрузки
+    }
+  }
+
   const mainArtistName = parsed.data.artists[0]?.name ?? "";
   const effectiveUserId = store.userId ?? 0;
   const clientRequestId = createClientRequestId(store.clientRequestId);
@@ -393,13 +405,23 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
     store.setSubmitStage("finalizing");
     store.setSubmitProgress(92);
     const updated = await submitRelease({ releaseId, clientRequestId });
+    if (process.env.NODE_ENV === "development") {
+      if (updated.status !== "processing" && updated.status !== "ready") {
+        console.warn(
+          "[submitTracksAndFinalize] unexpected status after finalize:",
+          updated.status
+        );
+      }
+    }
     store.setSubmitStatus("success");
     store.setSubmitStage("done");
     store.setSubmitProgress(100);
+    // Статус в БД уже `processing` (или `ready` при повторе) — см. submitRelease / finalize_release.
     store.setSuccessSummary({
-      artistName: updated.artist_name,
-      trackName: updated.track_name
+      artistName: updated.artist_name?.trim() || "Артист",
+      trackName: updated.track_name?.trim() || "Релиз"
     });
+    // Очистить мастер, оставить successSummary для экрана «Готово» (persist).
     store.clearCreateFormKeepSummary();
     try {
       triggerHaptic("success");

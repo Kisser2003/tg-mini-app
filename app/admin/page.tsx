@@ -14,6 +14,7 @@ import {
   type ReleaseRecord,
   type ReleaseTrackRow
 } from "@/repositories/releases.repo";
+import { sendApprovalNotification } from "@/lib/bot-api";
 import { getTelegramUserId, initTelegramWebApp, triggerHaptic } from "@/lib/telegram";
 import { useSafePolling } from "@/lib/useSafePolling";
 
@@ -66,6 +67,30 @@ export default function AdminPage() {
     requestTimeoutMs: 12000,
     debugName: "admin.queue"
   });
+
+  const handleApprove = useCallback(
+    async (release: ReleaseRecord) => {
+      setBusyId(release.id);
+      setActionError(null);
+      try {
+        triggerHaptic("medium");
+        const updated = await updateReleaseStatus(release.id, { status: "ready" });
+        setExpandedRejectId(null);
+        try {
+          await sendApprovalNotification(updated);
+        } catch (e: unknown) {
+          console.error("sendApprovalNotification failed:", e);
+        }
+        await reloadQueue();
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "Не удалось обновить статус релиза.";
+        setActionError(msg);
+      } finally {
+        setBusyId(null);
+      }
+    },
+    [reloadQueue]
+  );
 
   const updateStatus = useCallback(
     async (id: string, status: "ready" | "failed") => {
@@ -161,7 +186,7 @@ export default function AdminPage() {
               busy={busyId === row.release.id}
               rejectExpanded={expandedRejectId === row.release.id}
               rejectReason={rejectReasons[row.release.id] ?? ""}
-              onApprove={() => void updateStatus(row.release.id, "ready")}
+              onApprove={() => void handleApprove(row.release)}
               onToggleReject={() =>
                 setExpandedRejectId((prev) => (prev === row.release.id ? null : row.release.id))
               }

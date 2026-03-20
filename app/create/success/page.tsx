@@ -1,15 +1,27 @@
 "use client";
 
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { CreateShell } from "@/features/release/createRelease/components/CreateShell";
 import { StepGate } from "@/features/release/createRelease/components/StepGate";
 import { useCreateReleaseDraftStore } from "@/features/release/createRelease/store";
 import { SuccessScreen } from "@/components/SuccessScreen";
+import { triggerHaptic } from "@/lib/telegram";
 
 export default function CreateSuccessPage() {
   const router = useRouter();
   const summary = useCreateReleaseDraftStore((s) => s.successSummary);
   const resetDraft = useCreateReleaseDraftStore((s) => s.resetDraft);
+
+  useEffect(() => {
+    if (summary) {
+      try {
+        triggerHaptic("success");
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [summary]);
 
   return (
     <CreateShell title="Релиз · Готово">
@@ -23,7 +35,11 @@ export default function CreateSuccessPage() {
       ) : (
         <SuccessScreen
           summary={summary}
-          onReset={() => {
+          onGoHome={() => {
+            resetDraft();
+            router.push("/dashboard");
+          }}
+          onUploadAnother={() => {
             resetDraft();
             router.push("/create/metadata");
           }}
@@ -32,4 +48,3 @@ export default function CreateSuccessPage() {
     </CreateShell>
   );
 }
-

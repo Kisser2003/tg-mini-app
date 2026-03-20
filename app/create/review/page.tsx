@@ -72,7 +72,7 @@ export default function CreateReviewPage() {
       toast.error(msg ?? "Не удалось отправить релиз", { id: loadingId });
       return;
     }
-    toast.success("Релиз передан в модерацию", { id: loadingId });
+    toast.success("Релиз на проверке! Скоро всё будет.", { id: loadingId });
     router.push("/create/success");
   }, [missingFiles, router, setSubmitError, trackFiles]);
 

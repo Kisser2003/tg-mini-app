@@ -251,6 +251,25 @@ export async function createDraftRelease(
 ): Promise<ReleaseRecord> {
   const validated = releaseStep1Schema.parse(payload);
 
+  const { data: existingRow, error: loadError } = await withRetry(async () => {
+    return await supabase
+      .from("releases")
+      .select("*")
+      .eq("client_request_id", validated.client_request_id)
+      .maybeSingle();
+  });
+
+  if (loadError) {
+    throw loadError;
+  }
+
+  const existing = existingRow as ReleaseRecord | null;
+  if (existing && (existing.status === "processing" || existing.status === "ready")) {
+    throw new Error(
+      "Релиз с этим идентификатором уже на проверке или опубликован — нельзя снова сохранить как черновик."
+    );
+  }
+
   const { data, error } = await withRetry(async () => {
     const response = await supabase
       .from("releases")
