@@ -60,6 +60,13 @@ type CreateReleaseDraftActions = {
   resetDraft: () => void;
   /** После успешной отправки: очистить черновик, оставить successSummary для экрана «Готово». */
   clearCreateFormKeepSummary: () => void;
+  /**
+   * Как clearCreateFormKeepSummary, но не сбрасывает submitStatus/submitStage/submitProgress
+   * (нужно для exit-анимации прогресса на Review перед переходом на /create/success).
+   */
+  clearCreateFormKeepSummaryPreserveSubmit: () => void;
+  /** Сбросить только индикаторы отправки (после перехода на экран успеха). */
+  resetSubmissionUi: () => void;
   setHasHydrated: (value: boolean) => void;
   /** Атомарно заполнить стор из черновика в БД; файлы сессии сбрасываются. */
   resumeFromDraft: (payload: ResumeDraftPayload) => void;
@@ -265,6 +272,27 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
             submitProgress: 0,
             lastModified: null,
             hasHydrated: true
+          }),
+        clearCreateFormKeepSummaryPreserveSubmit: () =>
+          set({
+            releaseId: null,
+            clientRequestId: null,
+            metadata: EMPTY_METADATA,
+            artworkUrl: null,
+            artworkFile: null,
+            tracks: [{ title: "", explicit: false }],
+            trackFiles: [null],
+            trackAudioUrlsFromDb: [],
+            submitError: null,
+            lastModified: null,
+            hasHydrated: true
+          }),
+        resetSubmissionUi: () =>
+          set({
+            submitError: null,
+            submitStatus: "idle",
+            submitStage: "idle",
+            submitProgress: 0
           }),
         setHasHydrated: (value) =>
           set((state) => (state.hasHydrated === value ? state : { hasHydrated: value })),

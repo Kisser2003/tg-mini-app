@@ -468,13 +468,15 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
       storeOk.setSubmitStatus("success");
       storeOk.setSubmitStage("done");
       storeOk.setSubmitProgress(100);
+      const title = verified.track_name?.trim() || "Релиз";
       storeOk.setSuccessSummary({
         artistName: verified.artist_name?.trim() || "Артист",
-        trackName: verified.track_name?.trim() || "Релиз"
+        trackName: title,
+        releaseName: title
       });
       // Очистить мастер только после подтверждённого статуса в БД; successSummary для /create/success.
-      // resetDraft() здесь не вызываем — он обнуляет successSummary.
-      storeOk.clearCreateFormKeepSummary();
+      // Состояние submit (прогресс 100%) сохраняем для exit-анимации на Review — см. clearCreateFormKeepSummaryPreserveSubmit.
+      storeOk.clearCreateFormKeepSummaryPreserveSubmit();
       try {
         triggerHaptic("success");
       } catch {}

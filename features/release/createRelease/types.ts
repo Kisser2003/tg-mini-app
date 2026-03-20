@@ -21,6 +21,9 @@ export type SubmissionStage =
 
 export type CreateReleaseSuccessSummary = {
   artistName: string;
+  /** Как в БД (`track_name`) */
   trackName: string;
+  /** Название релиза для UI (дублирует trackName); опционально для старого persist */
+  releaseName?: string;
 };
 

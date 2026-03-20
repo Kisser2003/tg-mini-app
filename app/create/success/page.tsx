@@ -12,6 +12,11 @@ export default function CreateSuccessPage() {
   const router = useRouter();
   const summary = useCreateReleaseDraftStore((s) => s.successSummary);
   const resetDraft = useCreateReleaseDraftStore((s) => s.resetDraft);
+  const resetSubmissionUi = useCreateReleaseDraftStore((s) => s.resetSubmissionUi);
+
+  useEffect(() => {
+    resetSubmissionUi();
+  }, [resetSubmissionUi]);
 
   useEffect(() => {
     if (summary) {

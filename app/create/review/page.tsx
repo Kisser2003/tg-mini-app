@@ -4,6 +4,7 @@ import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
+import { AnimatePresence, motion } from "framer-motion";
 import { CreateShell } from "@/features/release/createRelease/components/CreateShell";
 import { StepGate } from "@/features/release/createRelease/components/StepGate";
 import { useStepGuard } from "@/features/release/createRelease/guards";
@@ -28,10 +29,16 @@ export default function CreateReviewPage() {
   const submitProgress = useCreateReleaseDraftStore((s) => s.submitProgress);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [progressDismissed, setProgressDismissed] = useState(false);
   const prevSubmitErrorRef = useRef<string | null>(null);
+  const pendingSuccessNavRef = useRef(false);
 
   const missingFiles = useMemo(() => tracks.some((_t, i) => !trackFiles[i]), [trackFiles, tracks]);
-  const submitBlocked = missingFiles || isSubmitting || submitStatus === "submitting";
+  const submitBlocked =
+    missingFiles ||
+    isSubmitting ||
+    submitStatus === "submitting" ||
+    submitStatus === "success";
 
   const stageLabel = useMemo(() => {
     if (submitStage === "preparing") return "Подготавливаем релиз";
@@ -42,10 +49,22 @@ export default function CreateReviewPage() {
     return "Ожидание отправки";
   }, [submitStage]);
 
+  const showProgressPanel =
+    submitStatus === "submitting" ||
+    submitStatus === "error" ||
+    (submitStatus === "success" && !progressDismissed);
+
+  useEffect(() => {
+    if (submitStatus === "success") {
+      const t = window.setTimeout(() => setProgressDismissed(true), 450);
+      return () => clearTimeout(t);
+    }
+    return undefined;
+  }, [submitStatus]);
+
   useEffect(() => {
     if (submitError && submitError !== prevSubmitErrorRef.current) {
-      const isFileRelated =
-        /wav|файл|загруз/i.test(submitError);
+      const isFileRelated = /wav|файл|загруз/i.test(submitError);
       if (isFileRelated) {
         triggerHaptic("error");
       }
@@ -55,6 +74,8 @@ export default function CreateReviewPage() {
 
   const handleSubmit = useCallback(async () => {
     setSubmitError(null);
+    setProgressDismissed(false);
+    pendingSuccessNavRef.current = false;
     if (missingFiles) {
       const msg =
         "Не хватает WAV-файлов в этой сессии. Загрузите их на шаге «Треки» — даже если в базе уже есть старые файлы.";
@@ -64,20 +85,24 @@ export default function CreateReviewPage() {
     triggerHaptic("medium");
     const files = trackFiles.filter(Boolean) as File[];
     setIsSubmitting(true);
-    const loadingId = toast.loading("Загрузка WAV и отправка в модерацию…");
     const ok = await submitTracksAndFinalize({ files });
     setIsSubmitting(false);
     if (!ok) {
       const msg = useCreateReleaseDraftStore.getState().submitError;
       toast.error(
-        msg ?? "Не удалось отправить релиз на модерацию. Статус не изменён.",
-        { id: loadingId }
+        msg ?? "Не удалось отправить релиз на модерацию. Статус не изменён."
       );
       return;
     }
-    toast.success("Релиз на проверке! Скоро всё будет.", { id: loadingId });
-    router.push("/create/success");
-  }, [missingFiles, router, setSubmitError, trackFiles]);
+    pendingSuccessNavRef.current = true;
+  }, [missingFiles, setSubmitError, trackFiles]);
+
+  const handleProgressExitComplete = useCallback(() => {
+    if (pendingSuccessNavRef.current) {
+      pendingSuccessNavRef.current = false;
+      router.push("/create/success");
+    }
+  }, [router]);
 
   return (
     <CreateShell title="Релиз · Проверка">
@@ -166,9 +191,19 @@ export default function CreateReviewPage() {
             {isSubmitting || submitStatus === "submitting" ? "Отправляем..." : "Отправить релиз"}
           </button>
 
-          {(submitStatus === "submitting" || submitStatus === "error") && (
-            <UploadProgress label={stageLabel} progress={submitProgress} />
-          )}
+          <AnimatePresence mode="wait" onExitComplete={handleProgressExitComplete}>
+            {showProgressPanel && (
+              <motion.div
+                key="upload-progress"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 8 }}
+                transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <UploadProgress label={stageLabel} progress={submitProgress} />
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {submitError && (
             <p className="text-center text-[11px] text-red-400">

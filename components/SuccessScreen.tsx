@@ -39,7 +39,7 @@ export function SuccessScreen({ summary, onGoHome, onUploadAnother }: Props) {
         <div className="mt-3 rounded-[18px] border border-white/[0.08] bg-black/30 px-4 py-3 text-[13px] backdrop-blur-md">
           <p className="text-xs uppercase tracking-[0.18em] text-white/40 mb-1">Краткое резюме</p>
           <p className="text-[14px] font-medium text-white">
-            {summary.artistName} — {summary.trackName}
+            {summary.artistName} — {summary.releaseName ?? summary.trackName}
           </p>
         </div>
 
@@ -60,7 +60,7 @@ export function SuccessScreen({ summary, onGoHome, onUploadAnother }: Props) {
             onClick={onUploadAnother}
             className="inline-flex h-[48px] w-full items-center justify-center rounded-[18px] border border-white/[0.14] bg-white/[0.04] text-[14px] font-semibold text-white/90 shadow-[0_8px_24px_rgba(0,0,0,0.35)] backdrop-blur-md transition-all hover:bg-white/[0.07]"
           >
-            Загрузить ещё один
+            Создать новый релиз
           </motion.button>
           <p className="text-center text-[10px] tracking-[0.26em] text-white/28 uppercase">
             OMF DISTRIBUTION • 2026

@@ -37,7 +37,7 @@ export function UploadProgress({ label, progress, className = "" }: Props) {
     <div
       className={`rounded-[18px] border border-white/10 bg-black/30 px-4 py-3 backdrop-blur-md ${className}`}
     >
-      <div className="mb-2 flex items-center justify-between gap-2 text-xs text-white/70">
+      <div className="mb-2 flex items-center justify-between gap-2 text-[11px] text-white/80">
         <span className="min-w-0 flex-1 truncate">{label}</span>
         <span className="tabular-nums text-white/90">{displayPct}%</span>
       </div>
@@ -47,7 +47,7 @@ export function UploadProgress({ label, progress, className = "" }: Props) {
           style={{
             width: widthPct,
             boxShadow:
-              "0 0 20px rgba(56, 189, 248, 0.45), 0 0 12px rgba(167, 139, 250, 0.35)"
+              "0 0 24px rgba(56, 189, 248, 0.65), 0 0 16px rgba(167, 139, 250, 0.5), 0 0 8px rgba(232, 121, 249, 0.45)"
           }}
         />
       </div>
