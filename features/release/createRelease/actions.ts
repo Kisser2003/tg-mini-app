@@ -3,7 +3,8 @@ import {
   getTelegramUserDisplayName,
   getTelegramUserId,
   getTelegramWebApp,
-  initTelegramWebApp
+  initTelegramWebApp,
+  triggerHaptic
 } from "@/lib/telegram";
 import {
   addReleaseTrack,
@@ -19,6 +20,9 @@ import {
 import type { ReleaseRecord, ReleaseStep1Payload } from "@/repositories/releases.repo";
 import { metadataSchema, tracksSchema } from "./schemas";
 import { useCreateReleaseDraftStore } from "./store";
+
+/** Защита от двойного сабмита (двойной тап в Telegram). */
+let submitTracksInFlight = false;
 
 function uuidV4Fallback(): string {
   const bytes = new Uint8Array(16);
@@ -143,7 +147,7 @@ export async function ensureDraftRelease(): Promise<ReleaseRecord | null> {
     store.setReleaseId(draft.id);
     store.setClientRequestId(clientRequestId);
     try {
-      getTelegramWebApp()?.HapticFeedback?.notificationOccurred?.("success");
+      triggerHaptic("success");
     } catch {}
     return draft;
   } catch (e: unknown) {
@@ -165,11 +169,14 @@ export async function uploadArtworkForDraft(file: File): Promise<string | null> 
     const artworkUrl = await uploadReleaseArtwork({
       userId: store.userId,
       releaseId: store.releaseId,
-      file
+      file,
+      options: {
+        markReleaseFailedOnError: { releaseId: store.releaseId }
+      }
     });
     store.setArtworkUrl(artworkUrl);
     try {
-      getTelegramWebApp()?.HapticFeedback?.notificationOccurred?.("success");
+      triggerHaptic("success");
     } catch {}
     return artworkUrl;
   } catch (e: unknown) {
@@ -182,10 +189,21 @@ export async function uploadArtworkForDraft(file: File): Promise<string | null> 
 export async function submitTracksAndFinalize(args: { files: File[] }): Promise<boolean> {
   const store = useCreateReleaseDraftStore.getState();
   initUserContextInStore();
+
+  if (submitTracksInFlight) {
+    store.setSubmitError("Отправка уже выполняется. Дождитесь завершения.");
+    return false;
+  }
+
   store.setSubmitStage("idle");
   store.setSubmitProgress(0);
   if (!store.userId || !store.releaseId) {
     store.setSubmitError("Нет данных релиза для отправки.");
+    return false;
+  }
+
+  if (!store.clientRequestId) {
+    store.setSubmitError("Нет client_request_id. Сохраните паспорт релиза (шаг «Паспорт») и повторите.");
     return false;
   }
 
@@ -200,42 +218,59 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
     return false;
   }
 
+  submitTracksInFlight = true;
   store.setSubmitStatus("submitting");
   store.setSubmitStage("preparing");
   store.setSubmitProgress(5);
   store.setSubmitError(null);
 
+  const totalTracks = parsedTracks.data.tracks.length;
+  const releaseId = store.releaseId;
+  const clientRequestId = store.clientRequestId;
+
+  const setTrackUploadProgress = (trackIndex: number, filePercent: number) => {
+    const segment = (trackIndex + filePercent / 100) / Math.max(totalTracks, 1);
+    store.setSubmitProgress(15 + segment * 70);
+  };
+
   try {
+    const existing = await getReleaseById(releaseId);
+    if (existing.status === "failed") {
+      await updateRelease(releaseId, { status: "draft", error_message: null });
+    }
+
     if (store.artworkUrl) {
-      await updateRelease(store.releaseId, { artwork_url: store.artworkUrl });
+      await updateRelease(releaseId, { artwork_url: store.artworkUrl });
       store.setSubmitProgress(15);
     }
 
-    const totalTracks = parsedTracks.data.tracks.length;
     for (let index = 0; index < parsedTracks.data.tracks.length; index += 1) {
       store.setSubmitStage("uploading_tracks");
       const track = parsedTracks.data.tracks[index];
       const file = args.files[index];
       const audioUrl = await uploadReleaseTrackAudio({
         userId: store.userId,
-        releaseId: store.releaseId,
+        releaseId,
         trackIndex: index,
-        file
+        file,
+        options: {
+          markReleaseFailedOnError: { releaseId },
+          onProgress: (pct) => setTrackUploadProgress(index, pct)
+        }
       });
       await addReleaseTrack({
-        releaseId: store.releaseId,
+        releaseId,
         index,
         title: track.title,
         explicit: Boolean(track.explicit),
         audioUrl
       });
-      const uploadedRatio = (index + 1) / Math.max(totalTracks, 1);
-      store.setSubmitProgress(15 + uploadedRatio * 70);
+      setTrackUploadProgress(index + 1, 0);
     }
 
     store.setSubmitStage("finalizing");
     store.setSubmitProgress(92);
-    const updated = await submitRelease(store.releaseId);
+    const updated = await submitRelease({ releaseId, clientRequestId });
     store.setSubmitStatus("success");
     store.setSubmitStage("done");
     store.setSubmitProgress(100);
@@ -243,23 +278,31 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
       artistName: updated.artist_name,
       trackName: updated.track_name
     });
+    store.clearCreateFormKeepSummary();
     try {
-      getTelegramWebApp()?.HapticFeedback?.notificationOccurred?.("success");
+      triggerHaptic("success");
     } catch {}
     return true;
   } catch (e: unknown) {
     let cleanupFailed = false;
+    let existingMessage: string | null = null;
     try {
-      await cleanupReleaseTracks(store.releaseId);
+      const current = await getReleaseById(releaseId).catch(() => null);
+      existingMessage = current?.error_message?.trim() ?? null;
+
+      await cleanupReleaseTracks(releaseId);
       await deleteReleaseFiles({
         userId: store.userId,
-        releaseId: store.releaseId,
+        releaseId,
         trackCount: parsedTracks.data.tracks.length
       });
-      await updateRelease(store.releaseId, {
-        status: "failed",
-        error_message: "Отправка прервана, временные файлы очищены."
-      });
+
+      if (!current || current.status !== "failed") {
+        await updateRelease(releaseId, {
+          status: "failed",
+          error_message: "Отправка прервана, временные файлы очищены."
+        });
+      }
     } catch {
       cleanupFailed = true;
     }
@@ -267,12 +310,20 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
     store.setSubmitStatus("error");
     store.setSubmitStage("error");
     const detail = e instanceof Error ? e.message : JSON.stringify(e);
+
+    const primary =
+      existingMessage && existingMessage.length > 0
+        ? existingMessage
+        : `Ошибка отправки: ${detail}`;
+
     store.setSubmitError(
       cleanupFailed
-        ? `Ошибка отправки: ${detail}. Автоочистка завершилась с ошибкой, обратитесь к администратору.`
-        : `Ошибка отправки: ${detail}. Временные файлы очищены, можно повторить отправку.`
+        ? `${primary}. Автоочистка завершилась с ошибкой — обратитесь к администратору.`
+        : `${primary}. Временные файлы очищены, можно повторить отправку.`
     );
     return false;
+  } finally {
+    submitTracksInFlight = false;
   }
 }
 

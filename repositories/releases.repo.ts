@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { supabase } from "../lib/supabase";
+import { uploadToSupabaseStorageObject } from "../lib/storage-upload-client";
 import {
   RELEASE_STATUS_VALUES,
   RELEASE_TYPE_VALUES,
@@ -14,6 +15,18 @@ import {
 
 const releaseStatusSchema = z.enum(RELEASE_STATUS_VALUES);
 export type { ReleaseStatus };
+
+/** Лимиты и допустимые MIME (строгая проверка до загрузки в Storage) */
+export const RELEASE_FILE_LIMITS = {
+  audioMaxMb: 200,
+  artworkMaxMb: 20
+} as const;
+
+/** WAV: только явные audio-типы или пустой type с расширением .wav */
+export const ALLOWED_AUDIO_MIME = new Set(["audio/wav", "audio/x-wav", "audio/wave"]);
+
+/** Обложка: только JPEG / PNG */
+export const ALLOWED_ARTWORK_MIME = new Set(["image/jpeg", "image/png", "image/jpg"]);
 
 export type ReleaseStep1Payload = {
   user_id: number;
@@ -89,13 +102,18 @@ const trackInsertSchema = z.object({
   audioUrl: z.string().url()
 });
 
-type NetworkFn = () => Promise<any>;
+export type UploadAssetOptions = {
+  /** 0–100, вызывается при XMLHttpRequest upload progress */
+  onProgress?: (percent: number) => void;
+  /**
+   * При ошибке загрузки: перевести релиз в failed и записать error_message (и лог в release_logs).
+   */
+  markReleaseFailedOnError?: {
+    releaseId: string;
+  };
+};
 
-async function withRetry(
-  fn: NetworkFn,
-  retries = 2,
-  baseDelayMs = 200
-): Promise<any> {
+async function withRetry<T>(fn: () => Promise<T>, retries = 2, baseDelayMs = 200): Promise<T> {
   let attempt = 0;
   // eslint-disable-next-line no-constant-condition
   while (true) {
@@ -132,6 +150,100 @@ async function logReleaseEvent(params: {
 
     return null;
   });
+}
+
+function humanizeUploadError(err: unknown, fallback: string): string {
+  if (err instanceof Error && err.message) return err.message;
+  return fallback;
+}
+
+/**
+ * Удаление объектов в Storage без фатала, если файла уже нет (освобождение места перед новой загрузкой).
+ */
+async function removeStorageObjectsQuiet(bucket: string, paths: string[]): Promise<void> {
+  const unique = [...new Set(paths.filter((p) => p.length > 0))];
+  if (unique.length === 0) return;
+
+  try {
+    const { error } = await supabase.storage.from(bucket).remove(unique);
+    if (error) {
+      const msg = error.message?.toLowerCase() ?? "";
+      if (!msg.includes("not found") && !msg.includes("404")) {
+        console.warn("[storage] remove:", error.message);
+      }
+    }
+  } catch {
+    /* ignore — best-effort cleanup */
+  }
+}
+
+async function putObjectWithProgress(
+  bucket: string,
+  objectPath: string,
+  file: File,
+  options?: { upsert?: boolean; onProgress?: (percent: number) => void }
+): Promise<void> {
+  if (typeof window !== "undefined") {
+    await uploadToSupabaseStorageObject({
+      bucket,
+      objectPath,
+      file,
+      upsert: options?.upsert ?? true,
+      onProgress: options?.onProgress
+    });
+  } else {
+    const { error } = await supabase.storage
+      .from(bucket)
+      .upload(objectPath, file, { upsert: options?.upsert ?? true });
+    if (error) throw error;
+  }
+}
+
+async function handleUploadFailure(
+  releaseId: string | undefined,
+  err: unknown,
+  context: string
+): Promise<void> {
+  if (!releaseId) return;
+  const message = `${context}: ${humanizeUploadError(err, "неизвестная ошибка")}`;
+  try {
+    await markReleaseFailed(releaseId, message);
+  } catch {
+    /* уже отдали ошибку выше */
+  }
+}
+
+export async function markReleaseFailed(releaseId: string, errorMessage: string): Promise<ReleaseRecord> {
+  const trimmed = errorMessage.trim().slice(0, 2000);
+  const { data, error } = await withRetry(async () => {
+    return await supabase
+      .from("releases")
+      .update({
+        status: "failed" as ReleaseStatus,
+        error_message: trimmed || "Ошибка загрузки или обработки."
+      })
+      .eq("id", releaseId)
+      .select("*");
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  const rows = data as ReleaseRecord[] | null;
+  if (!rows || rows.length === 0) {
+    throw new Error(`Не удалось пометить релиз как failed (id: ${releaseId})`);
+  }
+
+  const record = rows[0];
+  await logReleaseEvent({
+    releaseId,
+    stage: "error",
+    status: "failed",
+    errorMessage: trimmed
+  }).catch(() => {});
+
+  return record;
 }
 
 export async function createDraftRelease(
@@ -232,12 +344,34 @@ export async function updateRelease(
   return record;
 }
 
-export async function submitRelease(id: string): Promise<ReleaseRecord> {
-  // Try RPC first; fall back to simple status update if the function doesn't exist
-  let record: ReleaseRecord;
+export type SubmitReleaseParams = {
+  releaseId: string;
+  clientRequestId: string;
+};
+
+/**
+ * Финализация: RPC `finalize_release(p_release_id, p_client_request_id)` в одной транзакции
+ * (статус + лог). Идемпотентность: повторный вызов при уже `processing`/`ready` возвращает строку без дублей.
+ */
+export async function submitRelease(params: SubmitReleaseParams): Promise<ReleaseRecord> {
+  const parsedIds = z
+    .object({
+      releaseId: z.string().uuid(),
+      clientRequestId: z.string().uuid()
+    })
+    .safeParse(params);
+
+  if (!parsedIds.success) {
+    throw new Error("Некорректные идентификаторы релиза (ожидается UUID для id и client_request_id).");
+  }
+
+  const { releaseId, clientRequestId } = parsedIds.data;
 
   const { data: rpcData, error: rpcError } = await withRetry(async () => {
-    return await supabase.rpc("finalize_release", { p_release_id: id });
+    return await supabase.rpc("finalize_release", {
+      p_release_id: releaseId,
+      p_client_request_id: clientRequestId
+    });
   });
 
   if (rpcError) {
@@ -247,53 +381,102 @@ export async function submitRelease(id: string): Promise<ReleaseRecord> {
       rpcError.code === "PGRST202";
 
     if (isMissing) {
-      const updated = await updateRelease(id, { status: "processing" as ReleaseStatus });
-      record = updated;
-    } else {
-      await logReleaseEvent({
-        releaseId: id,
-        stage: "error",
-        status: "failed",
-        errorMessage: rpcError.message
-      }).catch(() => {});
-      throw rpcError;
+      return finalizeReleaseFallback(params);
     }
-  } else {
-    const rows = Array.isArray(rpcData) ? rpcData : rpcData ? [rpcData] : [];
-    if (rows.length === 0) {
-      const updated = await updateRelease(id, { status: "processing" as ReleaseStatus });
-      record = updated;
-    } else {
-      record = rows[0] as ReleaseRecord;
-    }
+
+    await logReleaseEvent({
+      releaseId,
+      stage: "error",
+      status: "failed",
+      errorMessage: rpcError.message
+    }).catch(() => {});
+
+    throw rpcError;
   }
+
+  const rows = Array.isArray(rpcData) ? rpcData : rpcData ? [rpcData] : [];
+  if (rows.length === 0) {
+    return finalizeReleaseFallback({ releaseId, clientRequestId });
+  }
+
+  return rows[0] as ReleaseRecord;
+}
+
+async function finalizeReleaseFallback(params: SubmitReleaseParams): Promise<ReleaseRecord> {
+  const { releaseId, clientRequestId } = params;
+
+  const { data: existing, error: loadError } = await withRetry(async () => {
+    return await supabase
+      .from("releases")
+      .select("*")
+      .eq("id", releaseId)
+      .eq("client_request_id", clientRequestId)
+      .maybeSingle();
+  });
+
+  if (loadError) {
+    throw loadError;
+  }
+
+  const row = existing as ReleaseRecord | null;
+  if (!row) {
+    throw new Error("Релиз не найден или client_request_id не совпадает.");
+  }
+
+  if (row.status === "processing" || row.status === "ready") {
+    return row;
+  }
+
+  if (row.status !== "draft") {
+    throw new Error(`Нельзя отправить релиз в модерацию из статуса «${row.status}».`);
+  }
+
+  const updated = await updateRelease(releaseId, {
+    status: "processing",
+    error_message: null
+  });
 
   await logReleaseEvent({
-    releaseId: record.id,
+    releaseId,
     stage: "finalize",
-    status: record.status
+    status: updated.status
   }).catch(() => {});
 
-  return record;
+  return updated;
 }
 
-function assertAudioFile(file: File, maxSizeMb: number) {
+function validateAudioFileStrict(file: File, maxSizeMb: number): void {
   const sizeMb = file.size / (1024 * 1024);
   if (sizeMb > maxSizeMb) {
-    throw new Error(`Audio file is too large. Max ${maxSizeMb}MB allowed.`);
+    throw new Error(`Аудио слишком большое. Максимум ${maxSizeMb} МБ.`);
   }
-  if (!file.type.includes("wav") && !file.name.toLowerCase().endsWith(".wav")) {
-    throw new Error("Only WAV audio is allowed.");
+  const name = file.name.toLowerCase();
+  const hasWavExt = name.endsWith(".wav");
+  const mime = file.type.trim().toLowerCase();
+
+  if (ALLOWED_AUDIO_MIME.has(mime)) {
+    return;
   }
+  if (mime.length === 0 && hasWavExt) {
+    return;
+  }
+  if (mime === "application/octet-stream" && hasWavExt) {
+    return;
+  }
+
+  throw new Error(
+    "Допустим только WAV: MIME audio/wav / audio/x-wav или файл с расширением .wav."
+  );
 }
 
-function assertArtworkFile(file: File, maxSizeMb: number) {
+function validateArtworkFileStrict(file: File, maxSizeMb: number): void {
   const sizeMb = file.size / (1024 * 1024);
   if (sizeMb > maxSizeMb) {
-    throw new Error(`Artwork file is too large. Max ${maxSizeMb}MB allowed.`);
+    throw new Error(`Обложка слишком большая. Максимум ${maxSizeMb} МБ.`);
   }
-  if (!["image/jpeg", "image/jpg", "image/png"].includes(file.type)) {
-    throw new Error("Artwork must be JPG or PNG.");
+  const mime = file.type.trim().toLowerCase();
+  if (!ALLOWED_ARTWORK_MIME.has(mime)) {
+    throw new Error("Обложка: допустимы только image/jpeg или image/png.");
   }
 }
 
@@ -301,19 +484,27 @@ export async function uploadReleaseAudio(params: {
   userId: number;
   releaseId: string;
   file: File;
+  options?: UploadAssetOptions;
 }): Promise<string> {
-  assertAudioFile(params.file, 200);
+  validateAudioFileStrict(params.file, RELEASE_FILE_LIMITS.audioMaxMb);
   const path = getReleaseAudioPath(params.userId, params.releaseId);
 
-  const { error } = await withRetry(async () => {
-    const response = await supabase.storage
-      .from("audio")
-      .upload(path, params.file, { upsert: true });
-    return response;
-  });
+  await removeStorageObjectsQuiet("audio", [path]);
 
-  if (error) {
-    throw error;
+  try {
+    await putObjectWithProgress("audio", path, params.file, {
+      upsert: true,
+      onProgress: params.options?.onProgress
+    });
+  } catch (err) {
+    if (params.options?.markReleaseFailedOnError?.releaseId) {
+      await handleUploadFailure(
+        params.options.markReleaseFailedOnError.releaseId,
+        err,
+        "Ошибка загрузки основного аудио"
+      );
+    }
+    throw err;
   }
 
   const {
@@ -327,30 +518,32 @@ export async function uploadReleaseArtwork(params: {
   userId: number;
   releaseId: string;
   file: File;
+  options?: UploadAssetOptions;
 }): Promise<string> {
-  assertArtworkFile(params.file, 20);
+  validateArtworkFileStrict(params.file, RELEASE_FILE_LIMITS.artworkMaxMb);
 
   const ext = params.file.type === "image/png" ? "png" : "jpg";
   const path = getReleaseArtworkPath(params.userId, params.releaseId, ext);
 
-  const { error } = await withRetry(async () => {
-    const response = await supabase.storage
-      .from("artwork")
-      .upload(path, params.file, {
-        upsert: true,
-        contentType: params.file.type
-      });
-    return response;
-  });
+  const otherExt = ext === "png" ? "jpg" : "png";
+  const otherPath = getReleaseArtworkPath(params.userId, params.releaseId, otherExt);
+  await removeStorageObjectsQuiet("artwork", [path, otherPath]);
 
-  if (error) {
-    console.error("[uploadReleaseArtwork] Supabase Storage error:", {
-      message: error.message,
-      name: (error as any).name,
-      statusCode: (error as any).statusCode,
-      error: JSON.stringify(error)
+  try {
+    await putObjectWithProgress("artwork", path, params.file, {
+      upsert: true,
+      onProgress: params.options?.onProgress
     });
-    throw new Error(`Ошибка загрузки обложки: ${error.message}`);
+  } catch (err) {
+    if (params.options?.markReleaseFailedOnError?.releaseId) {
+      await handleUploadFailure(
+        params.options.markReleaseFailedOnError.releaseId,
+        err,
+        "Ошибка загрузки обложки"
+      );
+    }
+    const wrapped = err instanceof Error ? err : new Error(String(err));
+    throw new Error(`Ошибка загрузки обложки: ${wrapped.message}`);
   }
 
   const {
@@ -365,19 +558,27 @@ export async function uploadReleaseTrackAudio(params: {
   releaseId: string;
   trackIndex: number;
   file: File;
+  options?: UploadAssetOptions;
 }): Promise<string> {
-  assertAudioFile(params.file, 200);
+  validateAudioFileStrict(params.file, RELEASE_FILE_LIMITS.audioMaxMb);
   const path = getReleaseTrackAudioPath(params.userId, params.releaseId, params.trackIndex);
 
-  const { error } = await withRetry(async () => {
-    const response = await supabase.storage
-      .from("audio")
-      .upload(path, params.file, { upsert: true });
-    return response;
-  });
+  await removeStorageObjectsQuiet("audio", [path]);
 
-  if (error) {
-    throw error;
+  try {
+    await putObjectWithProgress("audio", path, params.file, {
+      upsert: true,
+      onProgress: params.options?.onProgress
+    });
+  } catch (err) {
+    if (params.options?.markReleaseFailedOnError?.releaseId) {
+      await handleUploadFailure(
+        params.options.markReleaseFailedOnError.releaseId,
+        err,
+        `Ошибка загрузки WAV трека #${params.trackIndex + 1}`
+      );
+    }
+    throw err;
   }
 
   const {
@@ -476,5 +677,3 @@ export async function getReleaseById(id: string): Promise<ReleaseRecord> {
 
   return data as ReleaseRecord;
 }
-
-

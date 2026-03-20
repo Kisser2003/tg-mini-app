@@ -8,7 +8,13 @@ import { getExpectedAdminTelegramId } from "@/lib/admin";
 import { debugInit } from "@/lib/debug";
 import { getReleaseStatusMeta, normalizeReleaseStatus } from "@/lib/release-status";
 import { supabase } from "@/lib/supabase";
-import { getTelegramUserDisplayName, getTelegramUserId, initTelegramWebApp } from "@/lib/telegram";
+import {
+  getTelegramUserDisplayName,
+  getTelegramUserId,
+  initTelegramWebApp,
+  triggerHaptic
+} from "@/lib/telegram";
+import { ReleaseCardSkeletonList } from "@/components/ReleaseCardSkeleton";
 import { useSafePolling } from "@/lib/useSafePolling";
 import type { ReleaseStatus } from "@/lib/db-enums";
 
@@ -62,6 +68,7 @@ export default function DashboardPage() {
   });
 
   const handleCreate = () => {
+    triggerHaptic("light");
     router.push("/create/metadata");
   };
 
@@ -146,20 +153,14 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {loading && (
+        {(userId === null || loading) && (
           <div className="space-y-4">
             <p className="text-[13px] text-text-muted">
-              Загружаем твои релизы из OMF…
+              {userId === null
+                ? "Подключаем Telegram…"
+                : "Загружаем твои релизы из OMF…"}
             </p>
-            <div className="space-y-3">
-              {[0, 1, 2].map((i) => (
-                <div
-                  // eslint-disable-next-line react/no-array-index-key
-                  key={i}
-                  className="h-[64px] rounded-[20px] bg-surface/80"
-                />
-              ))}
-            </div>
+            <ReleaseCardSkeletonList count={3} />
           </div>
         )}
 
@@ -169,7 +170,7 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {!loading && !error && !hasReleases && (
+        {userId != null && !loading && !error && !hasReleases && (
           <div className="flex flex-1 flex-col items-center justify-center gap-4 rounded-[24px] border border-white/[0.08] bg-surface/80 px-6 py-10 text-center shadow-[0_18px_40px_rgba(0,0,0,0.7)] backdrop-blur-2xl">
             <div className="text-4xl">🎧</div>
             <div className="space-y-1">
@@ -190,7 +191,7 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {!loading && hasReleases && (
+        {userId != null && !loading && hasReleases && (
           <div className="space-y-3">
             <AnimatePresence>
               {releases.map((release) => {

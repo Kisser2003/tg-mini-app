@@ -11,6 +11,7 @@ import { metadataSchema } from "@/features/release/createRelease/schemas";
 import type { CreateMetadata } from "@/features/release/createRelease/types";
 import { useCreateReleaseDraftStore } from "@/features/release/createRelease/store";
 import { hydrateFromReleaseId, initUserContextInStore } from "@/features/release/createRelease/actions";
+import { triggerHaptic } from "@/lib/telegram";
 
 function CreateMetadataPageInner() {
   const router = useRouter();
@@ -116,6 +117,7 @@ function CreateMetadataPageInner() {
   }, []);
 
   const onSubmit = useCallback(async (data: CreateMetadata) => {
+    triggerHaptic("light");
     setMetadata(data);
     router.push("/create/assets");
   }, [router, setMetadata]);

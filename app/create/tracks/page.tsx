@@ -12,6 +12,7 @@ import { tracksSchema } from "@/features/release/createRelease/schemas";
 import type { CreateTracks } from "@/features/release/createRelease/types";
 import { useCreateReleaseDraftStore } from "@/features/release/createRelease/store";
 import { FileUploader } from "@/components/FileUploader";
+import { triggerHaptic } from "@/lib/telegram";
 
 export default function CreateTracksPage() {
   const router = useRouter();
@@ -110,6 +111,7 @@ export default function CreateTracksPage() {
 
   const handleNext = useCallback(
     async (data: CreateTracks) => {
+      triggerHaptic("light");
       setSubmitAttempted(true);
       setSubmitError(null);
       setTracks(data.tracks);

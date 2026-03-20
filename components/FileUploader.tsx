@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { motion, useMotionValue, useSpring } from "framer-motion";
 import { Music2, Image as ImageIcon } from "lucide-react";
 import confetti from "canvas-confetti";
+import { triggerHaptic } from "@/lib/telegram";
 
 type Props = {
   label: string;
@@ -143,6 +144,7 @@ export function FileUploader({ label, accept, maxSizeMb, type, onFileChange, ini
           onFileChange(selected);
           setIsUploading(true);
           setUploadSuccess(true);
+          triggerHaptic("success");
           setTimeout(() => {
             setIsUploading(false);
             setUploadSuccess(false);
@@ -163,6 +165,7 @@ export function FileUploader({ label, accept, maxSizeMb, type, onFileChange, ini
     onFileChange(selected);
     setIsUploading(true);
     setUploadSuccess(true);
+    triggerHaptic("success");
     setTimeout(() => {
       setIsUploading(false);
       setUploadSuccess(false);
@@ -262,9 +265,13 @@ export function FileUploader({ label, accept, maxSizeMb, type, onFileChange, ini
                 </div>
               )}
               {previewUrl && type === "cover" && (
-                <img
+                <motion.img
+                  key={previewUrl}
                   src={previewUrl}
                   alt="Предпросмотр обложки"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.35, ease: "easeOut" }}
                   className="mx-auto mt-2 h-16 w-16 rounded-lg object-cover"
                 />
               )}

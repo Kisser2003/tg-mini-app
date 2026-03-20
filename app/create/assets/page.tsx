@@ -9,6 +9,7 @@ import { ensureDraftRelease, uploadArtworkForDraft } from "@/features/release/cr
 import { useCreateReleaseDraftStore } from "@/features/release/createRelease/store";
 import { FileUploader } from "@/components/FileUploader";
 import { debugInit } from "@/lib/debug";
+import { triggerHaptic } from "@/lib/telegram";
 
 export default function CreateAssetsPage() {
   const router = useRouter();
@@ -37,6 +38,7 @@ export default function CreateAssetsPage() {
   );
 
   const handleNext = useCallback(async () => {
+    triggerHaptic("light");
     debugInit("create/assets", "handleNext start", {
       hasArtworkUrl: Boolean(artworkUrl),
       hasArtworkFile: Boolean(artworkFile),

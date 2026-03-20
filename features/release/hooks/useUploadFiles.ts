@@ -24,12 +24,18 @@ export function useUploadFiles() {
         uploadReleaseAudio({
           userId: args.userId,
           releaseId: args.releaseId,
-          file: args.audioFile
+          file: args.audioFile,
+          options: {
+            markReleaseFailedOnError: { releaseId: args.releaseId }
+          }
         }),
         uploadReleaseArtwork({
           userId: args.userId,
           releaseId: args.releaseId,
-          file: args.artworkFile
+          file: args.artworkFile,
+          options: {
+            markReleaseFailedOnError: { releaseId: args.releaseId }
+          }
         })
       ]);
 

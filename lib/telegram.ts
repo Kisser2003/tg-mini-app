@@ -117,3 +117,28 @@ export function getTelegramStartParam(): string | null {
   return raw && raw.trim().length > 0 ? raw : null;
 }
 
+/**
+ * Тактильная отдача в Telegram Mini App (безопасный no-op в обычном браузере).
+ */
+export function triggerHaptic(type: "light" | "medium" | "success" | "error"): void {
+  const h = getTelegramWebApp()?.HapticFeedback;
+  if (!h) return;
+  try {
+    if (type === "success") {
+      h.notificationOccurred?.("success");
+      return;
+    }
+    if (type === "error") {
+      h.notificationOccurred?.("error");
+      return;
+    }
+    if (type === "light") {
+      h.impactOccurred?.("light");
+      return;
+    }
+    h.impactOccurred?.("medium");
+  } catch {
+    // ignore
+  }
+}
+

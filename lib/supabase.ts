@@ -1,30 +1,28 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createClient } from "@supabase/supabase-js";
+import { getTelegramUserId } from "./telegram";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-const missingEnvMessage =
-  "Supabase env vars are missing. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.";
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-let supabaseInstance: SupabaseClient | null = null;
-
-function createMissingEnvProxy(): SupabaseClient {
-  return new Proxy({} as SupabaseClient, {
-    get() {
-      throw new Error(missingEnvMessage);
+/**
+ * Кастомный fetch для динамической подстановки `x-telegram-user-id` под RLS (PostgREST request.headers).
+ * Заголовки мержим через Headers, чтобы не ломать то, что передаёт Supabase-клиент.
+ */
+function createTelegramAwareFetch(): typeof fetch {
+  return (input, init) => {
+    const userId = getTelegramUserId();
+    if (userId == null) {
+      return fetch(input, init);
     }
-  });
+    const headers = new Headers(init?.headers);
+    headers.set("x-telegram-user-id", String(userId));
+    return fetch(input, { ...init, headers });
+  };
 }
 
-export function getSupabaseClient(): SupabaseClient {
-  if (supabaseInstance) return supabaseInstance;
-  if (!supabaseUrl || !supabaseKey) {
-    console.error("[supabase] missing NEXT_PUBLIC env vars");
-    supabaseInstance = createMissingEnvProxy();
-    return supabaseInstance;
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  global: {
+    fetch: createTelegramAwareFetch()
   }
-  supabaseInstance = createClient(supabaseUrl, supabaseKey);
-  return supabaseInstance;
-}
-
-export const supabase = getSupabaseClient();
-
+  // Realtime при необходимости настраивается отдельно; для REST и Storage достаточно global.fetch.
+});

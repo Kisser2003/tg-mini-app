@@ -2,11 +2,16 @@
 
 import { useMemo, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { CreateShell } from "@/features/release/createRelease/components/CreateShell";
 import { StepGate } from "@/features/release/createRelease/components/StepGate";
 import { useStepGuard } from "@/features/release/createRelease/guards";
-import { useCreateReleaseDraftStore } from "@/features/release/createRelease/store";
+import {
+  useCreateReleaseDraftStore
+} from "@/features/release/createRelease/store";
 import { submitTracksAndFinalize } from "@/features/release/createRelease/actions";
+import { UploadProgress } from "@/components/UploadProgress";
+import { triggerHaptic } from "@/lib/telegram";
 
 export default function CreateReviewPage() {
   const router = useRouter();
@@ -40,11 +45,18 @@ export default function CreateReviewPage() {
       setSubmitError("Не хватает WAV-файлов. Вернитесь на шаг «Треки» и загрузите все файлы.");
       return;
     }
+    triggerHaptic("medium");
     const files = trackFiles.filter(Boolean) as File[];
     setIsSubmitting(true);
+    const loadingId = toast.loading("Загрузка WAV и отправка в модерацию…");
     const ok = await submitTracksAndFinalize({ files });
     setIsSubmitting(false);
-    if (!ok) return;
+    if (!ok) {
+      const msg = useCreateReleaseDraftStore.getState().submitError;
+      toast.error(msg ?? "Не удалось отправить релиз", { id: loadingId });
+      return;
+    }
+    toast.success("Релиз передан в модерацию", { id: loadingId });
     router.push("/create/success");
   }, [missingFiles, router, setSubmitError, trackFiles]);
 
@@ -112,18 +124,7 @@ export default function CreateReviewPage() {
           </button>
 
           {(submitStatus === "submitting" || submitStatus === "error") && (
-            <div className="rounded-[18px] border border-white/10 bg-black/30 px-4 py-3">
-              <div className="mb-2 flex items-center justify-between text-xs text-white/70">
-                <span>{stageLabel}</span>
-                <span>{submitProgress}%</span>
-              </div>
-              <div className="h-2 overflow-hidden rounded-full bg-white/10">
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-sky-400 to-violet-400 transition-all duration-500"
-                  style={{ width: `${submitProgress}%` }}
-                />
-              </div>
-            </div>
+            <UploadProgress label={stageLabel} progress={submitProgress} />
           )}
 
           {submitError && (

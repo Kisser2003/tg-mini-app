@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { triggerHaptic } from "@/lib/telegram";
 
 export function StepGate({
   title,
@@ -23,7 +24,10 @@ export function StepGate({
       <p className="mt-2 text-[13px] text-text-muted leading-relaxed">{description}</p>
       <button
         type="button"
-        onClick={onAction}
+        onClick={() => {
+          triggerHaptic("light");
+          onAction();
+        }}
         className="mt-4 inline-flex h-[48px] w-full items-center justify-center rounded-[18px] bg-gradient-to-tr from-[#4F46E5] to-[#7C3AED] text-[14px] font-semibold text-white shadow-[0_14px_40px_rgba(88,80,236,0.6)]"
       >
         {actionLabel}

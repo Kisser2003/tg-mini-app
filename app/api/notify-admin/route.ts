@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import type { TelegramAuthContext } from "@/lib/api/with-telegram-auth";
+import { withTelegramAuth } from "@/lib/api/with-telegram-auth";
 
 const notifyBodySchema = z.object({
   artistName: z.string().trim().min(1).max(256).optional(),
@@ -11,7 +13,10 @@ const notifyBodySchema = z.object({
   cLine: z.string().trim().min(1).max(256).optional()
 });
 
-export async function POST(request: NextRequest) {
+async function handleNotifyAdmin(
+  request: NextRequest,
+  _telegram: TelegramAuthContext
+): Promise<Response> {
   try {
     const json = await request.json();
     const {
@@ -71,3 +76,4 @@ export async function POST(request: NextRequest) {
   }
 }
 
+export const POST = withTelegramAuth(handleNotifyAdmin);

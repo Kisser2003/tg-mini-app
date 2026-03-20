@@ -56,6 +56,8 @@ type CreateReleaseDraftActions = {
   setSuccessSummary: (summary: CreateReleaseSuccessSummary | null) => void;
 
   resetDraft: () => void;
+  /** После успешной отправки: очистить черновик, оставить successSummary для экрана «Готово». */
+  clearCreateFormKeepSummary: () => void;
   setHasHydrated: (value: boolean) => void;
 };
 
@@ -227,6 +229,22 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
             hasHydrated: true, // already on client, no rehydration needed after reset
             lastModified: null
           }),
+        clearCreateFormKeepSummary: () =>
+          set({
+            releaseId: null,
+            clientRequestId: null,
+            metadata: EMPTY_METADATA,
+            artworkUrl: null,
+            artworkFile: null,
+            tracks: [{ title: "", explicit: false }],
+            trackFiles: [null],
+            submitError: null,
+            submitStatus: "idle",
+            submitStage: "idle",
+            submitProgress: 0,
+            lastModified: null,
+            hasHydrated: true
+          }),
         setHasHydrated: (value) =>
           set((state) => (state.hasHydrated === value ? state : { hasHydrated: value }))
       };
@@ -253,7 +271,8 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
         metadata: state.metadata,
         artworkUrl: state.artworkUrl,
         tracks: state.tracks,
-        lastModified: state.lastModified
+        lastModified: state.lastModified,
+        successSummary: state.successSummary
       })
     }
   )

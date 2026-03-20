@@ -3,21 +3,9 @@
 import { useMemo } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { PageTransition } from "@/components/PageTransition";
-
-const STEPS = [
-  { key: "metadata", label: "Паспорт" },
-  { key: "assets", label: "Обложка" },
-  { key: "tracks", label: "Треки" },
-  { key: "review", label: "Проверка" },
-  { key: "success", label: "Готово" }
-] as const;
-
-function getStepIndexFromPath(pathname: string): number {
-  const last = pathname.split("/").filter(Boolean).slice(-1)[0] ?? "metadata";
-  const idx = STEPS.findIndex((s) => s.key === (last as any));
-  return idx >= 0 ? idx : 0;
-}
+import { CREATE_FLOW_STEPS, getCreateStepIndexFromPath } from "@/lib/create-steps";
+import { CreateStepTransition } from "@/features/release/createRelease/components/CreateStepTransition";
+import { triggerHaptic } from "@/lib/telegram";
 
 export function CreateShell({
   children,
@@ -29,9 +17,9 @@ export function CreateShell({
   const router = useRouter();
   const pathname = usePathname();
 
-  const activeIndex = useMemo(() => getStepIndexFromPath(pathname), [pathname]);
+  const activeIndex = useMemo(() => getCreateStepIndexFromPath(pathname), [pathname]);
   const progress = useMemo(() => {
-    const denom = Math.max(1, STEPS.length - 1);
+    const denom = Math.max(1, CREATE_FLOW_STEPS.length - 1);
     return (activeIndex / denom) * 100;
   }, [activeIndex]);
 
@@ -44,7 +32,10 @@ export function CreateShell({
           <div className="flex items-center justify-between gap-3">
             <button
               type="button"
-              onClick={() => router.back()}
+              onClick={() => {
+                triggerHaptic("light");
+                router.back();
+              }}
               className="text-[12px] text-text-muted hover:text-white transition-colors"
             >
               ← Назад
@@ -68,23 +59,23 @@ export function CreateShell({
               />
             </div>
             <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.16em] text-white/35">
-              <span>{STEPS[activeIndex]?.label ?? "Шаг"}</span>
+              <span>{CREATE_FLOW_STEPS[activeIndex]?.label ?? "Шаг"}</span>
               <span>
-                {Math.min(activeIndex + 1, STEPS.length)}/{STEPS.length}
+                {Math.min(activeIndex + 1, CREATE_FLOW_STEPS.length)}/{CREATE_FLOW_STEPS.length}
               </span>
             </div>
           </div>
         </header>
 
-        {/* Animated content — slides on every step change */}
-        <PageTransition>
+        {/* Шаги мастера: направление анимации зависит от вперёд/назад */}
+        <CreateStepTransition>
           <div className="flex flex-col gap-4">
             {title && (
               <h1 className="text-[20px] font-semibold tracking-tight">{title}</h1>
             )}
             {children}
           </div>
-        </PageTransition>
+        </CreateStepTransition>
 
       </div>
     </div>
