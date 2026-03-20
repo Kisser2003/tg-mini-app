@@ -1,4 +1,5 @@
 import { formatErrorMessage } from "@/lib/errors";
+import { getExpectedAdminTelegramId } from "@/lib/admin";
 import {
   getTelegramUserDisplayName,
   getTelegramUserId,
@@ -152,9 +153,18 @@ export async function resumeDraftFromRelease(releaseId: string): Promise<string 
 
     const store = useCreateReleaseDraftStore.getState();
     const uid = store.userId;
-    if (uid != null && existing.user_id !== uid) {
-      useCreateReleaseDraftStore.getState().setSubmitError("Это не ваш релиз.");
-      return null;
+    if (uid != null) {
+      const ownerId = Number(existing.user_id);
+      const sessionId = Number(uid);
+      const isOwner =
+        Number.isFinite(ownerId) &&
+        Number.isFinite(sessionId) &&
+        ownerId === sessionId;
+      const isAdminUser = sessionId === getExpectedAdminTelegramId();
+      if (!isOwner && !isAdminUser) {
+        useCreateReleaseDraftStore.getState().setSubmitError("Это не ваш релиз.");
+        return null;
+      }
     }
 
     const trackRows = await getReleaseTracksByReleaseId(releaseId);
