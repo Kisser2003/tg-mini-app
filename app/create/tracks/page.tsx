@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useFieldArray, useForm } from "react-hook-form";
 import { motion } from "framer-motion";
+import { MagneticButton } from "@/components/MagneticButton";
 import { CreateShell } from "@/features/release/createRelease/components/CreateShell";
 import { StepGate } from "@/features/release/createRelease/components/StepGate";
 import { useStepGuard } from "@/features/release/createRelease/guards";
@@ -59,7 +60,7 @@ export default function CreateTracksPage() {
     handleSubmit,
     watch,
     reset,
-    formState: { errors, isValid, isDirty, dirtyFields }
+    formState: { errors, isValid, isDirty, dirtyFields, isSubmitting }
   } = useForm<CreateTracks>({
     resolver: zodResolver(tracksSchema),
     mode: "onChange",
@@ -237,13 +238,13 @@ export default function CreateTracksPage() {
             </button>
           )}
 
-          <button
+          <MagneticButton
             type="submit"
-            disabled={!isValid}
+            disabled={!isValid || isSubmitting}
             className="inline-flex h-[56px] w-full items-center justify-center rounded-[20px] bg-gradient-to-tr from-[#4F46E5] to-[#7C3AED] text-[16px] font-semibold text-white shadow-[0_14px_40px_rgba(88,80,236,0.6)] disabled:opacity-60 disabled:shadow-none"
           >
-            Далее
-          </button>
+            {isSubmitting ? "Сохраняем…" : "Далее"}
+          </MagneticButton>
 
           <FormFieldError message={submitError ?? undefined} messageClassName="text-center" />
         </form>

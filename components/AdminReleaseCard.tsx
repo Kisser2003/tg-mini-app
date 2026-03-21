@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { motion, type Variants } from "framer-motion";
 import { CheckCircle2, ExternalLink, Headphones, XCircle } from "lucide-react";
+import { ArtworkCoverGlow } from "@/components/ArtworkCoverGlow";
 import { AudioPlayerLazy } from "@/components/AudioPlayerLazy";
 import type { ReleaseRecord, ReleaseTrackRow } from "@/repositories/releases.repo";
 import { getReleaseStatusMeta } from "@/lib/release-status";
@@ -46,13 +47,9 @@ type AdminReleaseCardProps = {
   /** Варианты для stagger-анимации очереди (родитель задаёт staggerChildren). */
   listVariants?: Variants;
   busy: boolean;
-  rejectExpanded: boolean;
-  rejectReason: string;
   onApprove: () => void;
-  onToggleReject: () => void;
-  onRejectReasonChange: (value: string) => void;
-  onCancelReject: () => void;
-  onConfirmReject: () => void;
+  /** Открыть модальное окно выбора причины отклонения */
+  onOpenReject: () => void;
   /** Ссылка на страницу детали модерации */
   detailHref?: string;
   /** LCP / приоритет загрузки для первых карточек в списке */
@@ -64,16 +61,11 @@ const ARTWORK_SIZES = "(max-width: 768px) 100vw, 33vw";
 export function AdminReleaseCard({
   release,
   tracks,
-  index,
+  index: _index,
   listVariants,
   busy,
-  rejectExpanded,
-  rejectReason,
   onApprove,
-  onToggleReject,
-  onRejectReasonChange,
-  onCancelReject,
-  onConfirmReject,
+  onOpenReject,
   detailHref,
   artworkPriority = false
 }: AdminReleaseCardProps) {
@@ -81,6 +73,11 @@ export function AdminReleaseCard({
   const audioItems = buildAudioItems(release, tracks);
 
   return (
+    <ArtworkCoverGlow
+      artworkUrl={release.artwork_url}
+      priority={artworkPriority}
+      className="rounded-[22px]"
+    >
     <motion.div
       {...(listVariants
         ? { variants: listVariants }
@@ -90,7 +87,7 @@ export function AdminReleaseCard({
           })}
       whileHover={{ scale: 0.995 }}
       whileTap={{ scale: 0.98 }}
-      transition={{ type: "spring", stiffness: 280, damping: 24 }}
+      transition={{ type: "spring", stiffness: 300, damping: 30 }}
       className="glass-card will-change-transform overflow-hidden rounded-[22px] border border-white/[0.08] bg-white/[0.03] p-4 shadow-[0_18px_40px_rgba(0,0,0,0.7)] backdrop-blur-2xl transition-shadow duration-300 hover:shadow-[0_0_48px_rgba(255,255,255,0.07),0_18px_40px_rgba(0,0,0,0.7)] focus-within:shadow-[0_0_52px_rgba(139,92,246,0.15),0_18px_40px_rgba(0,0,0,0.7)]"
     >
       <div className="flex gap-3">
@@ -129,7 +126,7 @@ export function AdminReleaseCard({
               {releaseTypeLabel(release.release_type)}
             </Badge>
             <span
-              className={`inline-flex min-w-0 max-w-full truncate rounded-full border px-2 py-0.5 text-[10px] ${statusMeta.badgeClassName} ${statusMeta.badgeGlowClassName ?? ""}`}
+              className={`inline-flex min-w-0 max-w-full truncate rounded-full border px-2 py-0.5 text-[10px] ${statusMeta.badgeClassName} ${statusMeta.badgeGlowClassName ?? ""} ${statusMeta.badgeShimmerClassName ?? ""}`}
             >
               {statusMeta.label}
             </span>
@@ -160,7 +157,7 @@ export function AdminReleaseCard({
         ) : (
           <div className="space-y-2">
             {audioItems.map((item) => (
-              <AudioPlayerLazy key={item.key} src={item.src} label={item.label} />
+              <AudioPlayerLazy key={item.key} src={item.src} label={item.label} variant="admin" />
             ))}
           </div>
         )}
@@ -177,60 +174,28 @@ export function AdminReleaseCard({
           whileHover={{ scale: 0.99 }}
           whileTap={{ scale: 0.98 }}
           transition={{ type: "spring", stiffness: 320, damping: 22 }}
-          className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-300/40 bg-emerald-500/20 px-3 py-2.5 text-sm text-emerald-100 shadow-[0_0_25px_rgba(16,185,129,0.35)] disabled:opacity-60"
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-300/40 bg-emerald-500/20 px-3 py-2.5 text-sm font-medium text-emerald-100 shadow-[0_0_25px_rgba(16,185,129,0.35)] disabled:opacity-60"
         >
           <CheckCircle2 className="h-4 w-4 shrink-0" />
-          Одобрить
+          Approve
         </motion.button>
         <motion.button
           type="button"
           disabled={busy}
           onClick={() => {
             triggerHaptic("light");
-            onToggleReject();
+            onOpenReject();
           }}
           whileHover={{ scale: 0.99 }}
           whileTap={{ scale: 0.98 }}
           transition={{ type: "spring", stiffness: 320, damping: 22 }}
-          className="inline-flex items-center justify-center gap-2 rounded-xl border border-rose-300/40 bg-rose-500/20 px-3 py-2.5 text-sm text-rose-100 shadow-[0_0_25px_rgba(244,63,94,0.35)] disabled:opacity-60"
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-rose-300/40 bg-rose-500/20 px-3 py-2.5 text-sm font-medium text-rose-100 shadow-[0_0_25px_rgba(244,63,94,0.35)] disabled:opacity-60"
         >
           <XCircle className="h-4 w-4 shrink-0" />
-          Отклонить
+          Reject
         </motion.button>
       </div>
-
-      {rejectExpanded && (
-        <div className="mt-3 space-y-2 rounded-xl border border-white/10 bg-black/25 p-3 backdrop-blur-md">
-          <p className="text-xs text-white/65">Причина отклонения (увидит артист)</p>
-          <textarea
-            value={rejectReason}
-            onChange={(e) => onRejectReasonChange(e.target.value)}
-            rows={3}
-            placeholder="Например: проблема с правами, невалидная обложка, шум в WAV."
-            className="w-full resize-none break-words rounded-xl border border-white/[0.08] bg-black/30 px-4 py-3 text-[16px] leading-relaxed text-white outline-none transition-[box-shadow] duration-200 placeholder:text-white/45 focus:ring-2 focus:ring-violet-500/25 focus:ring-offset-0"
-          />
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={onCancelReject}
-              className="rounded-lg border border-white/20 bg-white/5 px-3 py-1.5 text-xs text-white/80"
-            >
-              Отмена
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => {
-                triggerHaptic("light");
-                onConfirmReject();
-              }}
-              className="rounded-lg border border-rose-300/35 bg-rose-500/20 px-3 py-1.5 text-xs text-rose-100 disabled:opacity-60"
-            >
-              Подтвердить отклонение
-            </button>
-          </div>
-        </div>
-      )}
     </motion.div>
+    </ArtworkCoverGlow>
   );
 }

@@ -5,9 +5,9 @@ import {
   getTelegramUserDisplayName,
   getTelegramUserId,
   getTelegramWebApp,
-  initTelegramWebApp,
-  triggerHaptic
+  initTelegramWebApp
 } from "@/lib/telegram";
+import { hapticMap } from "@/lib/haptic-map";
 import {
   addReleaseTrack,
   cleanupReleaseTracks,
@@ -28,6 +28,47 @@ import { useCreateReleaseDraftStore } from "./store";
 
 /** Защита от двойного сабмита (двойной тап в Telegram). */
 let submitTracksInFlight = false;
+
+async function requestReleaseSubmitPrecheck(params: {
+  releaseId: string;
+  clientRequestId: string;
+  declaredTrackCount: number;
+}): Promise<{ ok: true } | { ok: false; message: string }> {
+  const initData =
+    typeof window !== "undefined" ? getTelegramWebApp()?.initData?.trim() ?? "" : "";
+  const res = await fetch("/api/releases/submit-precheck", {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      ...(initData.length > 0 ? { "X-Telegram-Init-Data": initData } : {})
+    },
+    body: JSON.stringify({
+      releaseId: params.releaseId,
+      clientRequestId: params.clientRequestId,
+      declaredTrackCount: params.declaredTrackCount
+    })
+  });
+
+  let body: { ok?: boolean; error?: string } = {};
+  try {
+    body = (await res.json()) as typeof body;
+  } catch {
+    /* ignore */
+  }
+
+  if (!res.ok) {
+    const msg =
+      typeof body.error === "string" && body.error.length > 0
+        ? body.error
+        : res.status === 401
+          ? "Не удалось подтвердить сессию Telegram. Откройте мини-приложение из Telegram."
+          : "Не удалось проверить треки перед отправкой.";
+    return { ok: false, message: msg };
+  }
+
+  return { ok: true };
+}
 
 function uuidV4Fallback(): string {
   const bytes = new Uint8Array(16);
@@ -299,7 +340,7 @@ export async function ensureDraftRelease(): Promise<ReleaseRecord | null> {
     store.setReleaseId(draft.id);
     store.setClientRequestId(clientRequestId);
     try {
-      triggerHaptic("success");
+      hapticMap.notificationSuccess();
     } catch {}
     return draft;
   } catch (e: unknown) {
@@ -334,7 +375,7 @@ export async function uploadArtworkForDraft(file: File): Promise<string | null> 
     });
     store.setArtworkUrl(artworkUrl);
     try {
-      triggerHaptic("success");
+      hapticMap.notificationSuccess();
     } catch {}
     return artworkUrl;
   } catch (e: unknown) {
@@ -509,6 +550,29 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
       storeAfterUpload.setSubmitStage("finalizing");
       storeAfterUpload.setSubmitProgress(92);
 
+      const precheck = await requestReleaseSubmitPrecheck({
+        releaseId,
+        clientRequestId,
+        declaredTrackCount: totalTracks
+      });
+      if (!precheck.ok) {
+        storeAfterUpload.setSubmitStatus("error");
+        storeAfterUpload.setSubmitStage("error");
+        storeAfterUpload.setSubmitError(precheck.message);
+        try {
+          hapticMap.notificationWarning();
+        } catch {
+          /* ignore */
+        }
+        logClientError({
+          error: new Error(precheck.message),
+          screenName: "CreateReview_submitPrecheck",
+          route: "/create/review",
+          extra: { flow: "submitTracksAndFinalize", phase: "submit_precheck" }
+        });
+        return false;
+      }
+
       await submitRelease({ releaseId, clientRequestId });
 
       const verified = await ensureReleaseProcessing(releaseId, clientRequestId);
@@ -536,7 +600,7 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
       // Состояние submit (прогресс 100%) сохраняем для exit-анимации на Review — см. clearCreateFormKeepSummaryPreserveSubmit.
       storeOk.clearCreateFormKeepSummaryPreserveSubmit();
       try {
-        triggerHaptic("success");
+        hapticMap.notificationSuccess();
       } catch {}
       return true;
     } catch (e: unknown) {

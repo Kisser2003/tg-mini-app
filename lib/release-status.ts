@@ -11,6 +11,8 @@ export type ReleaseStatusMeta = {
   badgeClassName: string;
   /** Лёгкий glow только для успешного статуса (UI). */
   badgeGlowClassName?: string;
+  /** Бесконечный шиммер (Ready / Pending). */
+  badgeShimmerClassName?: string;
 };
 
 const STATUS_META: Record<CanonicalReleaseStatus, Omit<ReleaseStatusMeta, "canonical">> = {
@@ -20,13 +22,17 @@ const STATUS_META: Record<CanonicalReleaseStatus, Omit<ReleaseStatusMeta, "canon
   },
   processing: {
     label: "На проверке",
-    badgeClassName: "border-amber-500/40 bg-amber-500/15 text-amber-300"
+    badgeClassName:
+      "relative overflow-hidden border-amber-500/40 bg-amber-500/15 text-amber-300",
+    badgeShimmerClassName: "status-badge-shimmer"
   },
   ready: {
     label: "Готов",
-    badgeClassName: "border-emerald-500/40 bg-emerald-500/15 text-emerald-300",
+    badgeClassName:
+      "relative overflow-hidden border-emerald-500/40 bg-emerald-500/15 text-emerald-300",
     /** «Дыхание» свечения для премиального акцента статуса */
-    badgeGlowClassName: "shadow-[0_0_15px_rgba(34,197,94,0.3)] animate-pulse"
+    badgeGlowClassName: "shadow-[0_0_15px_rgba(34,197,94,0.3)] animate-pulse",
+    badgeShimmerClassName: "status-badge-shimmer"
   },
   failed: {
     label: "Отклонено",

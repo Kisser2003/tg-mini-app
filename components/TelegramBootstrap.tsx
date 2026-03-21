@@ -12,6 +12,19 @@ export function TelegramBootstrap() {
   useEffect(() => {
     initTelegramWebApp();
 
+    if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+      navigator.serviceWorker
+        .register("/sw-audio.js")
+        .then((reg) => {
+          if (process.env.NODE_ENV === "development") {
+            console.log("[SW-AUDIO] registered", reg.scope);
+          }
+        })
+        .catch((err) => {
+          console.error("[SW-AUDIO] registration failed", err);
+        });
+    }
+
     const startParam = getTelegramStartParam();
     const userId = getTelegramUserId();
     if (startParam === "admin" && userId === ADMIN_TELEGRAM_ID && pathname !== "/admin") {

@@ -9,7 +9,8 @@ import {
   getCreateStepIndexFromPath
 } from "@/lib/create-steps";
 import { CreateStepTransition } from "@/features/release/createRelease/components/CreateStepTransition";
-import { triggerHaptic } from "@/lib/telegram";
+import { hapticMap } from "@/lib/haptic-map";
+import { SPRING_PROGRESS } from "@/lib/motion-spring";
 
 export function CreateShell({
   children,
@@ -37,7 +38,7 @@ export function CreateShell({
             <button
               type="button"
               onClick={() => {
-                triggerHaptic("light");
+                hapticMap.impactLight();
                 router.push(getCreateBackPath(pathname));
               }}
               className="text-[12px] text-text-muted hover:text-white transition-colors"
@@ -54,12 +55,17 @@ export function CreateShell({
           </div>
 
           <div className="space-y-2">
-            <div className="h-2 w-full overflow-hidden rounded-full bg-white/8">
+            <div className="relative h-2 w-full overflow-hidden rounded-full bg-gradient-to-r from-white/[0.06] via-white/10 to-white/[0.06]">
               <motion.div
-                className="h-full bg-gradient-to-r from-[#4F46E5] to-[#7C3AED]"
-                initial={false}
-                animate={{ width: `${progress}%` }}
-                transition={{ type: "spring", stiffness: 260, damping: 30 }}
+                key={activeIndex}
+                className="relative z-[1] h-full origin-left rounded-full bg-gradient-to-r from-[color:var(--tg-theme-button-color,#4F46E5)] via-indigo-400/90 to-[#7C3AED]"
+                style={{
+                  boxShadow:
+                    "2px 0 14px color-mix(in srgb, var(--tg-theme-button-color, #a5b4fc) 38%, transparent)"
+                }}
+                initial={{ width: `${progress}%`, scaleX: 0.94, opacity: 0.92 }}
+                animate={{ width: `${progress}%`, scaleX: 1, opacity: 1 }}
+                transition={SPRING_PROGRESS}
               />
             </div>
             <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.16em] text-white/35">

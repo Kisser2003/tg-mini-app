@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 import { AnimatePresence, motion } from "framer-motion";
+import { MagneticButton } from "@/components/MagneticButton";
 import { CreateShell } from "@/features/release/createRelease/components/CreateShell";
+import { hapticMap } from "@/lib/haptic-map";
 import { StepGate } from "@/features/release/createRelease/components/StepGate";
 import { useStepGuard } from "@/features/release/createRelease/guards";
 import { useCreateReleaseDraftStore } from "@/features/release/createRelease/store";
@@ -76,7 +78,7 @@ export default function CreateReviewPage() {
     if (submitError && submitError !== prevSubmitErrorRef.current) {
       const isFileRelated = /wav|файл|загруз/i.test(submitError);
       if (isFileRelated) {
-        triggerHaptic("error");
+        hapticMap.notificationError();
       }
     }
     prevSubmitErrorRef.current = submitError;
@@ -90,6 +92,7 @@ export default function CreateReviewPage() {
       const msg =
         "Не хватает WAV-файлов в этой сессии. Загрузите их на шаге «Треки» — даже если в базе уже есть старые файлы.";
       setSubmitError(msg);
+      hapticMap.notificationError();
       toast.error(msg);
       logClientError({
         error: new Error("review_precheck_missing_wav"),
@@ -108,6 +111,7 @@ export default function CreateReviewPage() {
       const st = useCreateReleaseDraftStore.getState();
       const msg = st.submitError;
       const toastText = msg ?? "Не удалось отправить релиз на модерацию. Статус не изменён.";
+      hapticMap.notificationError();
       toast.error(toastText);
       logClientError({
         error: new Error(toastText),
@@ -224,14 +228,14 @@ export default function CreateReviewPage() {
             </div>
           )}
 
-          <button
+          <MagneticButton
             type="button"
             disabled={submitBlocked}
             onClick={handleSubmit}
             className="inline-flex h-[56px] w-full items-center justify-center rounded-[20px] bg-gradient-to-tr from-[#4F46E5] to-[#7C3AED] text-[16px] font-semibold text-white shadow-[0_14px_40px_rgba(88,80,236,0.6)] disabled:opacity-60 disabled:shadow-none"
           >
             {isSubmitting || submitStatus === "submitting" ? "Отправляем..." : "Отправить релиз"}
-          </button>
+          </MagneticButton>
 
           <AnimatePresence mode="wait" onExitComplete={handleProgressExitComplete}>
             {showProgressPanel && (

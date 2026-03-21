@@ -24,8 +24,10 @@ npm install
 2. Configure environment:
 
 - Copy `.env.local.example` to `.env.local`
+- Set `NEXT_PUBLIC_APP_URL` to your deployed origin (used for Open Graph `metadataBase` and link previews).
 - Fill `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
 - For admin UI and bot notifications: `ADMIN_TELEGRAM_ID`, `TELEGRAM_BOT_TOKEN`, `ADMIN_CHAT_ID`
+- For **release status webhooks** (Supabase `pg_net` → Next.js): `SUPABASE_WEBHOOK_SECRET` — must match the value you set in the SQL trigger headers (see migration [supabase/migrations/20260322120000_release_status_webhook.sql](supabase/migrations/20260322120000_release_status_webhook.sql)). Do not commit real values.
 - Never commit real secrets to git history or template files.
 
 3. In Supabase:
@@ -59,6 +61,10 @@ npm install
 - `release_logs` — журнал этапов:
   - `release_id`, `stage`, `status`, `error_message`
 
+**Кошелёк (ledger):** миграция [supabase/migrations/20260323140000_wallet_ledger.sql](supabase/migrations/20260323140000_wallet_ledger.sql) — таблицы `transactions`, `payout_accounts`, RLS (чтение своих строк по `x-telegram-user-id`). RPC `get_user_balance(p_user_id text, p_only_available boolean default false)` ([доп. миграция holding period](supabase/migrations/20260326120000_wallet_holding_period.sql)) — общий баланс или сумма проводок старше 60 дней (`p_only_available = true`); только `service_role`. Запись транзакций — с сервера с приватным ключом, не из клиентского anon SDK.
+
+**Обратная связь:** миграция [supabase/migrations/20260324120000_feedback.sql](supabase/migrations/20260324120000_feedback.sql) — таблица `feedback`; запись через [`POST /api/feedback`](app/api/feedback/route.ts) с `withTelegramAuth` и service role.
+
 **Postgres (рекомендуется):** примените миграцию [supabase/migrations/20250320120000_finalize_release_transaction.sql](supabase/migrations/20250320120000_finalize_release_transaction.sql) — функция `finalize_release(p_release_id uuid, p_client_request_id uuid)` атомарно переводит `draft` → `processing` и пишет строку в `release_logs` (идемпотентна при повторном вызове). Старая перегрузка `finalize_release(uuid)` удаляется скриптом. Если RPC недоступна, клиент делает проверку по `client_request_id` и обновляет статус в [repositories/releases.repo.ts](repositories/releases.repo.ts) (`finalizeReleaseFallback`).
 
 4. Run dev server:
@@ -79,6 +85,13 @@ Then hook the URL as a Telegram WebApp URL in your bot, so that Telegram passes 
 
 Пример: [`app/api/notify-admin/route.ts`](app/api/notify-admin/route.ts) — `POST` защищён через `withTelegramAuth`.
 
+### Webhook: смена статуса релиза (Supabase → Next → Telegram)
+
+- **Route:** [`app/api/webhooks/release-status-change/route.ts`](app/api/webhooks/release-status-change/route.ts) — `POST` с заголовком `x-supabase-webhook-secret` (значение = `SUPABASE_WEBHOOK_SECRET` в env приложения).
+- **Триггер БД:** см. миграцию с `pg_net` и `net.http_post`; в SQL замените плейсхолдеры `YOUR_PUBLIC_APP_DOMAIN` и секрет на свои (тот же секрет, что в `.env` у деплоя Next.js).
+- Уведомления пользователю в Telegram отправляются при переходе статуса в `ready` или `failed` (см. `lib/db-enums.ts`).
+- **Кошелёк:** [`GET /api/wallet/stats`](app/api/wallet/stats/route.ts) — `withTelegramAuth`, данные через `SUPABASE_SERVICE_ROLE_KEY` (баланс RPC, список транзакций).
+
 ## Security incident checklist (secrets)
 
 If any key was exposed in repository history, rotate immediately:
@@ -91,6 +104,7 @@ If any key was exposed in repository history, rotate immediately:
 6. Verify:
    - `/api/notify-admin` works with the new token.
    - Supabase writes/uploads work with new service role key.
+7. If `SUPABASE_WEBHOOK_SECRET` was exposed: generate a new secret, update Next.js env and the SQL trigger (`notify_release_status_webhook` header / `webhook_secret` variable), then redeploy.
 
 ## Required server-side follow-up
 

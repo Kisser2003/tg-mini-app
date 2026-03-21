@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { MagneticButton } from "@/components/MagneticButton";
 import { CreateShell } from "@/features/release/createRelease/components/CreateShell";
 import { StepGate } from "@/features/release/createRelease/components/StepGate";
 import { useStepGuard } from "@/features/release/createRelease/guards";
@@ -134,14 +135,14 @@ export default function CreateAssetsPage() {
             )}
           </div>
 
-          <button
+          <MagneticButton
             type="button"
             disabled={!canGoNext || isUploading}
             onClick={handleNext}
             className="inline-flex h-[56px] w-full items-center justify-center rounded-[20px] bg-gradient-to-tr from-[#4F46E5] to-[#7C3AED] text-[16px] font-semibold text-white shadow-[0_14px_40px_rgba(88,80,236,0.6)] disabled:opacity-60 disabled:shadow-none"
           >
             {isUploading ? "Загружаем..." : "Далее"}
-          </button>
+          </MagneticButton>
 
           <FormFieldError message={submitError ?? undefined} messageClassName="text-center" />
         </div>

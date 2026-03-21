@@ -201,7 +201,7 @@ export default function AdminReleaseDetailPage() {
             <h1 className="break-words text-xl font-semibold tracking-tight">{release.track_name}</h1>
             <p className="break-words text-sm text-white/60">{release.artist_name}</p>
             <span
-              className={`mt-2 inline-flex rounded-full border px-2 py-0.5 text-[10px] ${statusMeta.badgeClassName} ${statusMeta.badgeGlowClassName ?? ""}`}
+              className={`mt-2 inline-flex rounded-full border px-2 py-0.5 text-[10px] ${statusMeta.badgeClassName} ${statusMeta.badgeGlowClassName ?? ""} ${statusMeta.badgeShimmerClassName ?? ""}`}
             >
               {statusMeta.label}
             </span>

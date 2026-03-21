@@ -386,6 +386,24 @@ export async function submitRelease(params: SubmitReleaseParams): Promise<Releas
 
   const { releaseId, clientRequestId } = parsedIds.data;
 
+  const { data: currentRow, error: currentErr } = await withRetry(async () => {
+    return await supabase
+      .from("releases")
+      .select("*")
+      .eq("id", releaseId)
+      .eq("client_request_id", clientRequestId)
+      .maybeSingle();
+  });
+
+  if (currentErr) {
+    throw currentErr;
+  }
+
+  const current = currentRow as ReleaseRecord | null;
+  if (current && (current.status === "processing" || current.status === "ready")) {
+    return current;
+  }
+
   const { data: rpcData, error: rpcError } = await withRetry(async () => {
     return await supabase.rpc("finalize_release", {
       p_release_id: releaseId,

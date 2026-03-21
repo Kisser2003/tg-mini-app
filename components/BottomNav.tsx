@@ -1,19 +1,103 @@
 "use client";
 
-import { useMemo } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import type { LucideIcon } from "lucide-react";
 import { Library, Shield, Wallet } from "lucide-react";
 import { useScrollDirection } from "@/hooks/useScrollDirection";
 import { isAdminUi } from "@/lib/admin";
-import { initTelegramWebApp, triggerHaptic } from "@/lib/telegram";
+import { hapticMap } from "@/lib/haptic-map";
+import { SPRING_UI } from "@/lib/motion-spring";
+import { initTelegramWebApp } from "@/lib/telegram";
+
+const MAG_MAX_PX = 6;
 
 type NavItem = {
   label: string;
   href: string;
   icon: LucideIcon;
 };
+
+function BottomNavItem({
+  item,
+  active,
+  onNavigate
+}: {
+  item: NavItem;
+  active: boolean;
+  onNavigate: () => void;
+}) {
+  const Icon = item.icon;
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const [mag, setMag] = useState({ x: 0, y: 0 });
+
+  const onPointerMove = useCallback((e: React.PointerEvent<HTMLButtonElement>) => {
+    const el = btnRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const cx = r.left + r.width / 2;
+    const cy = r.top + r.height / 2;
+    const nx = (e.clientX - cx) / (r.width / 2);
+    const ny = (e.clientY - cy) / (r.height / 2);
+    setMag({
+      x: Math.max(-1, Math.min(1, nx)) * MAG_MAX_PX,
+      y: Math.max(-1, Math.min(1, ny)) * MAG_MAX_PX
+    });
+  }, []);
+
+  const onPointerLeave = useCallback(() => {
+    setMag({ x: 0, y: 0 });
+  }, []);
+
+  return (
+    <motion.button
+      ref={btnRef}
+      type="button"
+      onPointerMove={onPointerMove}
+      onPointerLeave={onPointerLeave}
+      whileTap={{ scale: 0.92 }}
+      transition={SPRING_UI}
+      onClick={onNavigate}
+      className={`relative flex flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 text-[11px] transition-colors ${
+        active ? "text-white" : "text-white/60 hover:text-white"
+      }`}
+    >
+      <div className="relative flex h-10 w-full items-center justify-center">
+        {active && (
+          <motion.div
+            layoutId="activeTab"
+            className="absolute left-1/2 top-1/2 h-9 w-11 -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white/15"
+            style={{
+              boxShadow:
+                "0 0 22px color-mix(in srgb, var(--tg-theme-button-color, #3390ec) 42%, transparent), inset 0 1px 0 rgba(255,255,255,0.12)"
+            }}
+            transition={SPRING_UI}
+          />
+        )}
+        <span
+          className="relative z-10 flex items-center justify-center will-change-transform"
+          style={{ transform: `translate(${mag.x}px, ${mag.y}px)` }}
+        >
+          <span
+            className="rounded-full p-1"
+            style={
+              active
+                ? {
+                    filter:
+                      "drop-shadow(0 0 10px color-mix(in srgb, var(--tg-theme-button-color, #3390ec) 50%, transparent))"
+                  }
+                : undefined
+            }
+          >
+            <Icon className="h-4 w-4" />
+          </span>
+        </span>
+      </div>
+      <span className="relative z-10">{item.label}</span>
+    </motion.button>
+  );
+}
 
 export function BottomNav() {
   const pathname = usePathname();
@@ -32,7 +116,6 @@ export function BottomNav() {
     [showAdminTab]
   );
 
-  /** Скрытие по скроллу на всех экранах, кроме финала мастера — таббар остаётся на месте. */
   const scrollHideEnabled = pathname !== "/create/success";
   const navVisible = useScrollDirection({
     enabled: scrollHideEnabled,
@@ -45,7 +128,6 @@ export function BottomNav() {
       aria-label="Основная навигация"
       className="fixed bottom-4 left-1/2 z-40 w-[calc(100%-1.5rem)] max-w-[450px] -translate-x-1/2 pb-[env(safe-area-inset-bottom,0px)]"
     >
-      {/* Внешний nav без Framer transform — иначе animate y затирает -translate-x-1/2 и бар уезжает вправо */}
       <motion.div
         initial={false}
         animate={{ y: navVisible ? 0 : "115%" }}
@@ -58,32 +140,21 @@ export function BottomNav() {
           style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}
         >
           {items.map((item) => {
-            const Icon = item.icon;
             const active =
               item.href === "/library"
                 ? pathname === "/library" || pathname === "/"
                 : pathname === item.href;
 
             return (
-              <motion.button
+              <BottomNavItem
                 key={item.href}
-                type="button"
-                whileHover={{ scale: 0.99 }}
-                whileTap={{ scale: 0.98 }}
-                transition={{ type: "spring", stiffness: 320, damping: 22 }}
-                onClick={() => {
-                  if (!active) triggerHaptic();
+                item={item}
+                active={active}
+                onNavigate={() => {
+                  if (!active) hapticMap.impactLight();
                   router.push(item.href);
                 }}
-                className={`flex flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 text-[11px] transition-colors ${
-                  active ? "bg-white/15 text-white" : "text-white/60 hover:text-white"
-                }`}
-              >
-                <span className={active ? "rounded-full p-1 shadow-[0_0_16px_rgba(96,165,250,0.55)]" : "rounded-full p-1"}>
-                  <Icon className="h-4 w-4" />
-                </span>
-                <span>{item.label}</span>
-              </motion.button>
+              />
             );
           })}
         </div>

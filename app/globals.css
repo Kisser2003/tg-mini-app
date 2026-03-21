@@ -6,6 +6,10 @@
  * Глобальный скролл документа (window): без вложенного overflow-y-auto в layout.
  * !important — перебить утилиты Tailwind на body при необходимости.
  */
+html {
+  scroll-behavior: smooth;
+}
+
 html,
 body {
   margin: 0;
@@ -21,6 +25,20 @@ body {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: none;
   touch-action: pan-y pinch-zoom;
+}
+
+/* Нативный мини-апп: без выделения текста, кроме полей ввода */
+body {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+input,
+textarea,
+select,
+[contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 /* Обертка контента в layout: без собственного скролла, только отступы */
@@ -116,4 +134,42 @@ button {
   to {
     transform: translateX(100%);
   }
+}
+
+/* GlassCard: медленный шиммер раз в 5 с */
+@keyframes glass-card-shimmer {
+  0% {
+    transform: translateX(-120%) skewX(-12deg);
+  }
+  100% {
+    transform: translateX(320%) skewX(-12deg);
+  }
+}
+
+.glass-card-shimmer-bar {
+  animation: glass-card-shimmer 5s ease-in-out infinite;
+}
+
+/* Ready / Pending: диагональный шиммер ~45°, цикл 3s */
+@keyframes status-badge-shimmer {
+  0% {
+    transform: translateX(-140%) skewX(-45deg);
+  }
+  100% {
+    transform: translateX(220%) skewX(-45deg);
+  }
+}
+
+.status-badge-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: -40% -60%;
+  background: linear-gradient(
+    105deg,
+    transparent 38%,
+    rgba(255, 255, 255, 0.38) 50%,
+    transparent 62%
+  );
+  animation: status-badge-shimmer 3s linear infinite;
+  pointer-events: none;
 }

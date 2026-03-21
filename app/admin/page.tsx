@@ -3,14 +3,17 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, type Variants } from "framer-motion";
-import { Info, RefreshCcw } from "lucide-react";
+import { BarChart3, Info, RefreshCcw, TrendingUp, Wallet } from "lucide-react";
 import useSWR from "swr";
 import { toast } from "sonner";
+import { AdminRejectModal } from "@/components/AdminRejectModal";
 import { AdminReleaseCard } from "@/components/AdminReleaseCard";
 import { GlassCard } from "@/components/GlassCard";
+import { PullRefreshBrand } from "@/components/PullRefreshBrand";
 import { approveRelease, rejectRelease } from "@/features/admin/actions";
 import { isAdminUi } from "@/lib/admin";
 import { debugInit } from "@/lib/debug";
+import { fetchAdminStats } from "@/lib/fetch-admin-stats";
 import {
   getPendingReleases,
   getReleaseTracksByReleaseId,
@@ -18,6 +21,7 @@ import {
   type ReleaseTrackRow
 } from "@/repositories/releases.repo";
 import { sendApprovalNotification } from "@/lib/bot-api";
+import { hapticMap } from "@/lib/haptic-map";
 import { getTelegramUserId, initTelegramWebApp, triggerHaptic } from "@/lib/telegram";
 import { withRequestTimeout } from "@/lib/withRequestTimeout";
 
@@ -45,13 +49,19 @@ const adminQueueItem: Variants = {
   }
 };
 
+function formatMoneyRub(value: number): string {
+  return `${value.toLocaleString("ru-RU", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })} ₽`;
+}
+
 export default function AdminPage() {
   const router = useRouter();
   const [userId, setUserId] = useState<number | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [expandedRejectId, setExpandedRejectId] = useState<string | null>(null);
-  const [rejectReasons, setRejectReasons] = useState<Record<string, string>>({});
+  const [rejectModalReleaseId, setRejectModalReleaseId] = useState<string | null>(null);
   const isAdmin = isAdminUi();
 
   useEffect(() => {
@@ -62,6 +72,7 @@ export default function AdminPage() {
   }, []);
 
   const swrKey = isAdmin ? (["admin-moderation-queue"] as const) : null;
+  const statsKey = isAdmin ? (["admin-stats"] as const) : null;
 
   const loadQueueCore = useCallback(async (): Promise<ModerationQueueRow[]> => {
     const releases = await getPendingReleases();
@@ -88,9 +99,22 @@ export default function AdminPage() {
     }
   );
 
+  const {
+    data: stats,
+    error: statsError,
+    mutate: mutateStats
+  } = useSWR(statsKey, fetchAdminStats, {
+    refreshInterval: 15000,
+    dedupingInterval: 5000
+  });
+
   const moderationQueue = data ?? [];
   const errorMessage =
     error instanceof Error ? error.message : error != null ? String(error) : null;
+
+  const refreshAll = useCallback(async () => {
+    await Promise.all([mutate(undefined, { revalidate: true }), mutateStats(undefined, { revalidate: true })]);
+  }, [mutate, mutateStats]);
 
   const handleApprove = useCallback(
     async (release: ReleaseRecord) => {
@@ -99,13 +123,13 @@ export default function AdminPage() {
       try {
         const updated = await approveRelease(release.id);
         triggerHaptic("success");
-        setExpandedRejectId(null);
+        setRejectModalReleaseId(null);
         try {
           await sendApprovalNotification(updated);
         } catch (e: unknown) {
           console.error("sendApprovalNotification failed:", e);
         }
-        await mutate();
+        await refreshAll();
         toast.success("Релиз одобрен");
         router.replace("/admin");
       } catch (e: unknown) {
@@ -116,25 +140,18 @@ export default function AdminPage() {
         setBusyId(null);
       }
     },
-    [mutate, router]
+    [refreshAll, router]
   );
 
-  const confirmReject = useCallback(
-    async (id: string) => {
-      if (
-        !window.confirm(
-          "Отклонить релиз? Артист увидит указанную причину в уведомлении."
-        )
-      ) {
-        return;
-      }
+  const handleRejectWithReason = useCallback(
+    async (id: string, reason: string) => {
       setBusyId(id);
       setActionError(null);
       try {
-        await rejectRelease(id, rejectReasons[id] ?? "");
-        triggerHaptic("warning");
-        setExpandedRejectId(null);
-        await mutate();
+        await rejectRelease(id, reason);
+        hapticMap.notificationWarning();
+        setRejectModalReleaseId(null);
+        await refreshAll();
         toast.success("Релиз отклонён");
         router.replace("/admin");
       } catch (e: unknown) {
@@ -145,7 +162,7 @@ export default function AdminPage() {
         setBusyId(null);
       }
     },
-    [rejectReasons, mutate, router]
+    [refreshAll, router]
   );
 
   if (userId == null && process.env.NODE_ENV === "production") {
@@ -169,11 +186,16 @@ export default function AdminPage() {
   }
 
   const showQueueSkeleton = isLoading && data === undefined;
+  const pendingQueueCount = stats?.pending_queue ?? moderationQueue.length;
+  const readyToday = stats?.ready_today ?? 0;
+  const holdSum = stats?.pending_hold_sum ?? 0;
+  const statsLoadError = statsError instanceof Error ? statsError.message : null;
 
   return (
     <div className="flex min-h-[100dvh] flex-col gap-4 pb-10">
+      <PullRefreshBrand />
       <GlassCard className="p-5">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-white/55">Админ</p>
             <h1 className="mt-2 text-2xl font-semibold tracking-tight">Очередь модерации</h1>
@@ -186,15 +208,53 @@ export default function AdminPage() {
             whileHover={{ scale: 0.99 }}
             whileTap={{ scale: 0.98 }}
             transition={{ type: "spring", stiffness: 320, damping: 22 }}
-            onClick={() => void mutate(undefined, { revalidate: true })}
+            onClick={() => void refreshAll()}
             disabled={isValidating}
-            className="inline-flex shrink-0 items-center gap-1 rounded-full border border-white/20 bg-white/5 px-3 py-1.5 text-xs text-white/80 disabled:opacity-60"
+            className="inline-flex shrink-0 items-center gap-1 self-start rounded-full border border-white/20 bg-white/5 px-3 py-1.5 text-xs text-white/80 disabled:opacity-60"
           >
             <RefreshCcw className={`h-3.5 w-3.5 ${isValidating ? "animate-spin" : ""}`} />
             {isValidating ? "Обновляем..." : "Обновить"}
           </motion.button>
         </div>
+
+        <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="rounded-[18px] border border-white/[0.08] bg-black/25 px-4 py-3 backdrop-blur-md">
+            <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.16em] text-white/45">
+              <BarChart3 className="h-3.5 w-3.5 text-sky-300/80" />
+              В очереди
+            </div>
+            <p className="mt-2 text-2xl font-semibold tabular-nums text-white">{pendingQueueCount}</p>
+          </div>
+          <div className="rounded-[18px] border border-white/[0.08] bg-black/25 px-4 py-3 backdrop-blur-md">
+            <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.16em] text-white/45">
+              <TrendingUp className="h-3.5 w-3.5 text-emerald-300/80" />
+              Одобрено сегодня
+            </div>
+            <p className="mt-2 text-2xl font-semibold tabular-nums text-white">{readyToday}</p>
+            <p className="mt-1 text-[10px] text-white/35">ready, созданные с 00:00 UTC</p>
+          </div>
+          <div className="rounded-[18px] border border-white/[0.08] bg-black/25 px-4 py-3 backdrop-blur-md">
+            <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.16em] text-white/45">
+              <Wallet className="h-3.5 w-3.5 text-amber-300/80" />
+              Сумма в холде
+            </div>
+            <p className="mt-2 text-xl font-semibold tabular-nums text-white">{formatMoneyRub(holdSum)}</p>
+            <p className="mt-1 text-[10px] text-white/35">все транзакции pending</p>
+          </div>
+        </div>
+        {statsLoadError && (
+          <p className="mt-3 text-[11px] text-amber-200/90">
+            Счётчики: {statsLoadError} (очередь по списку ниже)
+          </p>
+        )}
       </GlassCard>
+
+      <AdminRejectModal
+        releaseId={rejectModalReleaseId}
+        busy={busyId === rejectModalReleaseId}
+        onClose={() => setRejectModalReleaseId(null)}
+        onSelectReason={(id, reason) => void handleRejectWithReason(id, reason)}
+      />
 
       {showQueueSkeleton && (
         <GlassCard className="p-4 text-sm text-white/70">Загружаем очередь...</GlassCard>
@@ -226,17 +286,8 @@ export default function AdminPage() {
               index={index}
               listVariants={adminQueueItem}
               busy={busyId === row.release.id}
-              rejectExpanded={expandedRejectId === row.release.id}
-              rejectReason={rejectReasons[row.release.id] ?? ""}
               onApprove={() => void handleApprove(row.release)}
-              onToggleReject={() =>
-                setExpandedRejectId((prev) => (prev === row.release.id ? null : row.release.id))
-              }
-              onRejectReasonChange={(value) =>
-                setRejectReasons((prev) => ({ ...prev, [row.release.id]: value }))
-              }
-              onCancelReject={() => setExpandedRejectId(null)}
-              onConfirmReject={() => void confirmReject(row.release.id)}
+              onOpenReject={() => setRejectModalReleaseId(row.release.id)}
               detailHref={`/admin/release/${row.release.id}`}
               artworkPriority={index < 3}
             />

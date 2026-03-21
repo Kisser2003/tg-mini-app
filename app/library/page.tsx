@@ -10,10 +10,12 @@ import {
 } from "react";
 import Image from "next/image";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
-import { Music2 } from "lucide-react";
+import { Disc3 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
+import { ArtworkCoverGlow } from "@/components/ArtworkCoverGlow";
 import { GlassCard } from "@/components/GlassCard";
+import { PullRefreshBrand } from "@/components/PullRefreshBrand";
 import { LibraryReleaseSkeletonGrid } from "@/components/ui/Skeleton";
 import { debugInit } from "@/lib/debug";
 import { resumeDraftFromRelease } from "@/features/release/createRelease/actions";
@@ -183,6 +185,7 @@ function LibraryPageInner() {
 
   return (
     <div className="min-h-[100dvh] bg-background px-5 py-6 pb-10 text-text">
+      <PullRefreshBrand />
       <div className="mx-auto flex w-full max-w-[440px] flex-col gap-6 font-sans">
         <GlassCard className="p-5">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -251,11 +254,21 @@ function LibraryPageInner() {
 
           {userId != null && !showListSkeleton && !errorMessage && !hasReleases && (
             <div className="flex min-h-[52vh] flex-1 flex-col items-center justify-center px-2">
-              <div className="flex w-full max-w-[360px] flex-col items-center justify-center gap-5 rounded-[24px] border border-white/[0.08] bg-surface/80 px-6 py-12 text-center shadow-[0_18px_40px_rgba(0,0,0,0.7)] backdrop-blur-2xl">
-                <Music2 className="h-14 w-14 text-white/35" strokeWidth={1.25} aria-hidden />
+              <div className="flex w-full max-w-[360px] flex-col items-center justify-center gap-6 rounded-[24px] border border-white/[0.08] bg-surface/80 px-6 py-12 text-center shadow-[0_18px_40px_rgba(0,0,0,0.7)] backdrop-blur-2xl">
+                <div className="relative mx-auto flex h-[88px] w-[88px] items-center justify-center">
+                  <div
+                    className="absolute inset-0 rounded-full bg-gradient-to-br from-violet-500/50 via-fuchsia-500/35 to-cyan-500/40 opacity-90 blur-2xl"
+                    aria-hidden
+                  />
+                  <div className="relative flex h-[72px] w-[72px] items-center justify-center rounded-[22px] border border-white/20 bg-black/40 shadow-[0_12px_40px_rgba(139,92,246,0.35)] backdrop-blur-md">
+                    <Disc3 className="h-9 w-9 text-white" strokeWidth={1.35} aria-hidden />
+                  </div>
+                </div>
                 <div className="space-y-1">
-                  <p className="text-[17px] font-semibold tracking-tight">У вас пока нет релизов</p>
-                  <p className="text-[13px] text-text-muted">Создайте первый релиз в пару шагов.</p>
+                  <p className="text-[17px] font-semibold tracking-tight">Пока нет релизов</p>
+                  <p className="text-[13px] text-text-muted">
+                    Загрузите первый трек — это займёт пару минут.
+                  </p>
                 </div>
                 <button
                   type="button"
@@ -296,60 +309,69 @@ function LibraryPageInner() {
 
                   if (isDraft) {
                     return (
-                      <motion.div
-                        key={release.id}
-                        variants={releaseListItem}
-                        className={`flex w-full gap-3 rounded-[20px] border border-white/[0.08] bg-surface/80 px-4 py-4 shadow-[0_18px_40px_rgba(0,0,0,0.7)] backdrop-blur-2xl ${
-                          isResumingDraft ? "pointer-events-none opacity-70" : "cursor-pointer select-none"
-                        }`}
-                        role="button"
-                        tabIndex={0}
-                        aria-busy={isResumingDraft}
-                        aria-label={`Продолжить заполнение черновика: ${release.track_name}`}
-                        whileHover={isResumingDraft ? undefined : { scale: 1.01, opacity: 0.96 }}
-                        whileTap={isResumingDraft ? undefined : { scale: 0.985 }}
-                        onClick={() => {
-                          void handleResumeDraft(release);
-                        }}
-                        onKeyDown={(e: KeyboardEvent) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            void handleResumeDraft(release);
-                          }
-                        }}
-                      >
-                        <ArtworkThumb
-                          url={release.artwork_url}
-                          title={release.track_name}
+                      <motion.div key={release.id} variants={releaseListItem} className="rounded-[20px]">
+                        <ArtworkCoverGlow
+                          artworkUrl={release.artwork_url}
                           priority={thumbPriority}
-                        />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-[15px] font-semibold">{release.track_name}</p>
-                          <p className="mt-0.5 text-[11px] text-text-muted">
-                            {new Date(release.created_at).toLocaleString("ru-RU", {
-                              day: "2-digit",
-                              month: "2-digit",
-                              hour: "2-digit",
-                              minute: "2-digit"
-                            })}
-                          </p>
-                        </div>
-                        <span
-                          className={`inline-flex shrink-0 items-center self-start rounded-full border px-3 py-1 text-[11px] font-medium ${statusMeta.badgeClassName} ${statusMeta.badgeGlowClassName ?? ""}`}
+                          className="rounded-[20px] border border-white/[0.08] bg-surface/80 shadow-[0_18px_40px_rgba(0,0,0,0.7)] backdrop-blur-2xl"
                         >
-                          {statusMeta.label}
-                        </span>
+                          <motion.div
+                            className={`flex w-full gap-3 px-4 py-4 ${
+                              isResumingDraft ? "pointer-events-none opacity-70" : "cursor-pointer select-none"
+                            }`}
+                            role="button"
+                            tabIndex={0}
+                            aria-busy={isResumingDraft}
+                            aria-label={`Продолжить заполнение черновика: ${release.track_name}`}
+                            whileHover={isResumingDraft ? undefined : { scale: 1.01, opacity: 0.96 }}
+                            whileTap={isResumingDraft ? undefined : { scale: 0.985 }}
+                            transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                            onClick={() => {
+                              void handleResumeDraft(release);
+                            }}
+                            onKeyDown={(e: KeyboardEvent) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                void handleResumeDraft(release);
+                              }
+                            }}
+                          >
+                            <ArtworkThumb
+                              url={release.artwork_url}
+                              title={release.track_name}
+                              priority={thumbPriority}
+                            />
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-[15px] font-semibold">{release.track_name}</p>
+                              <p className="mt-0.5 text-[11px] text-text-muted">
+                                {new Date(release.created_at).toLocaleString("ru-RU", {
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                  hour: "2-digit",
+                                  minute: "2-digit"
+                                })}
+                              </p>
+                            </div>
+                            <span
+                              className={`inline-flex shrink-0 items-center self-start rounded-full border px-3 py-1 text-[11px] font-medium ${statusMeta.badgeClassName} ${statusMeta.badgeGlowClassName ?? ""} ${statusMeta.badgeShimmerClassName ?? ""}`}
+                            >
+                              {statusMeta.label}
+                            </span>
+                          </motion.div>
+                        </ArtworkCoverGlow>
                       </motion.div>
                     );
                   }
 
                   if (isFailed) {
                     return (
-                      <motion.div
-                        key={release.id}
-                        variants={releaseListItem}
-                        className="rounded-[20px] border border-white/[0.08] bg-surface/80 px-4 py-4 shadow-[0_18px_40px_rgba(0,0,0,0.7)] backdrop-blur-2xl"
-                      >
+                      <motion.div key={release.id} variants={releaseListItem} className="rounded-[20px]">
+                        <ArtworkCoverGlow
+                          artworkUrl={release.artwork_url}
+                          priority={thumbPriority}
+                          className="rounded-[20px] border border-white/[0.08] bg-surface/80 shadow-[0_18px_40px_rgba(0,0,0,0.7)] backdrop-blur-2xl"
+                        >
+                          <div className="px-4 py-4">
                         <div className="flex gap-3">
                           <ArtworkThumb
                             url={release.artwork_url}
@@ -370,7 +392,7 @@ function LibraryPageInner() {
                           <div className="flex shrink-0 flex-col items-end gap-2">
                             <button
                               type="button"
-                              className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[11px] font-medium ${statusMeta.badgeClassName} ${statusMeta.badgeGlowClassName ?? ""}`}
+                              className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[11px] font-medium ${statusMeta.badgeClassName} ${statusMeta.badgeGlowClassName ?? ""} ${statusMeta.badgeShimmerClassName ?? ""}`}
                               onClick={() => {
                                 setExpandedErrorId((prev) =>
                                   prev === release.id ? null : release.id
@@ -408,38 +430,46 @@ function LibraryPageInner() {
                             </motion.div>
                           )}
                         </AnimatePresence>
+                          </div>
+                        </ArtworkCoverGlow>
                       </motion.div>
                     );
                   }
 
                   return (
-                    <motion.button
-                      key={release.id}
-                      type="button"
-                      variants={releaseListItem}
-                      onClick={() => router.push(`/release/${release.id}`)}
-                      whileHover={{ scale: 0.995 }}
-                      whileTap={{ scale: 0.98 }}
-                      transition={{ type: "spring", stiffness: 280, damping: 24 }}
-                      className="glass-card flex w-full items-center gap-3 p-4 text-left"
-                    >
-                      <ArtworkThumb
-                        url={release.artwork_url}
-                        title={release.track_name}
+                    <motion.div key={release.id} variants={releaseListItem} className="rounded-[20px]">
+                      <ArtworkCoverGlow
+                        artworkUrl={release.artwork_url}
                         priority={thumbPriority}
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium">{release.track_name}</p>
-                        <p className="text-xs text-white/60">
-                          {new Date(release.created_at).toLocaleDateString("ru-RU")}
-                        </p>
-                      </div>
-                      <span
-                        className={`rounded-full border px-2 py-1 text-[10px] ${statusMeta.badgeClassName} ${statusMeta.badgeGlowClassName ?? ""}`}
+                        className="rounded-[20px]"
                       >
-                        {statusMeta.label}
-                      </span>
-                    </motion.button>
+                        <motion.button
+                          type="button"
+                          onClick={() => router.push(`/release/${release.id}`)}
+                          whileHover={{ scale: 0.995 }}
+                          whileTap={{ scale: 0.98 }}
+                          transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                          className="glass-card flex w-full items-center gap-3 p-4 text-left"
+                        >
+                          <ArtworkThumb
+                            url={release.artwork_url}
+                            title={release.track_name}
+                            priority={thumbPriority}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium">{release.track_name}</p>
+                            <p className="text-xs text-white/60">
+                              {new Date(release.created_at).toLocaleDateString("ru-RU")}
+                            </p>
+                          </div>
+                          <span
+                            className={`rounded-full border px-2 py-1 text-[10px] ${statusMeta.badgeClassName} ${statusMeta.badgeGlowClassName ?? ""} ${statusMeta.badgeShimmerClassName ?? ""}`}
+                          >
+                            {statusMeta.label}
+                          </span>
+                        </motion.button>
+                      </ArtworkCoverGlow>
+                    </motion.div>
                   );
                 })}
             </motion.div>

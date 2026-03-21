@@ -15,8 +15,14 @@ import { useCreateReleaseDraftStore } from "@/features/release/createRelease/sto
 import { hydrateFromReleaseId, initUserContextInStore } from "@/features/release/createRelease/actions";
 import { logClientError } from "@/lib/logger";
 import { firstRhfErrorMessage } from "@/lib/rhf-first-error";
-import { triggerHaptic } from "@/lib/telegram";
+import { MagneticButton } from "@/components/MagneticButton";
+import { hapticMap } from "@/lib/haptic-map";
 import { toast } from "sonner";
+import {
+  getMetadataFieldWarningFlags,
+  validateMetadata,
+  type ReleaseMetadata
+} from "@/lib/metadata-validator";
 import {
   GLASS_DATE_WRAP_BASE,
   GLASS_DATE_WRAP_ERROR_SOFT,
@@ -32,11 +38,17 @@ const artistInputBase =
 function borderForField(
   hasError: boolean,
   touched: boolean | undefined,
-  dirty: boolean | undefined
+  dirty: boolean | undefined,
+  hasGuidelineWarning?: boolean
 ): string {
-  if (!hasError) return "";
-  if (dirty) return GLASS_FIELD_ERROR_STRONG;
-  if (touched) return GLASS_FIELD_ERROR_SOFT;
+  if (hasError) {
+    if (dirty) return GLASS_FIELD_ERROR_STRONG;
+    if (touched) return GLASS_FIELD_ERROR_SOFT;
+    return "";
+  }
+  if (hasGuidelineWarning) {
+    return "border-amber-500/45 ring-1 ring-amber-400/20";
+  }
   return "";
 }
 
@@ -59,6 +71,7 @@ function CreateMetadataPageInner() {
 
   const storeMetadata = useCreateReleaseDraftStore((s) => s.metadata);
   const setMetadata = useCreateReleaseDraftStore((s) => s.setMetadata);
+  const storeTracks = useCreateReleaseDraftStore((s) => s.tracks);
 
   const [isHydrating, setIsHydrating] = useState(Boolean(releaseIdParam));
   const [hydrateError, setHydrateError] = useState<string | null>(null);
@@ -104,7 +117,7 @@ function CreateMetadataPageInner() {
     watch,
     setValue,
     reset,
-    formState: { errors, isDirty, dirtyFields, touchedFields }
+    formState: { errors, isDirty, dirtyFields, touchedFields, isSubmitting }
   } = useForm<CreateMetadata>({
     resolver: zodResolver(metadataSchema),
     mode: "onChange",
@@ -130,6 +143,21 @@ function CreateMetadataPageInner() {
 
   const values = watch();
   const lastSyncedValuesRef = useRef<string>("");
+
+  const metaForGuidelines = useMemo<ReleaseMetadata>(() => {
+    const rawTitles = storeTracks.map((t) => t.title);
+    const hasAnyTrackTitle = rawTitles.some((t) => t.trim().length > 0);
+    return {
+      artists: values.artists ?? [],
+      releaseTitle: values.releaseTitle ?? "",
+      trackTitles: hasAnyTrackTitle ? rawTitles : undefined
+    };
+  }, [values.artists, values.releaseTitle, storeTracks]);
+
+  const guidelineFieldFlags = useMemo(
+    () => getMetadataFieldWarningFlags(metaForGuidelines),
+    [metaForGuidelines]
+  );
 
   useEffect(() => {
     if (!isDirty) return;
@@ -161,12 +189,29 @@ function CreateMetadataPageInner() {
   }, []);
 
   const onSubmit = useCallback(async (data: CreateMetadata) => {
-    triggerHaptic("light");
+    hapticMap.impactLight();
+    const tracks = useCreateReleaseDraftStore.getState().tracks;
+    const rawTitles = tracks.map((t) => t.title);
+    const hasAnyTrackTitle = rawTitles.some((t) => t.trim().length > 0);
+    const meta: ReleaseMetadata = {
+      artists: data.artists,
+      releaseTitle: data.releaseTitle,
+      trackTitles: hasAnyTrackTitle ? rawTitles : undefined
+    };
+    const dsp = validateMetadata(meta);
+    if (!dsp.isValid) {
+      hapticMap.notificationError();
+      toast.error(
+        dsp.errors[0] ??
+          "Метаданные не проходят базовую проверку. Исправьте поля с подсказкой."
+      );
+    }
     setMetadata(data);
     router.push("/create/assets");
   }, [router, setMetadata]);
 
   const onInvalid = useCallback((formErrors: FieldErrors<CreateMetadata>) => {
+    hapticMap.notificationError();
     toast.error(firstRhfErrorMessage(formErrors));
   }, []);
 
@@ -185,6 +230,11 @@ function CreateMetadataPageInner() {
                 {hydrateError}
               </p>
             )}
+            <p className="rounded-[14px] border border-amber-500/25 bg-amber-950/25 px-3 py-2.5 text-[12px] leading-relaxed text-amber-100/90">
+              Пожалуйста, не используйте Caps Lock и эмодзи в названиях — так проходят требования
+              стриминговых площадок. Поля с замечаниями подсвечиваются жёлтым; вы всё равно можете
+              продолжить — финальное решение за модерацией.
+            </p>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/60">
@@ -211,7 +261,8 @@ function CreateMetadataPageInner() {
                         className={`${artistInputBase} ${borderForField(
                           Boolean(errors.artists?.[idx]?.name),
                           touchedFields.artists?.[idx]?.name,
-                          dirtyFields.artists?.[idx]?.name
+                          dirtyFields.artists?.[idx]?.name,
+                          guidelineFieldFlags.artists[idx] === true
                         )}`}
                       />
                       <div className="flex w-full shrink-0 items-center gap-2 sm:w-auto sm:justify-end">
@@ -256,7 +307,8 @@ function CreateMetadataPageInner() {
                 className={`${GLASS_FIELD_BASE} ${borderForField(
                   Boolean(errors.releaseTitle),
                   touchedFields.releaseTitle,
-                  dirtyFields.releaseTitle
+                  dirtyFields.releaseTitle,
+                  guidelineFieldFlags.releaseTitle
                 )}`}
                 placeholder="Основное название релиза"
               />
@@ -372,13 +424,13 @@ function CreateMetadataPageInner() {
               </button>
             </div>
 
-            <button
+            <MagneticButton
               type="submit"
-              disabled={!canProceed}
+              disabled={!canProceed || isSubmitting}
               className="mt-1 inline-flex h-[56px] w-full items-center justify-center rounded-[20px] bg-gradient-to-tr from-[#4F46E5] to-[#7C3AED] text-[16px] font-semibold text-white shadow-[0_14px_40px_rgba(88,80,236,0.6)] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
             >
-              Далее
-            </button>
+              {isSubmitting ? "Сохраняем…" : "Далее"}
+            </MagneticButton>
           </form>
         )}
       </div>

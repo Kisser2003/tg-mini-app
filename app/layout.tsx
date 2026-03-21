@@ -9,6 +9,7 @@ import { PageTransition } from "@/components/PageTransition";
 import { TelegramBootstrap } from "@/components/TelegramBootstrap";
 import { BottomNavHost } from "@/components/BottomNavHost";
 import { NoiseOverlay } from "@/components/NoiseOverlay";
+import { FeedbackButton } from "@/components/FeedbackButton";
 
 function supabasePreconnectOrigin(): string | null {
   const raw = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -22,10 +23,12 @@ function supabasePreconnectOrigin(): string | null {
 
 const inter = Inter({
   subsets: ["latin", "cyrillic"],
-  variable: "--font-inter"
+  variable: "--font-inter",
+  display: "swap"
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"),
   title: "omf mini app",
   description: "Премиальный Telegram Mini App для музыкальной дистрибуции"
 };
@@ -35,7 +38,8 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  viewportFit: "cover"
+  viewportFit: "cover",
+  themeColor: "#030303"
 };
 
 export default function RootLayout({
@@ -78,6 +82,7 @@ export default function RootLayout({
               </AppErrorBoundary>
             </AppProviders>
           </div>
+          <FeedbackButton />
           <BottomNavHost />
         </div>
       </body>

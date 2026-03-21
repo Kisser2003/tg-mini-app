@@ -1,3 +1,4 @@
+/** Сегмент URL после бакета: публичный URL содержит `storage/v1/object/public/audio/...` (см. public/sw-audio.js). */
 export function getReleaseAudioPath(userId: number, releaseId: string): string {
   return `${userId}/${releaseId}/audio.wav`;
 }
