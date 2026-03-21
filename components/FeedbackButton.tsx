@@ -40,7 +40,9 @@ export function FeedbackButton() {
 
       const data = (await res.json()) as { ok?: boolean; error?: string };
       if (!res.ok || !data.ok) {
-        throw new Error(data.error ?? `HTTP ${res.status}`);
+        throw new Error(
+          data.error ?? "Не удалось отправить отзыв. Проверьте соединение и попробуйте ещё раз."
+        );
       }
       toast.success("Спасибо! Мы прочитаем отзыв.");
       setOpen(false);

@@ -37,6 +37,7 @@ export async function rejectRelease(
   const msg = comment.trim() || "Отклонено модератором";
   return updateReleaseStatus(releaseId, {
     status: "failed",
-    error_message: msg
+    error_message: msg,
+    admin_notes: msg
   });
 }

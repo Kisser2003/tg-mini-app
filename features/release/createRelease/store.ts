@@ -26,6 +26,13 @@ export type CreateReleaseDraftState = {
   trackFiles: (File | null)[];
   /** URL аудио из БД после резюме черновика (подсказки UX; не заменяют File при отправке). */
   trackAudioUrlsFromDb: (string | null)[];
+  /**
+   * WAV уже загружены в Storage и записаны в release_tracks на шаге «Треки»
+   * (чтобы не дублировать upload на «Проверке»).
+   */
+  tracksWavSyncedToDb: boolean;
+  /** Идёт загрузка WAV в Storage (блокирует «Отправить» на проверке). */
+  tracksUploadInProgress: boolean;
 
   // submission / status
   submitError: string | null;
@@ -50,6 +57,9 @@ type CreateReleaseDraftActions = {
   setTracks: (tracks: CreateTrack[]) => void;
   setTrackFile: (index: number, file: File | null) => void;
   syncTrackFilesLength: (len: number) => void;
+  setTrackAudioUrlAt: (index: number, url: string | null) => void;
+  setTracksWavSyncedToDb: (value: boolean) => void;
+  setTracksUploadInProgress: (value: boolean) => void;
 
   setSubmitStatus: (status: SubmissionStatus) => void;
   setSubmitStage: (stage: SubmissionStage) => void;
@@ -140,6 +150,45 @@ function areTracksEqual(current: CreateTrack[], next: CreateTrack[]) {
   return true;
 }
 
+function areTrackFilesEqualLengthAndRefs(
+  a: (File | null)[],
+  b: (File | null)[]
+): boolean {
+  if (a.length !== b.length) return false;
+  return a.every((f, i) => f === b[i]);
+}
+
+function areTrackUrlsEqualLengthAndValues(
+  a: (string | null)[],
+  b: (string | null)[]
+): boolean {
+  if (a.length !== b.length) return false;
+  return a.every((u, i) => u === b[i]);
+}
+
+/** Для сингла: один трек, title = название релиза; усечь файлы/URL до длины 1. */
+function syncStateForSingleRelease(
+  state: CreateReleaseDraftState,
+  nextMetadata: CreateMetadata
+): Pick<
+  CreateReleaseDraftState,
+  "tracks" | "trackFiles" | "trackAudioUrlsFromDb"
+> {
+  const prev0 = state.tracks[0] ?? { title: "", explicit: false };
+  const nextTracks: CreateTrack[] = [
+    { ...prev0, title: nextMetadata.releaseTitle }
+  ];
+  const nextTrackFiles = state.trackFiles.slice(0, 1);
+  while (nextTrackFiles.length < 1) nextTrackFiles.push(null);
+  const nextUrls = state.trackAudioUrlsFromDb.slice(0, 1);
+  while (nextUrls.length < 1) nextUrls.push(null);
+  return {
+    tracks: nextTracks,
+    trackFiles: nextTrackFiles,
+    trackAudioUrlsFromDb: nextUrls
+  };
+}
+
 export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
   persist(
     (set) => {
@@ -158,6 +207,8 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
         tracks: [{ title: "", explicit: false }],
         trackFiles: [null],
         trackAudioUrlsFromDb: [],
+        tracksWavSyncedToDb: false,
+        tracksUploadInProgress: false,
 
         submitError: null,
         submitStatus: "idle",
@@ -187,10 +238,43 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
         setMetadata: (patch) =>
           set((state) => {
             const nextMetadata = { ...state.metadata, ...patch };
-            if (areMetadataEqual(state.metadata, nextMetadata)) {
+
+            let nextTracks = state.tracks;
+            let nextTrackFiles = state.trackFiles;
+            let nextUrls = state.trackAudioUrlsFromDb;
+
+            if (nextMetadata.releaseType === "single") {
+              const synced = syncStateForSingleRelease(state, nextMetadata);
+              nextTracks = synced.tracks;
+              nextTrackFiles = synced.trackFiles;
+              nextUrls = synced.trackAudioUrlsFromDb;
+            }
+
+            const metadataSame = areMetadataEqual(state.metadata, nextMetadata);
+            const tracksSame = areTracksEqual(state.tracks, nextTracks);
+            const filesSame = areTrackFilesEqualLengthAndRefs(
+              state.trackFiles,
+              nextTrackFiles
+            );
+            const urlsSame = areTrackUrlsEqualLengthAndValues(
+              state.trackAudioUrlsFromDb,
+              nextUrls
+            );
+
+            if (metadataSame && tracksSame && filesSame && urlsSame) {
               return state;
             }
-            return { metadata: nextMetadata, ...stamp() };
+
+            const tracksOrFilesChanged = !tracksSame || !filesSame || !urlsSame;
+
+            return {
+              metadata: nextMetadata,
+              tracks: nextTracks,
+              trackFiles: nextTrackFiles,
+              trackAudioUrlsFromDb: nextUrls,
+              tracksWavSyncedToDb: tracksOrFilesChanged ? false : state.tracksWavSyncedToDb,
+              ...stamp()
+            };
           }),
         setArtworkUrl: (url) =>
           set((state) => {
@@ -218,8 +302,27 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
             const next = [...prev];
             while (next.length < trackCount) next.push(null);
             next[index] = file;
-            return { trackFiles: next };
+            return {
+              trackFiles: next,
+              tracksWavSyncedToDb: false
+            };
           }),
+        setTrackAudioUrlAt: (index, url) =>
+          set((state) => {
+            const next = [...state.trackAudioUrlsFromDb];
+            while (next.length <= index) next.push(null);
+            if (next[index] === url) return state;
+            next[index] = url;
+            return { trackAudioUrlsFromDb: next, ...stamp() };
+          }),
+        setTracksWavSyncedToDb: (value) =>
+          set((state) =>
+            state.tracksWavSyncedToDb === value ? state : { tracksWavSyncedToDb: value }
+          ),
+        setTracksUploadInProgress: (value) =>
+          set((state) =>
+            state.tracksUploadInProgress === value ? state : { tracksUploadInProgress: value }
+          ),
         syncTrackFilesLength: (len) =>
           set((state) => {
             const prev = state.trackFiles;
@@ -248,6 +351,8 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
             tracks: [{ title: "", explicit: false }],
             trackFiles: [null],
             trackAudioUrlsFromDb: [],
+            tracksWavSyncedToDb: false,
+            tracksUploadInProgress: false,
             submitError: null,
             submitStatus: "idle",
             submitStage: "idle",
@@ -266,6 +371,8 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
             tracks: [{ title: "", explicit: false }],
             trackFiles: [null],
             trackAudioUrlsFromDb: [],
+            tracksWavSyncedToDb: false,
+            tracksUploadInProgress: false,
             submitError: null,
             submitStatus: "idle",
             submitStage: "idle",
@@ -283,6 +390,8 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
             tracks: [{ title: "", explicit: false }],
             trackFiles: [null],
             trackAudioUrlsFromDb: [],
+            tracksWavSyncedToDb: false,
+            tracksUploadInProgress: false,
             submitError: null,
             lastModified: null,
             hasHydrated: true
@@ -299,22 +408,45 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
 
         resumeFromDraft: (payload) =>
           set(() => {
-            const len = payload.tracks.length;
+            const isSingle = payload.metadata.releaseType === "single";
+
+            let tracks: CreateTrack[] = payload.tracks;
+            let len = tracks.length;
+
+            if (isSingle) {
+              const first = tracks[0] ?? { title: "", explicit: false };
+              tracks = [{ ...first, title: payload.metadata.releaseTitle }];
+              len = 1;
+            }
+
             const trackFiles: (File | null)[] = [];
             for (let i = 0; i < len; i += 1) trackFiles.push(null);
-            const trackAudioUrlsFromDb =
-              payload.trackAudioUrlsFromDb && payload.trackAudioUrlsFromDb.length === len
-                ? payload.trackAudioUrlsFromDb
-                : Array.from({ length: len }, () => null);
+
+            let trackAudioUrlsFromDb: (string | null)[];
+            if (isSingle) {
+              const u0 =
+                payload.trackAudioUrlsFromDb && payload.trackAudioUrlsFromDb.length > 0
+                  ? payload.trackAudioUrlsFromDb[0] ?? null
+                  : null;
+              trackAudioUrlsFromDb = [u0];
+            } else {
+              trackAudioUrlsFromDb =
+                payload.trackAudioUrlsFromDb && payload.trackAudioUrlsFromDb.length === len
+                  ? payload.trackAudioUrlsFromDb
+                  : Array.from({ length: len }, () => null);
+            }
+
             return {
               releaseId: payload.releaseId,
               clientRequestId: payload.clientRequestId,
               metadata: payload.metadata,
               artworkUrl: payload.artworkUrl,
-              tracks: payload.tracks,
+              tracks,
               artworkFile: null,
               trackFiles,
               trackAudioUrlsFromDb,
+              tracksWavSyncedToDb: false,
+              tracksUploadInProgress: false,
               submitError: null,
               submitStatus: "idle" as SubmissionStatus,
               submitStage: "idle" as SubmissionStage,
@@ -349,6 +481,7 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
         artworkUrl: state.artworkUrl,
         tracks: state.tracks,
         trackAudioUrlsFromDb: state.trackAudioUrlsFromDb,
+        tracksWavSyncedToDb: state.tracksWavSyncedToDb,
         lastModified: state.lastModified,
         successSummary: state.successSummary
       })

@@ -10,19 +10,24 @@ import {
 } from "react";
 import Image from "next/image";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
-import { Disc3 } from "lucide-react";
+import { AlertCircle, Disc3, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import { ArtworkCoverGlow } from "@/components/ArtworkCoverGlow";
-import { GlassCard } from "@/components/GlassCard";
 import { PullRefreshBrand } from "@/components/PullRefreshBrand";
 import { LibraryReleaseSkeletonGrid } from "@/components/ui/Skeleton";
 import { debugInit } from "@/lib/debug";
 import { resumeDraftFromRelease } from "@/features/release/createRelease/actions";
 import { useCreateReleaseDraftStore } from "@/features/release/createRelease/store";
-import { getReleaseStatusMeta, normalizeReleaseStatus } from "@/lib/release-status";
+import {
+  getReleaseStatusMeta,
+  normalizeReleaseStatus,
+  type CanonicalReleaseStatus,
+  type ReleaseStatusMeta
+} from "@/lib/release-status";
 import { supabase } from "@/lib/supabase";
 import { getTelegramUserId, initTelegramWebApp, triggerHaptic } from "@/lib/telegram";
+import { USER_REQUEST_TIMEOUT_MESSAGE } from "@/lib/errors";
 import { withRequestTimeout } from "@/lib/withRequestTimeout";
 import { toast } from "sonner";
 import type { ReleaseStatus } from "@/lib/db-enums";
@@ -34,27 +39,94 @@ type ReleaseRow = {
   status: ReleaseStatus;
   created_at: string;
   error_message?: string | null;
+  admin_notes?: string | null;
+  draft_upload_started?: boolean | null;
 };
 
 const ARTWORK_SIZES = "(max-width: 768px) 100vw, 33vw";
 const RELEASES_LIST_TIMEOUT_MS = 12000;
 
+type LibraryStatusFilter = "all" | "processing" | "ready" | "failed";
+
+const STATUS_FILTER_CHIPS: { id: LibraryStatusFilter; label: string }[] = [
+  { id: "all", label: "Все" },
+  { id: "processing", label: "На модерации" },
+  { id: "ready", label: "Готовы" },
+  { id: "failed", label: "Отклонены" }
+];
+
 const releaseListContainer: Variants = {
   hidden: { opacity: 0 },
   show: {
-    opacity: 1,
-    transition: { staggerChildren: 0.05 }
+    opacity: 1
   }
 };
 
 const releaseListItem: Variants = {
-  hidden: { opacity: 0, y: 8 },
-  show: {
+  hidden: { opacity: 0, y: 10 },
+  show: (index: number) => ({
     opacity: 1,
     y: 0,
-    transition: { type: "spring", stiffness: 280, damping: 24 }
-  }
+    transition: {
+      delay: (typeof index === "number" ? index : 0) * 0.05,
+      type: "spring",
+      stiffness: 280,
+      damping: 26
+    }
+  })
 };
+
+/** TWA Haptic: `window.Telegram.WebApp.HapticFeedback` */
+function twaImpact(style: "light" | "medium"): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.(style);
+  } catch {
+    /* ignore */
+  }
+}
+
+const LIBRARY_BADGE_GLOW: Record<CanonicalReleaseStatus, string> = {
+  draft: "shadow-[0_0_32px_-6px_rgba(161,161,170,0.55)]",
+  pending: "shadow-[0_0_32px_-6px_rgba(139,92,246,0.5)]",
+  processing: "",
+  ready: "shadow-[0_0_32px_-6px_rgba(34,197,94,0.55)]",
+  failed: "shadow-[0_0_32px_-6px_rgba(251,113,133,0.5)]",
+  unknown: "shadow-[0_0_32px_-6px_rgba(14,165,233,0.45)]"
+};
+
+function LibraryStatusBadge({
+  statusMeta,
+  children,
+  className = ""
+}: {
+  statusMeta: ReleaseStatusMeta;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  const { canonical } = statusMeta;
+  const glow = LIBRARY_BADGE_GLOW[canonical];
+  const base = `${statusMeta.badgeClassName} ${statusMeta.badgeGlowClassName ?? ""} ${statusMeta.badgeShimmerClassName ?? ""} backdrop-blur-[10px] ${glow} ${className}`;
+
+  if (canonical === "processing") {
+    return (
+      <motion.span
+        className={base}
+        animate={{
+          boxShadow: [
+            "0 0 28px rgba(245,158,11,0.3)",
+            "0 0 48px rgba(245,158,11,0.7)",
+            "0 0 28px rgba(245,158,11,0.3)"
+          ]
+        }}
+        transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+      >
+        {children}
+      </motion.span>
+    );
+  }
+  return <span className={base}>{children}</span>;
+}
 
 function ArtworkThumb({
   url,
@@ -78,7 +150,7 @@ function ArtworkThumb({
         />
       ) : (
         <div className="flex h-full w-full items-center justify-center text-[10px] text-white/50">
-          NO ART
+          Нет обложки
         </div>
       )}
     </div>
@@ -90,7 +162,9 @@ async function fetchReleasesForUser([, uid]: readonly ["releases", number]): Pro
   const queryPromise = (async () => {
     const { data, error: dbError } = await supabase
       .from("releases")
-      .select("id, track_name, artwork_url, status, error_message, created_at")
+      .select(
+        "id, track_name, artwork_url, status, error_message, created_at, admin_notes, draft_upload_started"
+      )
       .eq("user_id", uid)
       .order("created_at", { ascending: false });
     if (dbError) throw dbError;
@@ -100,7 +174,7 @@ async function fetchReleasesForUser([, uid]: readonly ["releases", number]): Pro
   const rows = await withRequestTimeout(
     queryPromise,
     RELEASES_LIST_TIMEOUT_MS,
-    `Запрос превысил таймаут (${RELEASES_LIST_TIMEOUT_MS} мс).`
+    USER_REQUEST_TIMEOUT_MESSAGE
   );
   debugInit("library", "loadReleases success", { count: rows.length });
   return rows;
@@ -112,6 +186,11 @@ function LibraryPageInner() {
   const [userId, setUserId] = useState<number | null>(null);
   const [expandedErrorId, setExpandedErrorId] = useState<string | null>(null);
   const [resumingId, setResumingId] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<LibraryStatusFilter>("all");
+  const [adminNotesModal, setAdminNotesModal] = useState<{
+    title: string;
+    body: string;
+  } | null>(null);
 
   useEffect(() => {
     debugInit("library", "init start");
@@ -132,6 +211,11 @@ function LibraryPageInner() {
   );
 
   const releases = useMemo(() => data ?? [], [data]);
+
+  const filteredReleases = useMemo(() => {
+    if (statusFilter === "all") return releases;
+    return releases.filter((r) => normalizeReleaseStatus(r.status) === statusFilter);
+  }, [releases, statusFilter]);
   const errorMessage =
     error instanceof Error ? error.message : error != null ? String(error) : null;
 
@@ -142,13 +226,13 @@ function LibraryPageInner() {
   }, [searchParams, mutate, router]);
 
   const handleCreate = () => {
-    triggerHaptic("light");
+    twaImpact("light");
     router.push("/create/metadata");
   };
 
   const handleResumeDraft = useCallback(
     async (release: ReleaseRow) => {
-      triggerHaptic("light");
+      twaImpact("medium");
       setResumingId(release.id);
       try {
         const path = await resumeDraftFromRelease(release.id);
@@ -187,16 +271,19 @@ function LibraryPageInner() {
     <div className="min-h-[100dvh] bg-background px-5 py-6 pb-10 text-text">
       <PullRefreshBrand />
       <div className="mx-auto flex w-full max-w-[440px] flex-col gap-6 font-sans">
-        <GlassCard className="p-5">
+        <div className="sticky top-0 z-40 -mx-5 border-b border-white/[0.06] bg-black/40 px-5 py-5 backdrop-blur-xl backdrop-saturate-150">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <h1 className="text-[20px] font-semibold tracking-tight">Мои релизы</h1>
+            <h1 className="min-w-0 text-[20px] font-semibold tracking-tight">Мои релизы</h1>
             <div className="flex flex-wrap items-center gap-2">
               <motion.button
                 type="button"
                 whileHover={{ scale: 0.99 }}
                 whileTap={{ scale: 0.98 }}
                 transition={{ type: "spring", stiffness: 320, damping: 22 }}
-                onClick={() => void mutate(undefined, { revalidate: true })}
+                onClick={() => {
+                  twaImpact("light");
+                  void mutate(undefined, { revalidate: true });
+                }}
                 disabled={isValidating}
                 className="rounded-full border border-white/20 bg-white/5 px-3 py-1.5 text-xs text-white/80 disabled:opacity-60"
               >
@@ -211,7 +298,32 @@ function LibraryPageInner() {
               </button>
             </div>
           </div>
-        </GlassCard>
+        </div>
+
+        {hasReleases && (
+          <div className="-mx-1 flex gap-2 overflow-x-auto pb-1 pt-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {STATUS_FILTER_CHIPS.map((chip) => {
+              const active = statusFilter === chip.id;
+              return (
+                <button
+                  key={chip.id}
+                  type="button"
+                  onClick={() => {
+                    twaImpact("light");
+                    setStatusFilter(chip.id);
+                  }}
+                  className={`shrink-0 snap-start rounded-full border px-3.5 py-1.5 text-[12px] font-medium transition-colors ${
+                    active
+                      ? "border-primary/50 bg-primary/20 text-white"
+                      : "border-white/15 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white/90"
+                  }`}
+                >
+                  {chip.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         <div className="grid grid-cols-3 gap-2">
           <div className="rounded-[16px] border border-emerald-500/30 bg-emerald-500/10 px-3 py-3 shadow-[0_0_15px_rgba(34,197,94,0.3)]">
@@ -281,7 +393,13 @@ function LibraryPageInner() {
             </div>
           )}
 
-          {userId != null && hasReleases && (
+          {userId != null && hasReleases && filteredReleases.length === 0 && (
+            <p className="text-center text-[13px] text-text-muted">
+              Нет релизов с выбранным статусом. Смените фильтр выше.
+            </p>
+          )}
+
+          {userId != null && hasReleases && filteredReleases.length > 0 && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -293,7 +411,7 @@ function LibraryPageInner() {
               initial="hidden"
               animate="show"
             >
-              {releases.map((release, listIndex) => {
+              {filteredReleases.map((release, listIndex) => {
                   const statusMeta = getReleaseStatusMeta(release.status);
                   const normalizedStatus = normalizeReleaseStatus(release.status);
                   const isDraft = normalizedStatus === "draft";
@@ -309,7 +427,12 @@ function LibraryPageInner() {
 
                   if (isDraft) {
                     return (
-                      <motion.div key={release.id} variants={releaseListItem} className="rounded-[20px]">
+                      <motion.div
+                        key={release.id}
+                        variants={releaseListItem}
+                        custom={listIndex}
+                        className="rounded-[20px]"
+                      >
                         <ArtworkCoverGlow
                           artworkUrl={release.artwork_url}
                           priority={thumbPriority}
@@ -352,11 +475,14 @@ function LibraryPageInner() {
                                 })}
                               </p>
                             </div>
-                            <span
-                              className={`inline-flex shrink-0 items-center self-start rounded-full border px-3 py-1 text-[11px] font-medium ${statusMeta.badgeClassName} ${statusMeta.badgeGlowClassName ?? ""} ${statusMeta.badgeShimmerClassName ?? ""}`}
+                            <LibraryStatusBadge
+                              statusMeta={statusMeta}
+                              className="inline-flex max-w-[min(52%,200px)] shrink-0 items-center justify-center self-start rounded-full border px-3 py-1 text-center text-[10px] font-medium leading-tight"
                             >
-                              {statusMeta.label}
-                            </span>
+                              {release.draft_upload_started
+                                ? "Черновик (не завершено)"
+                                : statusMeta.label}
+                            </LibraryStatusBadge>
                           </motion.div>
                         </ArtworkCoverGlow>
                       </motion.div>
@@ -365,7 +491,17 @@ function LibraryPageInner() {
 
                   if (isFailed) {
                     return (
-                      <motion.div key={release.id} variants={releaseListItem} className="rounded-[20px]">
+                      <motion.div
+                        key={release.id}
+                        variants={releaseListItem}
+                        custom={listIndex}
+                        className="rounded-[20px]"
+                        onClick={(e) => {
+                          const el = e.target as HTMLElement;
+                          if (el.closest("button")) return;
+                          twaImpact("medium");
+                        }}
+                      >
                         <ArtworkCoverGlow
                           artworkUrl={release.artwork_url}
                           priority={thumbPriority}
@@ -390,20 +526,45 @@ function LibraryPageInner() {
                             </p>
                           </div>
                           <div className="flex shrink-0 flex-col items-end gap-2">
-                            <button
-                              type="button"
-                              className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[11px] font-medium ${statusMeta.badgeClassName} ${statusMeta.badgeGlowClassName ?? ""} ${statusMeta.badgeShimmerClassName ?? ""}`}
-                              onClick={() => {
-                                setExpandedErrorId((prev) =>
-                                  prev === release.id ? null : release.id
-                                );
-                              }}
-                            >
-                              {statusMeta.label}
-                              <span className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full border border-current text-[9px]">
-                                i
-                              </span>
-                            </button>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-rose-500/35 bg-rose-500/10 text-rose-200/95 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-md transition-colors hover:bg-rose-500/20"
+                                aria-label="Комментарий модератора"
+                                onClick={() => {
+                                  triggerHaptic("light");
+                                  const notes = release.admin_notes?.trim();
+                                  setAdminNotesModal({
+                                    title: release.track_name,
+                                    body:
+                                      notes && notes.length > 0
+                                        ? notes
+                                        : "Свяжитесь с поддержкой для уточнения деталей"
+                                  });
+                                }}
+                              >
+                                <AlertCircle className="h-[18px] w-[18px]" strokeWidth={2} />
+                              </button>
+                              <button
+                                type="button"
+                                className="inline-flex items-center gap-1 rounded-full border-0 bg-transparent p-0"
+                                onClick={() => {
+                                  setExpandedErrorId((prev) =>
+                                    prev === release.id ? null : release.id
+                                  );
+                                }}
+                              >
+                                <LibraryStatusBadge
+                                  statusMeta={statusMeta}
+                                  className="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[11px] font-medium"
+                                >
+                                  {statusMeta.label}
+                                  <span className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full border border-current text-[9px]">
+                                    i
+                                  </span>
+                                </LibraryStatusBadge>
+                              </button>
+                            </div>
                             <button
                               type="button"
                               onClick={() => {
@@ -437,7 +598,12 @@ function LibraryPageInner() {
                   }
 
                   return (
-                    <motion.div key={release.id} variants={releaseListItem} className="rounded-[20px]">
+                    <motion.div
+                      key={release.id}
+                      variants={releaseListItem}
+                      custom={listIndex}
+                      className="rounded-[20px]"
+                    >
                       <ArtworkCoverGlow
                         artworkUrl={release.artwork_url}
                         priority={thumbPriority}
@@ -445,7 +611,10 @@ function LibraryPageInner() {
                       >
                         <motion.button
                           type="button"
-                          onClick={() => router.push(`/release/${release.id}`)}
+                          onClick={() => {
+                            twaImpact("medium");
+                            router.push(`/release/${release.id}`);
+                          }}
                           whileHover={{ scale: 0.995 }}
                           whileTap={{ scale: 0.98 }}
                           transition={{ type: "spring", stiffness: 300, damping: 30 }}
@@ -462,11 +631,12 @@ function LibraryPageInner() {
                               {new Date(release.created_at).toLocaleDateString("ru-RU")}
                             </p>
                           </div>
-                          <span
-                            className={`rounded-full border px-2 py-1 text-[10px] ${statusMeta.badgeClassName} ${statusMeta.badgeGlowClassName ?? ""} ${statusMeta.badgeShimmerClassName ?? ""}`}
+                          <LibraryStatusBadge
+                            statusMeta={statusMeta}
+                            className="rounded-full border px-2 py-1 text-[10px]"
                           >
                             {statusMeta.label}
-                          </span>
+                          </LibraryStatusBadge>
                         </motion.button>
                       </ArtworkCoverGlow>
                     </motion.div>
@@ -477,6 +647,51 @@ function LibraryPageInner() {
           )}
         </div>
       </div>
+
+      <AnimatePresence>
+        {adminNotesModal && (
+          <motion.div
+            key="admin-notes-modal"
+            className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 p-4 backdrop-blur-[2px] sm:items-center"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setAdminNotesModal(null)}
+          >
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="admin-notes-title"
+              className="w-full max-w-[400px] rounded-[22px] border border-white/[0.1] bg-surface/95 p-5 shadow-[0_24px_60px_rgba(0,0,0,0.85)] backdrop-blur-2xl"
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 10 }}
+              transition={{ type: "spring", stiffness: 320, damping: 28 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <h2 id="admin-notes-title" className="text-[15px] font-semibold leading-snug text-white">
+                  Комментарий модератора
+                </h2>
+                <button
+                  type="button"
+                  className="rounded-full p-1 text-white/45 transition-colors hover:bg-white/10 hover:text-white/80"
+                  aria-label="Закрыть"
+                  onClick={() => setAdminNotesModal(null)}
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              <p className="mt-3 whitespace-pre-wrap break-words text-[13px] leading-relaxed text-white/88">
+                {adminNotesModal.body}
+              </p>
+              <p className="mt-3 truncate text-[11px] text-text-muted" title={adminNotesModal.title}>
+                {adminNotesModal.title}
+              </p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

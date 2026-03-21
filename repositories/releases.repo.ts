@@ -60,6 +60,10 @@ export type ReleaseRecord = {
   status: ReleaseStatus;
   created_at: string;
   error_message?: string | null;
+  /** Комментарий модератора при отклонении (показ в библиотеке). */
+  admin_notes?: string | null;
+  /** Пользователь начал загрузку WAV, не довёл до конца. */
+  draft_upload_started?: boolean;
 } & ReleaseStep2Payload;
 
 const releaseStep1Schema = z.object({
@@ -310,6 +314,8 @@ export async function updateRelease(
     artwork_url?: string | null;
     status?: ReleaseStatus;
     error_message?: string | null;
+    admin_notes?: string | null;
+    draft_upload_started?: boolean;
   }
 ): Promise<ReleaseRecord> {
   const base: Partial<ReleaseStep1Payload & ReleaseStep2Payload> = {};
@@ -464,7 +470,7 @@ async function finalizeReleaseFallback(params: SubmitReleaseParams): Promise<Rel
     return row;
   }
 
-  if (row.status !== "draft") {
+  if (row.status !== "draft" && row.status !== "pending") {
     throw new Error(`Нельзя отправить релиз в модерацию из статуса «${row.status}».`);
   }
 
@@ -511,7 +517,7 @@ export async function ensureReleaseProcessing(
     return row;
   }
 
-  if (row.status !== "draft") {
+  if (row.status !== "draft" && row.status !== "pending") {
     throw new Error(`Нельзя отправить релиз в модерацию из статуса «${row.status}».`);
   }
 
@@ -521,6 +527,7 @@ export async function ensureReleaseProcessing(
       .update({ status: "processing", error_message: null })
       .eq("id", parsed.data.releaseId)
       .eq("client_request_id", parsed.data.clientRequestId)
+      .in("status", ["draft", "pending"])
       .select("*");
   });
 
@@ -846,12 +853,15 @@ export async function updateReleaseStatus(
   args: {
     status: Extract<ReleaseStatus, "ready" | "failed">;
     error_message?: string | null;
+    /** Текст для пользователя в библиотеке (при отклонении). */
+    admin_notes?: string | null;
   }
 ): Promise<ReleaseRecord> {
   if (args.status === "ready") {
-    return updateRelease(id, { status: "ready", error_message: null });
+    return updateRelease(id, { status: "ready", error_message: null, admin_notes: null });
   }
   const msg =
     (args.error_message && args.error_message.trim()) || "Отклонено модератором";
-  return updateRelease(id, { status: "failed", error_message: msg });
+  const notes = (args.admin_notes && args.admin_notes.trim()) || msg;
+  return updateRelease(id, { status: "failed", error_message: msg, admin_notes: notes });
 }

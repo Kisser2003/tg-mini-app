@@ -25,6 +25,7 @@ import type { ReleaseRecord, ReleaseStep1Payload, ReleaseTrackRow } from "@/repo
 import type { CreateMetadata, CreateTrack } from "./types";
 import { isAssetsComplete, isMetadataComplete, isTracksComplete, metadataSchema, tracksSchema } from "./schemas";
 import { useCreateReleaseDraftStore } from "./store";
+import { supabase } from "@/lib/supabase";
 
 /** Защита от двойного сабмита (двойной тап в Telegram). */
 let submitTracksInFlight = false;
@@ -392,6 +393,179 @@ export async function uploadArtworkForDraft(file: File): Promise<string | null> 
   }
 }
 
+/**
+ * Сохраняет текущие метаданные (и обложку, если есть) в строку `releases` в БД.
+ * При отсутствии `releaseId` создаёт черновик через `ensureDraftRelease`.
+ */
+export async function saveDraftAction(): Promise<{ ok: true } | { ok: false; message: string }> {
+  initUserContextInStore();
+  const store = useCreateReleaseDraftStore.getState();
+  const parsed = metadataSchema.safeParse(store.metadata);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      message: parsed.error.issues[0]?.message ?? "Заполните паспорт релиза корректно."
+    };
+  }
+  if (!store.userId) {
+    return { ok: false, message: "Откройте приложение из Telegram." };
+  }
+  try {
+    store.setSubmitError(null);
+    if (!store.releaseId) {
+      const draft = await ensureDraftRelease();
+      if (!draft) {
+        return {
+          ok: false,
+          message: useCreateReleaseDraftStore.getState().submitError ?? "Не удалось создать черновик."
+        };
+      }
+    }
+    const rid = useCreateReleaseDraftStore.getState().releaseId;
+    if (!rid) {
+      return { ok: false, message: "Нет идентификатора релиза." };
+    }
+    const m = parsed.data;
+    const mainArtist = m.artists[0]?.name ?? "";
+    const latest = useCreateReleaseDraftStore.getState();
+    await updateRelease(rid, {
+      artist_name: mainArtist,
+      track_name: m.releaseTitle,
+      release_type: m.releaseType,
+      genre: m.genre,
+      release_date: m.releaseDate,
+      explicit: m.explicit,
+      ...(latest.artworkUrl ? { artwork_url: latest.artworkUrl } : {})
+    });
+    return { ok: true };
+  } catch (e: unknown) {
+    const msg = formatErrorMessage(e, "Не удалось сохранить черновик.");
+    return { ok: false, message: msg };
+  }
+}
+
+/** Последний черновик пользователя (для предложения «Продолжить»). */
+export async function fetchLatestDraftReleaseIdForUser(userId: number): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("releases")
+    .select("id")
+    .eq("user_id", userId)
+    .in("status", ["draft", "pending"])
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error || !data) return null;
+  return data.id as string;
+}
+
+async function postDraftUploadState(
+  releaseId: string,
+  phase: "start" | "complete" | "failed"
+): Promise<boolean> {
+  const initData =
+    typeof window !== "undefined" ? getTelegramWebApp()?.initData?.trim() ?? "" : "";
+  const res = await fetch("/api/releases/draft-upload-state", {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      ...(initData.length > 0 ? { "X-Telegram-Init-Data": initData } : {})
+    },
+    body: JSON.stringify({ releaseId, phase })
+  });
+  let body: { ok?: boolean } = {};
+  try {
+    body = (await res.json()) as typeof body;
+  } catch {
+    return false;
+  }
+  return res.ok && Boolean(body.ok);
+}
+
+/**
+ * Загрузка WAV на шаге «Треки» с прогрессом; после успеха `tracksWavSyncedToDb = true`.
+ */
+export async function uploadTracksForDraftStep(options: {
+  onTrackProgress: (index: number, percent: number) => void;
+}): Promise<boolean> {
+  initUserContextInStore();
+  const store = useCreateReleaseDraftStore.getState();
+  if (!store.userId || !store.releaseId) {
+    store.setSubmitError("Нет данных релиза для загрузки треков.");
+    return false;
+  }
+  const parsedTracks = tracksSchema.safeParse({ tracks: store.tracks });
+  if (!parsedTracks.success) {
+    store.setSubmitError(parsedTracks.error.issues[0]?.message ?? "Проверьте данные треков.");
+    return false;
+  }
+  const { tracks } = parsedTracks.data;
+  const { trackFiles } = store;
+  if (trackFiles.length !== tracks.length || tracks.some((_t, i) => !trackFiles[i])) {
+    store.setSubmitError("Загрузите WAV для каждого трека.");
+    return false;
+  }
+  const releaseId = store.releaseId;
+  const userId = store.userId;
+
+  useCreateReleaseDraftStore.getState().setTracksUploadInProgress(true);
+  try {
+    store.setSubmitError(null);
+    const started = await postDraftUploadState(releaseId, "start");
+    if (!started) {
+      store.setSubmitError("Не удалось зафиксировать начало загрузки на сервере.");
+      return false;
+    }
+
+    try {
+      for (let index = 0; index < tracks.length; index += 1) {
+        const file = trackFiles[index]!;
+        const track = tracks[index];
+        options.onTrackProgress(index, 0);
+        const audioUrl = await uploadReleaseTrackAudio({
+          userId,
+          releaseId,
+          trackIndex: index,
+          file,
+          options: {
+            markReleaseFailedOnError: { releaseId },
+            onProgress: (pct) => options.onTrackProgress(index, pct)
+          }
+        });
+        await addReleaseTrack({
+          releaseId,
+          index,
+          title: track.title,
+          explicit: Boolean(track.explicit),
+          audioUrl
+        });
+        useCreateReleaseDraftStore.getState().setTrackAudioUrlAt(index, audioUrl);
+      }
+    } catch (e: unknown) {
+      void postDraftUploadState(releaseId, "failed");
+      useCreateReleaseDraftStore
+        .getState()
+        .setSubmitError(formatErrorMessage(e, "Ошибка загрузки WAV."));
+      return false;
+    }
+
+    const completed = await postDraftUploadState(releaseId, "complete");
+    if (!completed) {
+      void postDraftUploadState(releaseId, "failed");
+      useCreateReleaseDraftStore
+        .getState()
+        .setSubmitError(
+          "Файлы загружены, но не удалось обновить статус релиза. Попробуйте ещё раз."
+        );
+      return false;
+    }
+    useCreateReleaseDraftStore.getState().setTracksWavSyncedToDb(true);
+    return true;
+  } finally {
+    useCreateReleaseDraftStore.getState().setTracksUploadInProgress(false);
+  }
+}
+
 export async function submitTracksAndFinalize(args: { files: File[] }): Promise<boolean> {
   const store = useCreateReleaseDraftStore.getState();
   initUserContextInStore();
@@ -421,9 +595,13 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
     return false;
   }
 
-  if (args.files.length !== parsedTracks.data.tracks.length) {
-    store.setSubmitError("Загрузите WAV для каждого трека.");
-    return false;
+  const skipWavUpload = useCreateReleaseDraftStore.getState().tracksWavSyncedToDb;
+
+  if (!skipWavUpload) {
+    if (args.files.length !== parsedTracks.data.tracks.length) {
+      store.setSubmitError("Загрузите WAV для каждого трека.");
+      return false;
+    }
   }
 
   submitTracksInFlight = true;
@@ -463,31 +641,36 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
         store.setSubmitProgress(15);
       }
 
-      for (let index = 0; index < parsedTracks.data.tracks.length; index += 1) {
-        uploadTrackIndex = index;
-        store.setSubmitStage("uploading_tracks");
-        const track = parsedTracks.data.tracks[index];
-        const file = args.files[index];
-        uploadPhase = "storage_track_wav";
-        const audioUrl = await uploadReleaseTrackAudio({
-          userId: store.userId,
-          releaseId,
-          trackIndex: index,
-          file,
-          options: {
-            markReleaseFailedOnError: { releaseId },
-            onProgress: (pct) => setTrackUploadProgress(index, pct)
-          }
-        });
-        uploadPhase = "db_release_track";
-        await addReleaseTrack({
-          releaseId,
-          index,
-          title: track.title,
-          explicit: Boolean(track.explicit),
-          audioUrl
-        });
-        setTrackUploadProgress(index + 1, 0);
+      if (skipWavUpload) {
+        useCreateReleaseDraftStore.getState().setSubmitStage("uploading_tracks");
+        useCreateReleaseDraftStore.getState().setSubmitProgress(85);
+      } else {
+        for (let index = 0; index < parsedTracks.data.tracks.length; index += 1) {
+          uploadTrackIndex = index;
+          store.setSubmitStage("uploading_tracks");
+          const track = parsedTracks.data.tracks[index];
+          const file = args.files[index];
+          uploadPhase = "storage_track_wav";
+          const audioUrl = await uploadReleaseTrackAudio({
+            userId: store.userId,
+            releaseId,
+            trackIndex: index,
+            file,
+            options: {
+              markReleaseFailedOnError: { releaseId },
+              onProgress: (pct) => setTrackUploadProgress(index, pct)
+            }
+          });
+          uploadPhase = "db_release_track";
+          await addReleaseTrack({
+            releaseId,
+            index,
+            title: track.title,
+            explicit: Boolean(track.explicit),
+            audioUrl
+          });
+          setTrackUploadProgress(index + 1, 0);
+        }
       }
       uploadTrackIndex = null;
     } catch (e: unknown) {
@@ -510,17 +693,21 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
         const current = await getReleaseById(releaseId).catch(() => null);
         existingMessage = current?.error_message?.trim() ?? null;
 
-        await cleanupReleaseTracks(releaseId);
-        await deleteReleaseFiles({
-          userId: store.userId,
-          releaseId,
-          trackCount: parsedTracks.data.tracks.length
-        });
+        if (!skipWavUpload) {
+          await cleanupReleaseTracks(releaseId);
+          await deleteReleaseFiles({
+            userId: store.userId,
+            releaseId,
+            trackCount: parsedTracks.data.tracks.length
+          });
+        }
 
         if (!current || current.status !== "failed") {
           await updateRelease(releaseId, {
             status: "failed",
-            error_message: "Отправка прервана, временные файлы очищены."
+            error_message: skipWavUpload
+              ? "Отправка прервана."
+              : "Отправка прервана, временные файлы очищены."
           });
         }
       } catch {

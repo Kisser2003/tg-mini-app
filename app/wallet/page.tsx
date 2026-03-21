@@ -19,7 +19,7 @@ import { PullRefreshBrand } from "@/components/PullRefreshBrand";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { debugInit } from "@/lib/debug";
 import { fetchWalletStats } from "@/lib/fetch-wallet-stats";
-import { HOLDING_DAYS, MIN_WITHDRAW_RUB } from "@/lib/wallet-payout-policy";
+import { holdingPeriodUserMessage, MIN_WITHDRAW_RUB } from "@/lib/wallet-payout-policy";
 import { getReleaseStatusMeta, normalizeReleaseStatus } from "@/lib/release-status";
 import { supabase } from "@/lib/supabase";
 import { SPRING_PHYSICS, SPRING_UI } from "@/lib/motion-spring";
@@ -96,7 +96,7 @@ function txSignedAmount(tx: WalletTransactionRow): number {
 function statusLabel(status: WalletTransactionRow["status"]): string {
   if (status === "completed") return "Завершено";
   if (status === "pending") return "В обработке";
-  return "Ошибка";
+  return "Не выполнено";
 }
 
 function WalletBalanceBlockSkeleton() {
@@ -236,14 +236,14 @@ export default function WalletPage() {
   return (
     <div className="flex flex-col gap-5 pb-10">
       <PullRefreshBrand />
-      <div className="flex items-start justify-between gap-3 px-0.5">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-white">Кошелек</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-2xl font-semibold tracking-tight text-white">Кошелёк</h1>
           <p className="mt-1 text-[13px] leading-relaxed text-white/50">
-            Баланс по леджеру и релизы
+            Баланс и статусы релизов
           </p>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
           <motion.button
             type="button"
             aria-label="Справка по кошельку"
@@ -285,10 +285,7 @@ export default function WalletPage() {
             </p>
             <div className="mt-3 flex items-start gap-2 text-xs leading-relaxed text-white/45">
               <Clock className="mt-0.5 h-4 w-4 shrink-0 text-white/40" aria-hidden />
-              <span>
-                Средства становятся доступны через {HOLDING_DAYS} дней после начисления (по дате в
-                журнале).
-              </span>
+              <span>{holdingPeriodUserMessage()}</span>
             </div>
             <p className="mt-3 text-[13px] tabular-nums text-white/55">
               <span className="text-white/40">Всего на счету</span>{" "}
@@ -402,7 +399,7 @@ export default function WalletPage() {
         )}
         {userId != null && walletError && !walletLoading && (
           <p className="mb-2 px-0.5 text-xs text-rose-300">
-            {walletError instanceof Error ? walletError.message : "Ошибка загрузки"}
+            {walletError instanceof Error ? walletError.message : "Не удалось загрузить операции"}
           </p>
         )}
         {showWalletSkeleton ? (
@@ -422,7 +419,8 @@ export default function WalletPage() {
               История пуста
             </p>
             <p className="mt-2 text-[13px] leading-relaxed text-white/45">
-              Здесь появятся роялти и выводы. После одобрения релизов начисления попадут в журнал.
+              Тут пока пусто: роялти появятся после первых стримов. После одобрения релизов начисления
+              попадут сюда.
             </p>
           </div>
         ) : (

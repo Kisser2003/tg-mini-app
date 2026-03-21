@@ -1,5 +1,6 @@
 export type CanonicalReleaseStatus =
   | "draft"
+  | "pending"
   | "processing"
   | "ready"
   | "failed"
@@ -19,6 +20,11 @@ const STATUS_META: Record<CanonicalReleaseStatus, Omit<ReleaseStatusMeta, "canon
   draft: {
     label: "Черновик",
     badgeClassName: "border-zinc-500/30 bg-zinc-500/10 text-zinc-300"
+  },
+  pending: {
+    label: "Ожидает отправки",
+    badgeClassName: "border-violet-500/35 bg-violet-500/12 text-violet-200",
+    badgeShimmerClassName: "status-badge-shimmer"
   },
   processing: {
     label: "На проверке",
@@ -48,7 +54,9 @@ export function normalizeReleaseStatus(status: string | null | undefined): Canon
   const value = (status ?? "").toLowerCase().trim();
 
   if (value === "draft") return "draft";
-  if (value === "processing" || value === "under_review" || value === "review" || value === "pending") {
+  /** В БД: WAV загружены, финальный submit ещё не нажат (не путать с legacy alias). */
+  if (value === "pending") return "pending";
+  if (value === "processing" || value === "under_review" || value === "review") {
     return "processing";
   }
   if (value === "ready" || value === "approved" || value === "live") return "ready";

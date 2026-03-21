@@ -9,6 +9,7 @@ import { GlassCard } from "@/components/GlassCard";
 import { debugInit } from "@/lib/debug";
 import { getReleaseStatusMeta, normalizeReleaseStatus } from "@/lib/release-status";
 import { isAdminUi } from "@/lib/admin";
+import { USER_REQUEST_TIMEOUT_MESSAGE } from "@/lib/errors";
 import { supabase } from "@/lib/supabase";
 import { getTelegramUserId, initTelegramWebApp } from "@/lib/telegram";
 
@@ -71,11 +72,7 @@ export default function ReleaseDetailsClient() {
         queryPromise.catch(() => {});
         const timeoutPromise = new Promise<Awaited<typeof queryPromise>>((_, reject) => {
           timeoutId = window.setTimeout(() => {
-            reject(
-              new Error(
-                `Запрос превысил таймаут (${RELEASE_DETAILS_TIMEOUT_MS} мс). Попробуйте снова.`
-              )
-            );
+            reject(new Error(USER_REQUEST_TIMEOUT_MESSAGE));
           }, RELEASE_DETAILS_TIMEOUT_MS);
         });
 

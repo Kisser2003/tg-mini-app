@@ -12,12 +12,18 @@ import { CreateShell } from "@/features/release/createRelease/components/CreateS
 import { metadataSchema } from "@/features/release/createRelease/schemas";
 import type { CreateMetadata } from "@/features/release/createRelease/types";
 import { useCreateReleaseDraftStore } from "@/features/release/createRelease/store";
-import { hydrateFromReleaseId, initUserContextInStore } from "@/features/release/createRelease/actions";
+import {
+  fetchLatestDraftReleaseIdForUser,
+  hydrateFromReleaseId,
+  initUserContextInStore,
+  saveDraftAction
+} from "@/features/release/createRelease/actions";
 import { logClientError } from "@/lib/logger";
 import { firstRhfErrorMessage } from "@/lib/rhf-first-error";
 import { MagneticButton } from "@/components/MagneticButton";
 import { hapticMap } from "@/lib/haptic-map";
 import { toast } from "sonner";
+import { getTelegramUserId } from "@/lib/telegram";
 import {
   getMetadataFieldWarningFlags,
   validateMetadata,
@@ -75,6 +81,7 @@ function CreateMetadataPageInner() {
 
   const [isHydrating, setIsHydrating] = useState(Boolean(releaseIdParam));
   const [hydrateError, setHydrateError] = useState<string | null>(null);
+  const [draftOfferId, setDraftOfferId] = useState<string | null>(null);
 
   useEffect(() => {
     initUserContextInStore();
@@ -103,6 +110,29 @@ function CreateMetadataPageInner() {
       }
     };
     void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [releaseIdParam]);
+
+  useEffect(() => {
+    if (releaseIdParam) return;
+    if (typeof window === "undefined") return;
+    try {
+      if (sessionStorage.getItem("omf_skip_draft_prompt") === "1") return;
+    } catch {
+      /* ignore */
+    }
+    initUserContextInStore();
+    const uid = getTelegramUserId();
+    if (!uid) return;
+    const localRid = useCreateReleaseDraftStore.getState().releaseId;
+    if (localRid) return;
+    let cancelled = false;
+    void (async () => {
+      const id = await fetchLatestDraftReleaseIdForUser(uid);
+      if (!cancelled && id) setDraftOfferId(id);
+    })();
     return () => {
       cancelled = true;
     };
@@ -205,8 +235,15 @@ function CreateMetadataPageInner() {
         dsp.errors[0] ??
           "Метаданные не проходят базовую проверку. Исправьте поля с подсказкой."
       );
+      return;
     }
     setMetadata(data);
+    const saved = await saveDraftAction();
+    if (!saved.ok) {
+      hapticMap.notificationError();
+      toast.error(saved.message);
+      return;
+    }
     router.push("/create/assets");
   }, [router, setMetadata]);
 
@@ -229,6 +266,40 @@ function CreateMetadataPageInner() {
               <p className="break-words rounded-[14px] border border-red-500/30 bg-red-950/40 px-3 py-2 text-[12px] leading-relaxed text-red-100">
                 {hydrateError}
               </p>
+            )}
+            {draftOfferId && !isHydrating && (
+              <div className="rounded-[14px] border border-sky-500/35 bg-sky-950/40 px-3 py-3 text-[12px] leading-relaxed text-sky-50/95">
+                <p className="font-medium text-white">Найден незавершённый черновик</p>
+                <p className="mt-1 text-white/70">
+                  Продолжить правки или начать новый релиз — локальный черновик сейчас не открыт.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      router.replace(`/create/metadata?releaseId=${draftOfferId}`);
+                      setDraftOfferId(null);
+                    }}
+                    className="rounded-[14px] bg-sky-500/90 px-4 py-2 text-[13px] font-medium text-white shadow-sm hover:bg-sky-500"
+                  >
+                    Продолжить
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      try {
+                        sessionStorage.setItem("omf_skip_draft_prompt", "1");
+                      } catch {
+                        /* ignore */
+                      }
+                      setDraftOfferId(null);
+                    }}
+                    className="rounded-[14px] border border-white/20 bg-white/5 px-4 py-2 text-[13px] font-medium text-white/85 hover:bg-white/10"
+                  >
+                    Начать новый
+                  </button>
+                </div>
+              </div>
             )}
             <p className="rounded-[14px] border border-amber-500/25 bg-amber-950/25 px-3 py-2.5 text-[12px] leading-relaxed text-amber-100/90">
               Пожалуйста, не используйте Caps Lock и эмодзи в названиях — так проходят требования

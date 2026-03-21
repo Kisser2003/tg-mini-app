@@ -23,6 +23,8 @@ import {
 import { sendApprovalNotification } from "@/lib/bot-api";
 import { hapticMap } from "@/lib/haptic-map";
 import { getTelegramUserId, initTelegramWebApp, triggerHaptic } from "@/lib/telegram";
+import { AdminModerationQueueSkeleton } from "@/components/ui/Skeleton";
+import { USER_REQUEST_TIMEOUT_MESSAGE } from "@/lib/errors";
 import { withRequestTimeout } from "@/lib/withRequestTimeout";
 
 type ModerationQueueRow = {
@@ -91,7 +93,7 @@ export default function AdminPage() {
       withRequestTimeout(
         loadQueueCore(),
         ADMIN_QUEUE_TIMEOUT_MS,
-        `Запрос превысил таймаут (${ADMIN_QUEUE_TIMEOUT_MS} мс).`
+        USER_REQUEST_TIMEOUT_MESSAGE
       ),
     {
       refreshInterval: 8000,
@@ -231,7 +233,7 @@ export default function AdminPage() {
               Одобрено сегодня
             </div>
             <p className="mt-2 text-2xl font-semibold tabular-nums text-white">{readyToday}</p>
-            <p className="mt-1 text-[10px] text-white/35">ready, созданные с 00:00 UTC</p>
+            <p className="mt-1 text-[10px] text-white/35">Статус «готов», с 00:00 UTC</p>
           </div>
           <div className="rounded-[18px] border border-white/[0.08] bg-black/25 px-4 py-3 backdrop-blur-md">
             <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.16em] text-white/45">
@@ -239,7 +241,7 @@ export default function AdminPage() {
               Сумма в холде
             </div>
             <p className="mt-2 text-xl font-semibold tabular-nums text-white">{formatMoneyRub(holdSum)}</p>
-            <p className="mt-1 text-[10px] text-white/35">все транзакции pending</p>
+            <p className="mt-1 text-[10px] text-white/35">Сумма по операциям «ожидает»</p>
           </div>
         </div>
         {statsLoadError && (
@@ -256,9 +258,7 @@ export default function AdminPage() {
         onSelectReason={(id, reason) => void handleRejectWithReason(id, reason)}
       />
 
-      {showQueueSkeleton && (
-        <GlassCard className="p-4 text-sm text-white/70">Загружаем очередь...</GlassCard>
-      )}
+      {showQueueSkeleton && <AdminModerationQueueSkeleton rows={3} />}
       {errorMessage && <GlassCard className="p-4 text-sm text-rose-200">{errorMessage}</GlassCard>}
       {actionError && <GlassCard className="p-4 text-sm text-rose-200">{actionError}</GlassCard>}
 

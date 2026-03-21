@@ -23,13 +23,13 @@ export async function fetchWalletStats(): Promise<WalletStatsResponse> {
     const err =
       typeof json === "object" && json !== null && "error" in json && typeof (json as { error: unknown }).error === "string"
         ? (json as { error: string }).error
-        : `HTTP ${res.status}`;
+        : "Не удалось загрузить баланс. Попробуйте обновить страницу.";
     throw new Error(err);
   }
 
   const body = json as WalletStatsResponse;
   if (body.ok !== true) {
-    throw new Error("Invalid wallet stats response");
+    throw new Error("Не удалось загрузить баланс. Попробуйте обновить страницу.");
   }
 
   return body;

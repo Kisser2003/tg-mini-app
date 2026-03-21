@@ -12,9 +12,9 @@ import { Badge } from "@/components/Badge";
 import { triggerHaptic } from "@/lib/telegram";
 
 function releaseTypeLabel(type: ReleaseRecord["release_type"]): string {
-  if (type === "single") return "Single";
+  if (type === "single") return "Сингл";
   if (type === "ep") return "EP";
-  return "Album";
+  return "Альбом";
 }
 
 function buildAudioItems(release: ReleaseRecord, tracks: ReleaseTrackRow[]) {
@@ -152,7 +152,7 @@ export function AdminReleaseCard({
         </div>
         {audioItems.length === 0 ? (
           <p className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-[12px] text-white/50">
-            Аудио недоступно (нет URL в базе).
+            Аудио пока недоступно для прослушивания.
           </p>
         ) : (
           <div className="space-y-2">
@@ -177,7 +177,7 @@ export function AdminReleaseCard({
           className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-300/40 bg-emerald-500/20 px-3 py-2.5 text-sm font-medium text-emerald-100 shadow-[0_0_25px_rgba(16,185,129,0.35)] disabled:opacity-60"
         >
           <CheckCircle2 className="h-4 w-4 shrink-0" />
-          Approve
+          Одобрить
         </motion.button>
         <motion.button
           type="button"
@@ -192,7 +192,7 @@ export function AdminReleaseCard({
           className="inline-flex items-center justify-center gap-2 rounded-xl border border-rose-300/40 bg-rose-500/20 px-3 py-2.5 text-sm font-medium text-rose-100 shadow-[0_0_25px_rgba(244,63,94,0.35)] disabled:opacity-60"
         >
           <XCircle className="h-4 w-4 shrink-0" />
-          Reject
+          Отклонить
         </motion.button>
       </div>
     </motion.div>

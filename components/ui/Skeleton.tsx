@@ -8,7 +8,7 @@ type SkeletonProps = HTMLAttributes<HTMLDivElement>;
 export function Skeleton({ className, ...props }: SkeletonProps) {
   return (
     <div
-      className={["rounded-lg bg-white/5 animate-pulse", className].filter(Boolean).join(" ")}
+      className={["rounded-lg bg-white/[0.06] skeleton-shimmer-bg", className].filter(Boolean).join(" ")}
       {...props}
     />
   );
@@ -20,7 +20,7 @@ export function Skeleton({ className, ...props }: SkeletonProps) {
 export function LibraryReleaseRowSkeleton() {
   return (
     <div
-      className="flex w-full items-center gap-3 rounded-[20px] border border-white/[0.08] bg-white/[0.02] p-4 backdrop-blur-sm"
+      className="flex min-h-[88px] w-full items-center gap-3 rounded-[20px] border border-white/[0.08] bg-white/[0.02] p-4 backdrop-blur-sm"
       aria-hidden
     >
       <Skeleton className="h-14 w-14 shrink-0 rounded-xl" />
@@ -28,6 +28,39 @@ export function LibraryReleaseRowSkeleton() {
         <Skeleton className="h-4 w-[70%] max-w-[220px]" />
         <Skeleton className="h-3 w-[40%] max-w-[120px]" />
       </div>
+    </div>
+  );
+}
+
+/** Скелетон очереди модерации — близко к высоте карточки в AdminReleaseCard. */
+export function AdminModerationQueueSkeleton({ rows = 3 }: { rows?: number }) {
+  return (
+    <div className="grid grid-cols-1 gap-3">
+      {Array.from({ length: rows }, (_, i) => (
+        <div
+          key={i}
+          className="glass-card overflow-hidden rounded-[22px] border border-white/[0.08] bg-white/[0.03] p-4 shadow-[0_18px_40px_rgba(0,0,0,0.7)] backdrop-blur-2xl"
+          aria-hidden
+        >
+          <div className="flex min-h-[120px] gap-3">
+            <Skeleton className="h-[72px] w-[72px] shrink-0 rounded-xl" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <Skeleton className="h-4 w-[88%] max-w-[260px] rounded-md" />
+              <Skeleton className="h-3.5 w-[60%] max-w-[180px] rounded-md" />
+              <Skeleton className="h-5 w-32 rounded-full" />
+              <Skeleton className="h-3 w-full max-w-[220px] rounded-md" />
+            </div>
+          </div>
+          <div className="mt-4 space-y-2">
+            <Skeleton className="h-3 w-24 rounded-md" />
+            <Skeleton className="h-11 w-full rounded-xl" />
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <Skeleton className="h-11 rounded-xl" />
+            <Skeleton className="h-11 rounded-xl" />
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

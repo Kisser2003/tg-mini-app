@@ -1,5 +1,6 @@
 export const RELEASE_STATUS_VALUES = [
   "draft",
+  "pending",
   "processing",
   "ready",
   "failed"

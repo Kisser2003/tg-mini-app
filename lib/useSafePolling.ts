@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { debugInit } from "@/lib/debug";
+import { USER_REQUEST_TIMEOUT_MESSAGE } from "@/lib/errors";
 
 type UseSafePollingOptions<T> = {
   enabled: boolean;
@@ -56,7 +57,7 @@ export function useSafePolling<T>({
         loadPromise.catch(() => {});
         const timeoutPromise = new Promise<T>((_, reject) => {
           timeoutId = window.setTimeout(() => {
-            reject(new Error(`Запрос превысил таймаут (${requestTimeoutMs} мс).`));
+            reject(new Error(USER_REQUEST_TIMEOUT_MESSAGE));
           }, requestTimeoutMs);
         });
         const next = await Promise.race([loadPromise, timeoutPromise]);

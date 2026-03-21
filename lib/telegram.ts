@@ -44,6 +44,8 @@ type TelegramWebApp = {
   ready?: () => void;
   setHeaderColor?: (colorKey: "bg_color" | "secondary_bg_color") => void;
   setBackgroundColor?: (color: string) => void;
+  enableClosingConfirmation?: () => void;
+  disableClosingConfirmation?: () => void;
 };
 
 declare global {
@@ -61,6 +63,24 @@ export function getTelegramWebApp(): TelegramWebApp | null {
 
 export function isTelegramMiniApp(): boolean {
   return Boolean(getTelegramWebApp()?.initData);
+}
+
+/**
+ * Подтверждение закрытия мини-приложения (пока идёт загрузка и т.п.).
+ * В обычном браузере — no-op.
+ */
+export function setTelegramClosingConfirmation(enabled: boolean): void {
+  const webApp = getTelegramWebApp();
+  if (!webApp) return;
+  try {
+    if (enabled) {
+      webApp.enableClosingConfirmation?.();
+    } else {
+      webApp.disableClosingConfirmation?.();
+    }
+  } catch {
+    /* ignore */
+  }
 }
 
 export function initTelegramWebApp() {

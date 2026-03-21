@@ -6,13 +6,17 @@ import { MagneticButton } from "@/components/MagneticButton";
 import { CreateShell } from "@/features/release/createRelease/components/CreateShell";
 import { StepGate } from "@/features/release/createRelease/components/StepGate";
 import { useStepGuard } from "@/features/release/createRelease/guards";
-import { ensureDraftRelease, uploadArtworkForDraft } from "@/features/release/createRelease/actions";
+import {
+  ensureDraftRelease,
+  saveDraftAction,
+  uploadArtworkForDraft
+} from "@/features/release/createRelease/actions";
 import { useCreateReleaseDraftStore } from "@/features/release/createRelease/store";
 import { FileUploader } from "@/components/FileUploader";
 import { FormFieldError } from "@/components/FormFieldError";
 import { debugInit } from "@/lib/debug";
 import { logClientError } from "@/lib/logger";
-import { triggerHaptic } from "@/lib/telegram";
+import { setTelegramClosingConfirmation, triggerHaptic } from "@/lib/telegram";
 import { toast } from "sonner";
 
 export default function CreateAssetsPage() {
@@ -50,6 +54,11 @@ export default function CreateAssetsPage() {
     });
     if (artworkUrl && !artworkFile) {
       debugInit("create/assets", "skip upload, artwork already exists");
+      const saved = await saveDraftAction();
+      if (!saved.ok) {
+        if (saved.message) toast.error(saved.message);
+        return;
+      }
       router.push("/create/tracks");
       return;
     }
@@ -60,6 +69,7 @@ export default function CreateAssetsPage() {
     }
     setIsUploading(true);
     setSubmitError(null);
+    setTelegramClosingConfirmation(true);
     try {
       if (!releaseId) {
         debugInit("create/assets", "ensureDraftRelease start");
@@ -81,6 +91,11 @@ export default function CreateAssetsPage() {
         return;
       }
       debugInit("create/assets", "uploadArtworkForDraft success", { hasUrl: true });
+      const saved = await saveDraftAction();
+      if (!saved.ok) {
+        if (saved.message) toast.error(saved.message);
+        return;
+      }
       router.push("/create/tracks");
     } catch (e: unknown) {
       console.error("[CreateAssetsPage] Upload error:", e);
@@ -97,6 +112,7 @@ export default function CreateAssetsPage() {
       );
     } finally {
       debugInit("create/assets", "handleNext finished");
+      setTelegramClosingConfirmation(false);
       setIsUploading(false);
     }
   }, [artworkFile, artworkUrl, releaseId, router, setSubmitError]);

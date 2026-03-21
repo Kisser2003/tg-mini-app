@@ -12,10 +12,14 @@ import { useStepGuard } from "@/features/release/createRelease/guards";
 import { tracksSchema } from "@/features/release/createRelease/schemas";
 import type { CreateTracks } from "@/features/release/createRelease/types";
 import { useCreateReleaseDraftStore } from "@/features/release/createRelease/store";
+import {
+  saveDraftAction,
+  uploadTracksForDraftStep
+} from "@/features/release/createRelease/actions";
 import { FileUploader } from "@/components/FileUploader";
 import { FormFieldError } from "@/components/FormFieldError";
 import { GLASS_FIELD_BASE, GLASS_FIELD_ERROR_STRONG } from "@/lib/glass-form-classes";
-import { triggerHaptic } from "@/lib/telegram";
+import { setTelegramClosingConfirmation, triggerHaptic } from "@/lib/telegram";
 import { toast } from "sonner";
 
 export default function CreateTracksPage() {
@@ -23,6 +27,7 @@ export default function CreateTracksPage() {
   const guard = useStepGuard("tracks");
 
   const releaseType = useCreateReleaseDraftStore((s) => s.metadata.releaseType);
+  const releaseTitle = useCreateReleaseDraftStore((s) => s.metadata.releaseTitle);
   const storeTracks = useCreateReleaseDraftStore((s) => s.tracks);
   const storeTrackFiles = useCreateReleaseDraftStore((s) => s.trackFiles);
   const setTracks = useCreateReleaseDraftStore((s) => s.setTracks);
@@ -47,11 +52,12 @@ export default function CreateTracksPage() {
   // useState initializer runs once, so this captures the correct store snapshot
   // without subscribing to future changes.
   const [initialTracks] = useState<CreateTracks["tracks"]>(() => {
-    const base =
-      storeTracks.length > 0 ? storeTracks : [{ title: "", explicit: false }];
-    // Enforce single-track cap: if the user previously had an EP and switched to
-    // single, we silently trim to the first track when the page mounts.
-    return isSingle ? [base[0]] : base;
+    const { tracks, metadata } = useCreateReleaseDraftStore.getState();
+    const base = tracks.length > 0 ? tracks : [{ title: "", explicit: false }];
+    if (metadata.releaseType === "single") {
+      return [{ ...(base[0] ?? { explicit: false }), title: metadata.releaseTitle }];
+    }
+    return base;
   });
 
   const {
@@ -60,6 +66,7 @@ export default function CreateTracksPage() {
     handleSubmit,
     watch,
     reset,
+    setValue,
     formState: { errors, isValid, isDirty, dirtyFields, isSubmitting }
   } = useForm<CreateTracks>({
     resolver: zodResolver(tracksSchema),
@@ -83,21 +90,30 @@ export default function CreateTracksPage() {
 
     const {
       tracks: storedTracks,
-      metadata: { releaseType: storedType }
+      metadata: { releaseType: storedType, releaseTitle: storedReleaseTitle }
     } = useCreateReleaseDraftStore.getState();
 
     const base =
       storedTracks.length > 0 ? storedTracks : [{ title: "", explicit: false }];
-    const freshTracks = storedType === "single" ? [base[0]] : base;
+    const freshTracks =
+      storedType === "single"
+        ? [{ ...(base[0] ?? { explicit: false }), title: storedReleaseTitle }]
+        : base;
 
     reset({ tracks: freshTracks }, { keepDirty: false });
 
     // If the cap trimmed the track list, sync the store immediately.
     if (storedType === "single" && storedTracks.length > 1) {
-      setTracks([base[0]]);
+      setTracks([{ ...(base[0] ?? { explicit: false }), title: storedReleaseTitle }]);
       syncTrackFilesLength(1);
     }
   }, [reset, setTracks, syncTrackFilesLength]);
+
+  // Сингл: название трека = название релиза из стора (в т.ч. после правок на «Паспорте»).
+  useEffect(() => {
+    if (!isSingle) return;
+    setValue("tracks.0.title", releaseTitle, { shouldValidate: true, shouldDirty: false });
+  }, [isSingle, releaseTitle, setValue]);
 
   const values = watch();
   const lastSyncedTracksRef = useRef<string>("");
@@ -121,6 +137,9 @@ export default function CreateTracksPage() {
   }, [fields.length, syncTrackFilesLength]);
 
   const [submitAttempted, setSubmitAttempted] = useState(false);
+  const [trackUploadProgress, setTrackUploadProgress] = useState<Record<number, number>>({});
+  const [activeUploadIndex, setActiveUploadIndex] = useState<number | null>(null);
+  const [isUploadingWav, setIsUploadingWav] = useState(false);
 
   const handleNext = useCallback(
     async (data: CreateTracks) => {
@@ -139,7 +158,36 @@ export default function CreateTracksPage() {
         toast.error(msg);
         return;
       }
-      router.push("/create/review");
+
+      setIsUploadingWav(true);
+      setTrackUploadProgress({});
+      setTelegramClosingConfirmation(true);
+      try {
+        const saved = await saveDraftAction();
+        if (!saved.ok) {
+          toast.error(saved.message);
+          setSubmitError(saved.message);
+          return;
+        }
+        const ok = await uploadTracksForDraftStep({
+          onTrackProgress: (index, pct) => {
+            setActiveUploadIndex(index);
+            setTrackUploadProgress((prev) => ({ ...prev, [index]: pct }));
+          }
+        });
+        if (!ok) {
+          const msg =
+            useCreateReleaseDraftStore.getState().submitError ?? "Не удалось загрузить WAV.";
+          if (msg) toast.error(msg);
+          return;
+        }
+        router.push("/create/review");
+      } finally {
+        setTelegramClosingConfirmation(false);
+        setIsUploadingWav(false);
+        setActiveUploadIndex(null);
+        setTrackUploadProgress({});
+      }
     },
     [router, setSubmitError, setTracks, syncTrackFilesLength]
   );
@@ -188,21 +236,38 @@ export default function CreateTracksPage() {
                 )}
               </div>
 
-              <div className="space-y-1.5">
-                <label className="block text-[11px] font-medium uppercase tracking-[0.18em] text-white/60">
-                  Название трека
-                </label>
-                <input
-                  {...register(`tracks.${index}.title` as const)}
-                  placeholder="Например, Track 1"
-                  className={`${GLASS_FIELD_BASE} rounded-[16px] ${
-                    errors.tracks?.[index]?.title && dirtyFields.tracks?.[index]?.title
-                      ? GLASS_FIELD_ERROR_STRONG
-                      : ""
-                  }`}
-                />
-                <FormFieldError message={errors.tracks?.[index]?.title?.message} />
-              </div>
+              {isSingle && index === 0 ? (
+                <div className="space-y-3">
+                  <div className="rounded-[14px] border border-white/10 bg-white/[0.04] px-3 py-2 text-[12px] leading-relaxed text-white/65">
+                    Для синглов название трека совпадает с названием релиза.
+                  </div>
+                  <div className="rounded-[16px] border border-white/[0.08] bg-black/20 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                    <span className="block text-[11px] font-medium uppercase tracking-[0.18em] text-white/50">
+                      Название трека
+                    </span>
+                    <p className="mt-1.5 break-words text-[15px] font-medium leading-snug text-white/95">
+                      {releaseTitle.trim() ? releaseTitle : "Как в паспорте релиза"}
+                    </p>
+                  </div>
+                  <FormFieldError message={errors.tracks?.[index]?.title?.message} />
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  <label className="block text-[11px] font-medium uppercase tracking-[0.18em] text-white/60">
+                    Название трека
+                  </label>
+                  <input
+                    {...register(`tracks.${index}.title` as const)}
+                    placeholder="Например, Track 1"
+                    className={`${GLASS_FIELD_BASE} rounded-[16px] ${
+                      errors.tracks?.[index]?.title && dirtyFields.tracks?.[index]?.title
+                        ? GLASS_FIELD_ERROR_STRONG
+                        : ""
+                    }`}
+                  />
+                  <FormFieldError message={errors.tracks?.[index]?.title?.message} />
+                </div>
+              )}
 
               {/* Pass the stored File reference so the uploader shows "file selected"
                   state when the user navigates back to this step within the session. */}
@@ -214,6 +279,11 @@ export default function CreateTracksPage() {
                 initialFile={storeTrackFiles[index] ?? null}
                 onFileChange={(file) => setTrackFile(index, file)}
                 invalid={submitAttempted && !storeTrackFiles[index]}
+                uploadProgressPercent={
+                  isUploadingWav && activeUploadIndex === index
+                    ? (trackUploadProgress[index] ?? 0)
+                    : null
+                }
               />
               <FormFieldError
                 message={
@@ -240,10 +310,14 @@ export default function CreateTracksPage() {
 
           <MagneticButton
             type="submit"
-            disabled={!isValid || isSubmitting}
+            disabled={!isValid || isSubmitting || isUploadingWav}
             className="inline-flex h-[56px] w-full items-center justify-center rounded-[20px] bg-gradient-to-tr from-[#4F46E5] to-[#7C3AED] text-[16px] font-semibold text-white shadow-[0_14px_40px_rgba(88,80,236,0.6)] disabled:opacity-60 disabled:shadow-none"
           >
-            {isSubmitting ? "Сохраняем…" : "Далее"}
+            {isUploadingWav
+              ? "Загружаем WAV…"
+              : isSubmitting
+                ? "Сохраняем…"
+                : "Далее"}
           </MagneticButton>
 
           <FormFieldError message={submitError ?? undefined} messageClassName="text-center" />

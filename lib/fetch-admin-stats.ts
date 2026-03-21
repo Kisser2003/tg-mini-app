@@ -23,13 +23,13 @@ export async function fetchAdminStats(): Promise<AdminStatsResponse> {
     const err =
       typeof json === "object" && json !== null && "error" in json && typeof (json as { error: unknown }).error === "string"
         ? (json as { error: string }).error
-        : `HTTP ${res.status}`;
+        : "Не удалось загрузить статистику. Попробуйте обновить страницу.";
     throw new Error(err);
   }
 
   const body = json as AdminStatsResponse;
   if (body.ok !== true) {
-    throw new Error("Invalid admin stats response");
+    throw new Error("Не удалось загрузить статистику. Попробуйте обновить страницу.");
   }
 
   return body;

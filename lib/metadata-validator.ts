@@ -34,9 +34,9 @@ function hasLetter(s: string): boolean {
 }
 
 function checkCriticalContent(trimmed: string): string | null {
-  if (trimmed.length === 0) return "Поле не может быть пустым.";
+  if (trimmed.length === 0) return "Пожалуйста, заполните это поле.";
   if (trimmed.length < MIN_FIELD_LEN) {
-    return `Минимум ${MIN_FIELD_LEN} символа после обрезки пробелов.`;
+    return `Нужно минимум ${MIN_FIELD_LEN} символа (без лишних пробелов).`;
   }
   if (trimmed.length > MAX_FIELD_LEN) {
     return `Максимум ${MAX_FIELD_LEN} символов.`;

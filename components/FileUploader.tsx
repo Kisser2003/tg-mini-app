@@ -19,6 +19,8 @@ type Props = {
   initialPreviewUrl?: string | null;
   /** Подсветка ошибки валидации с родителя (glass + красная обводка). */
   invalid?: boolean;
+  /** Реальный прогресс загрузки (0–100), например WAV на сервер; только для type `wav`. */
+  uploadProgressPercent?: number | null;
 };
 
 export function FileUploader({
@@ -29,7 +31,8 @@ export function FileUploader({
   onFileChange,
   initialFile,
   initialPreviewUrl,
-  invalid = false
+  invalid = false,
+  uploadProgressPercent = null
 }: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -223,7 +226,7 @@ export function FileUploader({
           x: magneticX,
           y: magneticY
         }}
-        className={`flex min-h-[140px] cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-4 py-5 text-center text-xs text-text-muted transition-[border-color,background-color,box-shadow] duration-200 focus-within:ring-2 focus-within:ring-violet-500/20 focus-within:ring-offset-0 ${
+        className={`relative flex min-h-[140px] cursor-pointer flex-col items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed px-4 py-5 text-center text-xs text-text-muted transition-[border-color,background-color,box-shadow] duration-200 focus-within:ring-2 focus-within:ring-violet-500/20 focus-within:ring-offset-0 ${
           invalid || error
             ? "border-red-500/55 bg-red-950/20 ring-2 ring-red-500/25 hover:border-red-400/60"
             : "border-border bg-surface/70 ring-2 ring-transparent hover:border-primary hover:bg-surface"
@@ -235,6 +238,29 @@ export function FileUploader({
           className="hidden"
           onChange={handleChange}
         />
+        {type === "wav" &&
+          uploadProgressPercent != null &&
+          Number.isFinite(uploadProgressPercent) && (
+            <div
+              className="absolute inset-0 z-10 flex flex-col justify-end bg-black/45"
+              aria-live="polite"
+              aria-label={`Загрузка ${Math.round(Math.min(100, Math.max(0, uploadProgressPercent)))}%`}
+            >
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="text-lg font-semibold tabular-nums text-white drop-shadow-md">
+                  {Math.round(Math.min(100, Math.max(0, uploadProgressPercent)))}%
+                </span>
+              </div>
+              <div className="h-2.5 w-full bg-black/40">
+                <div
+                  className="h-full bg-gradient-to-r from-sky-500 to-blue-600 transition-[width] duration-150 ease-out"
+                  style={{
+                    width: `${Math.min(100, Math.max(0, uploadProgressPercent))}%`
+                  }}
+                />
+              </div>
+            </div>
+          )}
         <div className="flex h-full flex-col items-center justify-center gap-2">
           <span className="flex items-center gap-2 text-sm font-medium text-text">
             {type === "wav" ? (
