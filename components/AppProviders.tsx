@@ -8,7 +8,7 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
       value={{
         revalidateOnFocus: false,
         revalidateOnReconnect: true,
-        dedupingInterval: 5000,
+        dedupingInterval: 10_000,
         isPaused: () => typeof document !== "undefined" && !document.hasFocus()
       }}
     >

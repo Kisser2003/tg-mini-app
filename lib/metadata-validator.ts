@@ -3,6 +3,9 @@
  * критические — блокируют submit-precheck на сервере).
  */
 
+import type { ArtistLinksState } from "@/lib/artist-links";
+import { mergeArtistLinksPartial } from "@/lib/artist-links";
+
 const MIN_FIELD_LEN = 2;
 const MAX_FIELD_LEN = 256;
 
@@ -15,17 +18,25 @@ const PROD_BY = /\b(?:prod\.?\s*by|produced\s+by)\b/i;
 const TRACK_ONE = /\btrack\s*1\b/i;
 const ORIGINAL_MIX = /\boriginal\s+mix\b/i;
 
+const LINK_LABELS: Record<keyof ArtistLinksState, string> = {
+  spotify: "Spotify",
+  apple: "Apple Music",
+  yandex: "Yandex Music",
+  vk: "VK"
+};
+
 export type ReleaseMetadata = {
-  artists: { name: string }[];
+  primaryArtist: string;
   releaseTitle: string;
-  /** Названия треков; если не переданы — проверяются только релиз и артисты. */
+  /** Названия треков; если не переданы — проверяются только релиз и артист. */
   trackTitles?: string[];
+  language?: string;
+  /** Глобальные ссылки на карточки артиста (если заполнены — валидные URL). */
+  releaseArtistLinks?: Partial<ArtistLinksState>;
 };
 
 export type MetadataValidationResult = {
-  /** Нет критических нарушений (можно пропускать submit-precheck по метаданным). */
   isValid: boolean;
-  /** Только критические сообщения (для API и toast). */
   errors: string[];
 };
 
@@ -80,17 +91,33 @@ function collectCriticalForString(value: string, label: string): string[] {
   return c ? [`${label}: ${c}`] : [];
 }
 
-/**
- * Полная проверка: критические нарушения для сервера, предупреждения — через {@link getMetadataWarnings}.
- */
+function isValidHttpUrl(raw: string): boolean {
+  try {
+    const u = new URL(raw.trim());
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+/** Ссылки на DSP: при непустом значении — должен быть валидный URL. Для submit-precheck. */
+export function collectReleaseArtistLinkErrors(links: Partial<ArtistLinksState> | undefined): string[] {
+  const merged = mergeArtistLinksPartial(links);
+  const out: string[] = [];
+  (Object.keys(LINK_LABELS) as (keyof ArtistLinksState)[]).forEach((k) => {
+    const v = merged[k].trim();
+    if (v.length === 0) return;
+    if (!isValidHttpUrl(v)) {
+      out.push(`${LINK_LABELS[k]}: укажите корректную ссылку (https://…).`);
+    }
+  });
+  return out;
+}
+
 export function validateMetadata(data: ReleaseMetadata): MetadataValidationResult {
   const critical: string[] = [];
 
-  for (let i = 0; i < data.artists.length; i += 1) {
-    const name = data.artists[i]?.name ?? "";
-    critical.push(...collectCriticalForString(name, `Артист ${i + 1}`));
-  }
-
+  critical.push(...collectCriticalForString(data.primaryArtist, "Артист"));
   critical.push(...collectCriticalForString(data.releaseTitle, "Название релиза"));
 
   const tracks = data.trackTitles ?? [];
@@ -99,20 +126,22 @@ export function validateMetadata(data: ReleaseMetadata): MetadataValidationResul
     critical.push(...collectCriticalForString(title, `Трек ${i + 1}`));
   }
 
+  const lang = data.language?.trim() ?? "";
+  if (lang.length === 0) {
+    critical.push("Выберите язык исполнения.");
+  }
+
+  /* Ссылки на профили необязательны на шаге паспорта; проверка URL — в submit-precheck. */
+
   return {
     isValid: critical.length === 0,
     errors: critical
   };
 }
 
-/**
- * Мягкие замечания (DSP) — не блокируют кнопку «Далее» на клиенте.
- */
 export function getMetadataWarnings(data: ReleaseMetadata): string[] {
   const out: string[] = [];
-  for (let i = 0; i < data.artists.length; i += 1) {
-    out.push(...checkWarningsArtist(data.artists[i]?.name ?? ""));
-  }
+  out.push(...checkWarningsArtist(data.primaryArtist));
   out.push(...checkWarningsTitle(data.releaseTitle, { allowOriginalMix: false }));
 
   const tracks = data.trackTitles ?? [];
@@ -129,16 +158,15 @@ export function getMetadataWarnings(data: ReleaseMetadata): string[] {
 
 export type MetadataFieldWarningFlags = {
   releaseTitle: boolean;
-  artists: boolean[];
+  primaryArtist: boolean;
   trackTitles: boolean[];
 };
 
-/** Для жёлтой подсветки полей без блокировки сабмита. */
 export function getMetadataFieldWarningFlags(data: ReleaseMetadata): MetadataFieldWarningFlags {
-  const artists = data.artists.map((a) => checkWarningsArtist(a.name).length > 0);
+  const primaryArtist = checkWarningsArtist(data.primaryArtist).length > 0;
   const releaseTitle = checkWarningsTitle(data.releaseTitle, { allowOriginalMix: false }).length > 0;
   const trackTitles = (data.trackTitles ?? []).map(
     (t) => checkWarningsTitle(t, { allowOriginalMix: /remix|ремикс/i.test(t) }).length > 0
   );
-  return { releaseTitle, artists, trackTitles };
+  return { releaseTitle, primaryArtist, trackTitles };
 }

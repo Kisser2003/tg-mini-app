@@ -8,6 +8,8 @@ import type {
   SubmissionStatus
 } from "./types";
 import { isAssetsComplete, isMetadataComplete, isTracksComplete } from "./schemas";
+import { parsePerformanceLanguage } from "@/lib/performance-language";
+import { EMPTY_ARTIST_LINKS, type ArtistLinksState } from "@/lib/artist-links";
 
 export type CreateReleaseDraftState = {
   // identity / context
@@ -33,6 +35,14 @@ export type CreateReleaseDraftState = {
   tracksWavSyncedToDb: boolean;
   /** Идёт загрузка WAV в Storage (блокирует «Отправить» на проверке). */
   tracksUploadInProgress: boolean;
+
+  /** Ссылки на карточки артиста на DSP (глобально на релиз). */
+  releaseArtistLinks: ArtistLinksState;
+  /**
+   * Пользователь прошёл модалку «У вас уже есть профили?» (не показывать снова до resetDraft).
+   * При открытии черновика из БД выставляется в true.
+   */
+  artistSetupGateCompleted: boolean;
 
   // submission / status
   submitError: string | null;
@@ -60,6 +70,9 @@ type CreateReleaseDraftActions = {
   setTrackAudioUrlAt: (index: number, url: string | null) => void;
   setTracksWavSyncedToDb: (value: boolean) => void;
   setTracksUploadInProgress: (value: boolean) => void;
+
+  setReleaseArtistLinks: (patch: Partial<ArtistLinksState>) => void;
+  setArtistSetupGateCompleted: (value: boolean) => void;
 
   setSubmitStatus: (status: SubmissionStatus) => void;
   setSubmitStage: (stage: SubmissionStage) => void;
@@ -92,6 +105,13 @@ export const selectIsAssetsComplete = (s: CreateReleaseDraftStore) =>
 export const selectIsTracksComplete = (s: CreateReleaseDraftStore) =>
   isTracksComplete({ tracks: s.tracks }, s.metadata.releaseType);
 
+/** Язык исполнения (паспорт). */
+export const selectPerformanceLanguage = (s: CreateReleaseDraftStore) => s.metadata.language;
+/** Explicit на уровне релиза (как в БД `explicit`). */
+export const selectIsExplicit = (s: CreateReleaseDraftStore) => s.metadata.explicit;
+/** Плановая дата релиза (`metadata.releaseDate`). */
+export const selectPlannedReleaseDate = (s: CreateReleaseDraftStore) => s.metadata.releaseDate;
+
 /** Данные для восстановления черновика из БД (Dashboard и др.). */
 export type ResumeDraftPayload = {
   releaseId: string;
@@ -101,6 +121,9 @@ export type ResumeDraftPayload = {
   tracks: CreateTrack[];
   /** Параллельно индексам `tracks`; для подсказок после резюме. */
   trackAudioUrlsFromDb: (string | null)[];
+  releaseArtistLinks: ArtistLinksState;
+  /** При резюме черновика модалка artist setup не показывается. */
+  artistSetupGateCompleted: boolean;
 };
 
 const EMPTY_METADATA: CreateMetadata = {
@@ -108,23 +131,20 @@ const EMPTY_METADATA: CreateMetadata = {
   releaseType: "single",
   genre: "",
   subgenre: "",
-  language: "",
+  language: "RU",
   label: "",
-  artists: [{ name: "", role: "primary" }],
+  primaryArtist: "",
   releaseDate: "",
   explicit: false
 };
 
-function areArtistsEqual(
-  current: CreateMetadata["artists"],
-  next: CreateMetadata["artists"]
-) {
-  if (current.length !== next.length) return false;
-  for (let i = 0; i < current.length; i += 1) {
-    if (current[i]?.name !== next[i]?.name) return false;
-    if (current[i]?.role !== next[i]?.role) return false;
-  }
-  return true;
+function areReleaseArtistLinksEqual(a: ArtistLinksState, b: ArtistLinksState): boolean {
+  return (
+    a.spotify === b.spotify &&
+    a.apple === b.apple &&
+    a.yandex === b.yandex &&
+    a.vk === b.vk
+  );
 }
 
 function areMetadataEqual(current: CreateMetadata, next: CreateMetadata) {
@@ -135,9 +155,9 @@ function areMetadataEqual(current: CreateMetadata, next: CreateMetadata) {
     current.subgenre === next.subgenre &&
     current.language === next.language &&
     current.label === next.label &&
+    current.primaryArtist === next.primaryArtist &&
     current.releaseDate === next.releaseDate &&
-    current.explicit === next.explicit &&
-    areArtistsEqual(current.artists, next.artists)
+    current.explicit === next.explicit
   );
 }
 
@@ -209,6 +229,9 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
         trackAudioUrlsFromDb: [],
         tracksWavSyncedToDb: false,
         tracksUploadInProgress: false,
+
+        releaseArtistLinks: { ...EMPTY_ARTIST_LINKS },
+        artistSetupGateCompleted: false,
 
         submitError: null,
         submitStatus: "idle",
@@ -323,6 +346,16 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
           set((state) =>
             state.tracksUploadInProgress === value ? state : { tracksUploadInProgress: value }
           ),
+        setReleaseArtistLinks: (patch) =>
+          set((state) => {
+            const next = { ...state.releaseArtistLinks, ...patch };
+            if (areReleaseArtistLinksEqual(state.releaseArtistLinks, next)) return state;
+            return { releaseArtistLinks: next, ...stamp() };
+          }),
+        setArtistSetupGateCompleted: (value) =>
+          set((state) =>
+            state.artistSetupGateCompleted === value ? state : { artistSetupGateCompleted: value }
+          ),
         syncTrackFilesLength: (len) =>
           set((state) => {
             const prev = state.trackFiles;
@@ -353,6 +386,8 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
             trackAudioUrlsFromDb: [],
             tracksWavSyncedToDb: false,
             tracksUploadInProgress: false,
+            releaseArtistLinks: { ...EMPTY_ARTIST_LINKS },
+            artistSetupGateCompleted: false,
             submitError: null,
             submitStatus: "idle",
             submitStage: "idle",
@@ -373,6 +408,8 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
             trackAudioUrlsFromDb: [],
             tracksWavSyncedToDb: false,
             tracksUploadInProgress: false,
+            releaseArtistLinks: { ...EMPTY_ARTIST_LINKS },
+            artistSetupGateCompleted: false,
             submitError: null,
             submitStatus: "idle",
             submitStage: "idle",
@@ -392,6 +429,8 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
             trackAudioUrlsFromDb: [],
             tracksWavSyncedToDb: false,
             tracksUploadInProgress: false,
+            releaseArtistLinks: { ...EMPTY_ARTIST_LINKS },
+            artistSetupGateCompleted: false,
             submitError: null,
             lastModified: null,
             hasHydrated: true
@@ -447,6 +486,8 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
               trackAudioUrlsFromDb,
               tracksWavSyncedToDb: false,
               tracksUploadInProgress: false,
+              releaseArtistLinks: { ...payload.releaseArtistLinks },
+              artistSetupGateCompleted: payload.artistSetupGateCompleted,
               submitError: null,
               submitStatus: "idle" as SubmissionStatus,
               submitStage: "idle" as SubmissionStage,
@@ -472,6 +513,45 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
         }
         state?.setHasHydrated(true);
       },
+      merge: (persistedState, currentState) => {
+        const p = (persistedState ?? {}) as Partial<CreateReleaseDraftState>;
+        const rawMeta = p.metadata as unknown as Record<string, unknown> | undefined;
+        let mergedMeta =
+          p.metadata != null
+            ? {
+                ...EMPTY_METADATA,
+                ...p.metadata,
+                language: parsePerformanceLanguage(p.metadata.language)
+              }
+            : currentState.metadata;
+        if (rawMeta && typeof rawMeta.primaryArtist !== "string") {
+          const legacyArtists = rawMeta.artists as unknown;
+          const legacyName =
+            Array.isArray(legacyArtists) &&
+            legacyArtists[0] &&
+            typeof (legacyArtists[0] as { name?: string }).name === "string"
+              ? String((legacyArtists[0] as { name: string }).name)
+              : "";
+          mergedMeta = {
+            ...mergedMeta,
+            primaryArtist: legacyName
+          };
+        }
+        const mergedLinks =
+          p.releaseArtistLinks != null
+            ? { ...EMPTY_ARTIST_LINKS, ...p.releaseArtistLinks }
+            : currentState.releaseArtistLinks;
+        return {
+          ...currentState,
+          ...p,
+          metadata: mergedMeta,
+          releaseArtistLinks: mergedLinks,
+          artistSetupGateCompleted:
+            typeof p.artistSetupGateCompleted === "boolean"
+              ? p.artistSetupGateCompleted
+              : currentState.artistSetupGateCompleted
+        };
+      },
       // artworkFile and trackFiles are intentionally excluded: File objects
       // cannot be serialized to JSON. They live in memory only for the session.
       partialize: (state) => ({
@@ -482,6 +562,8 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
         tracks: state.tracks,
         trackAudioUrlsFromDb: state.trackAudioUrlsFromDb,
         tracksWavSyncedToDb: state.tracksWavSyncedToDb,
+        releaseArtistLinks: state.releaseArtistLinks,
+        artistSetupGateCompleted: state.artistSetupGateCompleted,
         lastModified: state.lastModified,
         successSummary: state.successSummary
       })

@@ -10,7 +10,7 @@ import {
 } from "react";
 import Image from "next/image";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
-import { AlertCircle, Disc3, X } from "lucide-react";
+import { AlertCircle, Music, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import { ArtworkCoverGlow } from "@/components/ArtworkCoverGlow";
@@ -28,6 +28,8 @@ import {
 import { supabase } from "@/lib/supabase";
 import { getTelegramUserId, initTelegramWebApp, triggerHaptic } from "@/lib/telegram";
 import { USER_REQUEST_TIMEOUT_MESSAGE } from "@/lib/errors";
+import { ARTWORK_BLUR_DATA_URL } from "@/lib/image-blur";
+import { SWR_LIST_OPTIONS } from "@/lib/swr-config";
 import { withRequestTimeout } from "@/lib/withRequestTimeout";
 import { toast } from "sonner";
 import type { ReleaseStatus } from "@/lib/db-enums";
@@ -147,6 +149,8 @@ function ArtworkThumb({
           sizes={ARTWORK_SIZES}
           className="object-cover"
           priority={priority}
+          placeholder="blur"
+          blurDataURL={ARTWORK_BLUR_DATA_URL}
         />
       ) : (
         <div className="flex h-full w-full items-center justify-center text-[10px] text-white/50">
@@ -205,6 +209,7 @@ function LibraryPageInner() {
     swrKey,
     fetchReleasesForUser,
     {
+      ...SWR_LIST_OPTIONS,
       refreshInterval: 7000,
       keepPreviousData: true
     }
@@ -216,8 +221,7 @@ function LibraryPageInner() {
     if (statusFilter === "all") return releases;
     return releases.filter((r) => normalizeReleaseStatus(r.status) === statusFilter);
   }, [releases, statusFilter]);
-  const errorMessage =
-    error instanceof Error ? error.message : error != null ? String(error) : null;
+  const hasFetchError = error != null;
 
   useEffect(() => {
     if (searchParams.get("fromCreate") !== "1") return;
@@ -225,10 +229,10 @@ function LibraryPageInner() {
     router.replace("/library");
   }, [searchParams, mutate, router]);
 
-  const handleCreate = () => {
+  const handleCreate = useCallback(() => {
     twaImpact("light");
     router.push("/create/metadata");
-  };
+  }, [router]);
 
   const handleResumeDraft = useCallback(
     async (release: ReleaseRow) => {
@@ -358,13 +362,17 @@ function LibraryPageInner() {
             )}
           </AnimatePresence>
 
-          {errorMessage && (
-            <div className="rounded-[20px] border border-red-500/30 bg-red-950/40 px-4 py-3 text-[13px] text-red-100">
-              {errorMessage}
+          {hasFetchError && (
+            <div className="text-sm text-red-400/80">
+              Ошибка загрузки. Попробуйте обновить.
             </div>
           )}
 
-          {userId != null && !showListSkeleton && !errorMessage && !hasReleases && (
+          {userId != null &&
+            !isLoading &&
+            !hasFetchError &&
+            !hasReleases &&
+            !showListSkeleton && (
             <div className="flex min-h-[52vh] flex-1 flex-col items-center justify-center px-2">
               <div className="flex w-full max-w-[360px] flex-col items-center justify-center gap-6 rounded-[24px] border border-white/[0.08] bg-surface/80 px-6 py-12 text-center shadow-[0_18px_40px_rgba(0,0,0,0.7)] backdrop-blur-2xl">
                 <div className="relative mx-auto flex h-[88px] w-[88px] items-center justify-center">
@@ -373,11 +381,11 @@ function LibraryPageInner() {
                     aria-hidden
                   />
                   <div className="relative flex h-[72px] w-[72px] items-center justify-center rounded-[22px] border border-white/20 bg-black/40 shadow-[0_12px_40px_rgba(139,92,246,0.35)] backdrop-blur-md">
-                    <Disc3 className="h-9 w-9 text-white" strokeWidth={1.35} aria-hidden />
+                    <Music className="h-9 w-9 text-white" strokeWidth={1.35} aria-hidden />
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-[17px] font-semibold tracking-tight">Пока нет релизов</p>
+                  <p className="text-[17px] font-semibold tracking-tight">У вас пока нет релизов</p>
                   <p className="text-[13px] text-text-muted">
                     Загрузите первый трек — это займёт пару минут.
                   </p>
@@ -387,13 +395,16 @@ function LibraryPageInner() {
                   onClick={handleCreate}
                   className="inline-flex h-[52px] w-full max-w-[280px] items-center justify-center rounded-[18px] bg-gradient-to-tr from-[#4F46E5] to-[#7C3AED] text-[15px] font-semibold text-white shadow-[0_14px_40px_rgba(88,80,236,0.6)]"
                 >
-                  Создать релиз
+                  Создать первый
                 </button>
               </div>
             </div>
           )}
 
-          {userId != null && hasReleases && filteredReleases.length === 0 && (
+          {userId != null &&
+            hasReleases &&
+            !hasFetchError &&
+            filteredReleases.length === 0 && (
             <p className="text-center text-[13px] text-text-muted">
               Нет релизов с выбранным статусом. Смените фильтр выше.
             </p>
@@ -423,7 +434,7 @@ function LibraryPageInner() {
                     ? release.error_message!
                     : "Причина ошибки не указана";
                   const isExpanded = expandedErrorId === release.id;
-                  const thumbPriority = listIndex < 3 && Boolean(release.artwork_url);
+                  const thumbPriority = listIndex < 2 && Boolean(release.artwork_url);
 
                   if (isDraft) {
                     return (
@@ -431,7 +442,7 @@ function LibraryPageInner() {
                         key={release.id}
                         variants={releaseListItem}
                         custom={listIndex}
-                        className="rounded-[20px]"
+                        className="library-release-row rounded-[20px]"
                       >
                         <ArtworkCoverGlow
                           artworkUrl={release.artwork_url}
@@ -495,7 +506,7 @@ function LibraryPageInner() {
                         key={release.id}
                         variants={releaseListItem}
                         custom={listIndex}
-                        className="rounded-[20px]"
+                        className="library-release-row rounded-[20px]"
                         onClick={(e) => {
                           const el = e.target as HTMLElement;
                           if (el.closest("button")) return;
@@ -602,7 +613,7 @@ function LibraryPageInner() {
                       key={release.id}
                       variants={releaseListItem}
                       custom={listIndex}
-                      className="rounded-[20px]"
+                      className="library-release-row rounded-[20px]"
                     >
                       <ArtworkCoverGlow
                         artworkUrl={release.artwork_url}

@@ -5,7 +5,13 @@ import type { TelegramAuthContext } from "@/lib/api/with-telegram-auth";
 import { withTelegramAuth } from "@/lib/api/with-telegram-auth";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
 import { RELEASE_TYPE_VALUES, type ReleaseType } from "@/lib/db-enums";
-import { validateMetadata, type ReleaseMetadata } from "@/lib/metadata-validator";
+import {
+  collectReleaseArtistLinkErrors,
+  validateMetadata,
+  type ReleaseMetadata
+} from "@/lib/metadata-validator";
+import { parseArtistLinksFromJson } from "@/lib/artist-links";
+import { parsePerformanceLanguage } from "@/lib/performance-language";
 
 const bodySchema = z.object({
   releaseId: z.string().uuid(),
@@ -53,7 +59,9 @@ async function handleSubmitPrecheck(
 
   const { data: releaseRow, error: relErr } = await admin
     .from("releases")
-    .select("id, user_id, client_request_id, release_type, artist_name, track_name")
+    .select(
+      "id, user_id, client_request_id, release_type, artist_name, track_name, collaborators, performance_language, artist_links"
+    )
     .eq("id", releaseId)
     .maybeSingle();
 
@@ -121,10 +129,19 @@ async function handleSubmitPrecheck(
     return NextResponse.json({ ok: false, error: "Не удалось загрузить названия треков." }, { status: 500 });
   }
 
+  const row = releaseRow as {
+    artist_name?: string | null;
+    track_name?: string | null;
+    performance_language?: string | null;
+    artist_links?: unknown;
+  };
+
   const meta: ReleaseMetadata = {
-    artists: [{ name: String(releaseRow.artist_name ?? "").trim() }],
-    releaseTitle: String(releaseRow.track_name ?? "").trim(),
-    trackTitles: (trackRows ?? []).map((r) => String((r as { title: string }).title ?? ""))
+    primaryArtist: String(row.artist_name ?? "").trim(),
+    releaseTitle: String(row.track_name ?? "").trim(),
+    trackTitles: (trackRows ?? []).map((r) => String((r as { title: string }).title ?? "")),
+    language: parsePerformanceLanguage(row.performance_language),
+    releaseArtistLinks: parseArtistLinksFromJson(row.artist_links)
   };
 
   const dsp = validateMetadata(meta);
@@ -136,6 +153,20 @@ async function handleSubmitPrecheck(
           dsp.errors[0] ??
           "Метаданные не соответствуют требованиям площадок. Исправьте названия и повторите отправку.",
         details: dsp.errors
+      },
+      { status: 400 }
+    );
+  }
+
+  const linkErrors = collectReleaseArtistLinkErrors(meta.releaseArtistLinks);
+  if (linkErrors.length > 0) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          linkErrors[0] ??
+          "Проверьте ссылки на профили артиста (необходим корректный https://…).",
+        details: linkErrors
       },
       { status: 400 }
     );

@@ -4,6 +4,11 @@ import { z } from "zod";
 import type { TelegramAuthContext } from "@/lib/api/with-telegram-auth";
 import { withTelegramAuth } from "@/lib/api/with-telegram-auth";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
+import {
+  formatErrorMessage,
+  isMissingReleasesColumnError,
+  logSupabaseUpdateError
+} from "@/lib/errors";
 
 const bodySchema = z.object({
   releaseId: z.string().uuid(),
@@ -42,7 +47,7 @@ async function handleDraftUploadState(
     .maybeSingle();
 
   if (loadErr) {
-    console.error("[releases/draft-upload-state] load:", loadErr.message);
+    logSupabaseUpdateError("releases/draft-upload-state load", loadErr);
     return NextResponse.json({ ok: false, error: "Не удалось загрузить релиз." }, { status: 500 });
   }
 
@@ -72,8 +77,20 @@ async function handleDraftUploadState(
       .in("status", ["draft", "pending"]);
 
     if (error) {
-      console.error("[releases/draft-upload-state] start:", error.message);
-      return NextResponse.json({ ok: false, error: "Не удалось обновить статус." }, { status: 500 });
+      logSupabaseUpdateError("releases/draft-upload-state start", error);
+      if (isMissingReleasesColumnError(error, "draft_upload_started")) {
+        console.warn(
+          "[releases/draft-upload-state] start: колонка draft_upload_started отсутствует в БД — пропускаем флаг (примените миграцию 20260325120000_release_pending_admin_notes.sql)."
+        );
+        return NextResponse.json({ ok: true, degraded: true });
+      }
+      return NextResponse.json(
+        {
+          ok: false,
+          error: formatErrorMessage(error, "Не удалось обновить статус.")
+        },
+        { status: 500 }
+      );
     }
     return NextResponse.json({ ok: true });
   }
@@ -96,8 +113,30 @@ async function handleDraftUploadState(
       .in("status", ["draft", "pending"]);
 
     if (error) {
-      console.error("[releases/draft-upload-state] complete:", error.message);
-      return NextResponse.json({ ok: false, error: "Не удалось обновить статус." }, { status: 500 });
+      logSupabaseUpdateError("releases/draft-upload-state complete", error);
+      if (isMissingReleasesColumnError(error, "draft_upload_started")) {
+        const { error: err2 } = await admin
+          .from("releases")
+          .update({ status: "pending" })
+          .eq("id", releaseId)
+          .eq("user_id", telegramUserId)
+          .in("status", ["draft", "pending"]);
+        if (err2) {
+          logSupabaseUpdateError("releases/draft-upload-state complete (fallback status only)", err2);
+          return NextResponse.json(
+            { ok: false, error: formatErrorMessage(err2, "Не удалось обновить статус.") },
+            { status: 500 }
+          );
+        }
+        console.warn(
+          "[releases/draft-upload-state] complete: без draft_upload_started — обновлён только status=pending."
+        );
+        return NextResponse.json({ ok: true, degraded: true });
+      }
+      return NextResponse.json(
+        { ok: false, error: formatErrorMessage(error, "Не удалось обновить статус.") },
+        { status: 500 }
+      );
     }
     return NextResponse.json({ ok: true });
   }
@@ -114,8 +153,30 @@ async function handleDraftUploadState(
     .in("status", ["draft", "pending"]);
 
   if (error) {
-    console.error("[releases/draft-upload-state] failed:", error.message);
-    return NextResponse.json({ ok: false, error: "Не удалось сбросить статус." }, { status: 500 });
+    logSupabaseUpdateError("releases/draft-upload-state failed", error);
+    if (isMissingReleasesColumnError(error, "draft_upload_started")) {
+      const { error: err2 } = await admin
+        .from("releases")
+        .update({ status: "draft" })
+        .eq("id", releaseId)
+        .eq("user_id", telegramUserId)
+        .in("status", ["draft", "pending"]);
+      if (err2) {
+        logSupabaseUpdateError("releases/draft-upload-state failed (fallback status only)", err2);
+        return NextResponse.json(
+          { ok: false, error: formatErrorMessage(err2, "Не удалось сбросить статус.") },
+          { status: 500 }
+        );
+      }
+      console.warn(
+        "[releases/draft-upload-state] failed: без draft_upload_started — обновлён только status=draft."
+      );
+      return NextResponse.json({ ok: true, degraded: true });
+    }
+    return NextResponse.json(
+      { ok: false, error: formatErrorMessage(error, "Не удалось сбросить статус.") },
+      { status: 500 }
+    );
   }
 
   return NextResponse.json({ ok: true });

@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback } from "react";
+import { memo, useCallback } from "react";
 import { motion, useMotionTemplate, useMotionValue, useSpring } from "framer-motion";
 import type { ReactNode } from "react";
-import { SPRING_PHYSICS, SPRING_UI } from "@/lib/motion-spring";
+import { SPRING_PHYSICS, SPRING_UI_SNAP } from "@/lib/motion-spring";
 
 type GlassCardProps = {
   children: ReactNode;
@@ -14,7 +14,7 @@ type GlassCardProps = {
   shimmer?: boolean;
 };
 
-export function GlassCard({
+function GlassCardInner({
   children,
   className = "",
   variant = "default",
@@ -52,7 +52,7 @@ export function GlassCard({
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ scale: 0.995 }}
       whileTap={{ scale: 0.98 }}
-      transition={SPRING_UI}
+      transition={SPRING_UI_SNAP}
       onPointerMoveCapture={onPointerCapture}
       onPointerLeave={onPointerLeave}
       className={`relative overflow-hidden rounded-[24px] border bg-white/[0.02] p-4 backdrop-blur-3xl ${
@@ -79,3 +79,5 @@ export function GlassCard({
     </motion.div>
   );
 }
+
+export const GlassCard = memo(GlassCardInner);

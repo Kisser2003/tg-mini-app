@@ -16,7 +16,11 @@ import { FileUploader } from "@/components/FileUploader";
 import { FormFieldError } from "@/components/FormFieldError";
 import { debugInit } from "@/lib/debug";
 import { logClientError } from "@/lib/logger";
-import { setTelegramClosingConfirmation, triggerHaptic } from "@/lib/telegram";
+import {
+  acquireTelegramClosingConfirmation,
+  releaseTelegramClosingConfirmation,
+  triggerHaptic
+} from "@/lib/telegram";
 import { toast } from "sonner";
 
 export default function CreateAssetsPage() {
@@ -69,7 +73,7 @@ export default function CreateAssetsPage() {
     }
     setIsUploading(true);
     setSubmitError(null);
-    setTelegramClosingConfirmation(true);
+    acquireTelegramClosingConfirmation();
     try {
       if (!releaseId) {
         debugInit("create/assets", "ensureDraftRelease start");
@@ -112,7 +116,7 @@ export default function CreateAssetsPage() {
       );
     } finally {
       debugInit("create/assets", "handleNext finished");
-      setTelegramClosingConfirmation(false);
+      releaseTelegramClosingConfirmation();
       setIsUploading(false);
     }
   }, [artworkFile, artworkUrl, releaseId, router, setSubmitError]);

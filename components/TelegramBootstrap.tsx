@@ -3,7 +3,13 @@
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { ADMIN_TELEGRAM_ID } from "@/lib/admin";
-import { getTelegramStartParam, getTelegramUserId, initTelegramWebApp } from "@/lib/telegram";
+import {
+  acquireTelegramClosingConfirmation,
+  getTelegramStartParam,
+  getTelegramUserId,
+  initTelegramWebApp,
+  releaseTelegramClosingConfirmation
+} from "@/lib/telegram";
 
 export function TelegramBootstrap() {
   const router = useRouter();
@@ -11,7 +17,11 @@ export function TelegramBootstrap() {
 
   useEffect(() => {
     initTelegramWebApp();
+    acquireTelegramClosingConfirmation();
+    return () => releaseTelegramClosingConfirmation();
+  }, []);
 
+  useEffect(() => {
     if (typeof window !== "undefined" && "serviceWorker" in navigator) {
       navigator.serviceWorker
         .register("/sw-audio.js")

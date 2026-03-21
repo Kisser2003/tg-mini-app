@@ -19,7 +19,11 @@ import {
 import { FileUploader } from "@/components/FileUploader";
 import { FormFieldError } from "@/components/FormFieldError";
 import { GLASS_FIELD_BASE, GLASS_FIELD_ERROR_STRONG } from "@/lib/glass-form-classes";
-import { setTelegramClosingConfirmation, triggerHaptic } from "@/lib/telegram";
+import {
+  acquireTelegramClosingConfirmation,
+  releaseTelegramClosingConfirmation,
+  triggerHaptic
+} from "@/lib/telegram";
 import { toast } from "sonner";
 
 export default function CreateTracksPage() {
@@ -161,7 +165,7 @@ export default function CreateTracksPage() {
 
       setIsUploadingWav(true);
       setTrackUploadProgress({});
-      setTelegramClosingConfirmation(true);
+      acquireTelegramClosingConfirmation();
       try {
         const saved = await saveDraftAction();
         if (!saved.ok) {
@@ -182,8 +186,11 @@ export default function CreateTracksPage() {
           return;
         }
         router.push("/create/review");
+      } catch (unexpected) {
+        console.error("[create/tracks handleNext]", unexpected);
+        toast.error("Произошла ошибка. Попробуйте ещё раз.");
       } finally {
-        setTelegramClosingConfirmation(false);
+        releaseTelegramClosingConfirmation();
         setIsUploadingWav(false);
         setActiveUploadIndex(null);
         setTrackUploadProgress({});

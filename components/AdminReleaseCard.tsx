@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { motion, type Variants } from "framer-motion";
@@ -9,6 +10,7 @@ import { AudioPlayerLazy } from "@/components/AudioPlayerLazy";
 import type { ReleaseRecord, ReleaseTrackRow } from "@/repositories/releases.repo";
 import { getReleaseStatusMeta } from "@/lib/release-status";
 import { Badge } from "@/components/Badge";
+import { ARTWORK_BLUR_DATA_URL } from "@/lib/image-blur";
 import { triggerHaptic } from "@/lib/telegram";
 
 function releaseTypeLabel(type: ReleaseRecord["release_type"]): string {
@@ -58,7 +60,7 @@ type AdminReleaseCardProps = {
 
 const ARTWORK_SIZES = "(max-width: 768px) 100vw, 33vw";
 
-export function AdminReleaseCard({
+function AdminReleaseCardInner({
   release,
   tracks,
   index: _index,
@@ -100,6 +102,8 @@ export function AdminReleaseCard({
               sizes={ARTWORK_SIZES}
               className="object-cover"
               priority={artworkPriority}
+              placeholder="blur"
+              blurDataURL={ARTWORK_BLUR_DATA_URL}
             />
           ) : (
             <div className="flex h-full w-full items-center justify-center text-[10px] text-white/45">
@@ -199,3 +203,5 @@ export function AdminReleaseCard({
     </ArtworkCoverGlow>
   );
 }
+
+export const AdminReleaseCard = memo(AdminReleaseCardInner);

@@ -3,11 +3,13 @@
 import { useEffect, useRef, useMemo, useState, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
-import { useForm, useFieldArray, type FieldErrors } from "react-hook-form";
+import { useForm, type FieldErrors } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Calendar } from "lucide-react";
+import { AlertTriangle, Calendar, Languages, Mic2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { FormFieldError } from "@/components/FormFieldError";
+import { ArtistProfileLinksSection } from "@/features/release/createRelease/components/ArtistProfileLinksSection";
+import { ArtistSetupModal } from "@/features/release/createRelease/components/ArtistSetupModal";
 import { CreateShell } from "@/features/release/createRelease/components/CreateShell";
 import { metadataSchema } from "@/features/release/createRelease/schemas";
 import type { CreateMetadata } from "@/features/release/createRelease/types";
@@ -29,6 +31,10 @@ import {
   validateMetadata,
   type ReleaseMetadata
 } from "@/lib/metadata-validator";
+import {
+  PERFORMANCE_LANGUAGE_LABELS,
+  PERFORMANCE_LANGUAGE_VALUES
+} from "@/lib/performance-language";
 import {
   GLASS_DATE_WRAP_BASE,
   GLASS_DATE_WRAP_ERROR_SOFT,
@@ -78,6 +84,8 @@ function CreateMetadataPageInner() {
   const storeMetadata = useCreateReleaseDraftStore((s) => s.metadata);
   const setMetadata = useCreateReleaseDraftStore((s) => s.setMetadata);
   const storeTracks = useCreateReleaseDraftStore((s) => s.tracks);
+  const artistSetupGateCompleted = useCreateReleaseDraftStore((s) => s.artistSetupGateCompleted);
+  const persistedReleaseId = useCreateReleaseDraftStore((s) => s.releaseId);
 
   const [isHydrating, setIsHydrating] = useState(Boolean(releaseIdParam));
   const [hydrateError, setHydrateError] = useState<string | null>(null);
@@ -142,7 +150,6 @@ function CreateMetadataPageInner() {
 
   const {
     register,
-    control,
     handleSubmit,
     watch,
     setValue,
@@ -152,11 +159,6 @@ function CreateMetadataPageInner() {
     resolver: zodResolver(metadataSchema),
     mode: "onChange",
     defaultValues
-  });
-
-  const { fields: artistFields, append, remove } = useFieldArray({
-    control,
-    name: "artists"
   });
 
   // Post-mount hydration fix: on a hard page-refresh the SSR pass renders with
@@ -178,11 +180,11 @@ function CreateMetadataPageInner() {
     const rawTitles = storeTracks.map((t) => t.title);
     const hasAnyTrackTitle = rawTitles.some((t) => t.trim().length > 0);
     return {
-      artists: values.artists ?? [],
+      primaryArtist: values.primaryArtist ?? "",
       releaseTitle: values.releaseTitle ?? "",
       trackTitles: hasAnyTrackTitle ? rawTitles : undefined
     };
-  }, [values.artists, values.releaseTitle, storeTracks]);
+  }, [values.primaryArtist, values.releaseTitle, storeTracks]);
 
   const guidelineFieldFlags = useMemo(
     () => getMetadataFieldWarningFlags(metaForGuidelines),
@@ -201,11 +203,11 @@ function CreateMetadataPageInner() {
   }, [values, isDirty, setMetadata]);
 
   useEffect(() => {
-    const primaryArtist = values.artists?.[0]?.name;
+    const primaryArtist = values.primaryArtist?.trim();
     if (primaryArtist && !values.label) {
       setValue("label", primaryArtist, { shouldValidate: false, shouldDirty: true });
     }
-  }, [setValue, values.artists, values.label]);
+  }, [setValue, values.primaryArtist, values.label]);
 
   const minReleaseDate = useMemo(() => {
     const today = new Date();
@@ -218,15 +220,29 @@ function CreateMetadataPageInner() {
     return `${year}-${month}-${day}`;
   }, []);
 
+  const isEarlyReleaseDate = useMemo(() => {
+    const d = values.releaseDate?.trim();
+    if (!d) return false;
+    const picked = new Date(`${d}T12:00:00`);
+    if (Number.isNaN(picked.getTime())) return false;
+    const threshold = new Date();
+    threshold.setHours(0, 0, 0, 0);
+    threshold.setDate(threshold.getDate() + 14);
+    return picked < threshold;
+  }, [values.releaseDate]);
+
   const onSubmit = useCallback(async (data: CreateMetadata) => {
     hapticMap.impactLight();
     const tracks = useCreateReleaseDraftStore.getState().tracks;
     const rawTitles = tracks.map((t) => t.title);
     const hasAnyTrackTitle = rawTitles.some((t) => t.trim().length > 0);
+    const links = useCreateReleaseDraftStore.getState().releaseArtistLinks;
     const meta: ReleaseMetadata = {
-      artists: data.artists,
+      primaryArtist: data.primaryArtist,
       releaseTitle: data.releaseTitle,
-      trackTitles: hasAnyTrackTitle ? rawTitles : undefined
+      trackTitles: hasAnyTrackTitle ? rawTitles : undefined,
+      language: data.language,
+      releaseArtistLinks: links
     };
     const dsp = validateMetadata(meta);
     if (!dsp.isValid) {
@@ -253,10 +269,20 @@ function CreateMetadataPageInner() {
   }, []);
 
   const canProceed =
-    Boolean(values.releaseTitle?.trim()) && Boolean(values.genre?.trim());
+    Boolean(values.primaryArtist?.trim()) &&
+    Boolean(values.releaseTitle?.trim()) &&
+    Boolean(values.genre?.trim()) &&
+    Boolean(values.language);
+
+  const showArtistSetupModal =
+    artistSetupGateCompleted === false &&
+    !releaseIdParam &&
+    !isHydrating &&
+    !persistedReleaseId;
 
   return (
     <CreateShell title="Релиз · Паспорт">
+      <ArtistSetupModal open={showArtistSetupModal} />
       <div className="rounded-[24px] border border-white/[0.08] bg-surface/80 px-5 py-5 shadow-[0_18px_40px_rgba(0,0,0,0.7)] backdrop-blur-2xl">
         {isHydrating ? (
           <p className="text-[13px] text-text-muted">Загружаем данные релиза…</p>
@@ -301,72 +327,23 @@ function CreateMetadataPageInner() {
                 </div>
               </div>
             )}
-            <p className="rounded-[14px] border border-amber-500/25 bg-amber-950/25 px-3 py-2.5 text-[12px] leading-relaxed text-amber-100/90">
-              Пожалуйста, не используйте Caps Lock и эмодзи в названиях — так проходят требования
-              стриминговых площадок. Поля с замечаниями подсвечиваются жёлтым; вы всё равно можете
-              продолжить — финальное решение за модерацией.
-            </p>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/60">
-                  Артисты
-                </span>
-                <button
-                  type="button"
-                  onClick={() => append({ name: "", role: "featuring" })}
-                  className="text-[11px] font-medium text-[#A5B4FC]"
-                >
-                  + Добавить
-                </button>
-              </div>
-              <div className="space-y-2">
-                {artistFields.map((field, idx) => (
-                  <div
-                    key={field.id}
-                    className="flex flex-col gap-2 rounded-[16px] border border-white/[0.06] bg-black/35 px-3 py-3 sm:px-4"
-                  >
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                      <input
-                        {...register(`artists.${idx}.name` as const)}
-                        placeholder={idx === 0 ? "Основной артист" : "Feat / Remixer"}
-                        className={`${artistInputBase} ${borderForField(
-                          Boolean(errors.artists?.[idx]?.name),
-                          touchedFields.artists?.[idx]?.name,
-                          dirtyFields.artists?.[idx]?.name,
-                          guidelineFieldFlags.artists[idx] === true
-                        )}`}
-                      />
-                      <div className="flex w-full shrink-0 items-center gap-2 sm:w-auto sm:justify-end">
-                        <select
-                          {...register(`artists.${idx}.role` as const)}
-                          className="h-11 min-h-[44px] w-full max-w-[140px] rounded-full border border-white/[0.08] bg-black/50 px-4 text-[16px] text-white/90 outline-none transition-[background-color,box-shadow] duration-200 [color-scheme:dark] focus:bg-black/70 focus:ring-2 focus:ring-violet-500/25 focus:ring-offset-0 sm:w-auto"
-                        >
-                          <option value="primary">Primary</option>
-                          <option value="featuring">Featuring</option>
-                        </select>
-                        {idx > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => remove(idx)}
-                            className="shrink-0 self-end text-[11px] text-white/40 sm:self-auto"
-                          >
-                            ✕
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    <FormFieldError
-                      message={
-                        errors.artists?.[idx]?.name &&
-                        (touchedFields.artists?.[idx]?.name || dirtyFields.artists?.[idx]?.name)
-                          ? errors.artists[idx]?.name?.message
-                          : undefined
-                      }
-                    />
-                  </div>
-                ))}
-              </div>
-              <FormFieldError message={errors.artists?.root?.message} />
+            <div className="min-w-0 space-y-1.5">
+              <label className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.18em] text-white/60">
+                <Mic2 className="h-3.5 w-3.5 text-white/45" aria-hidden />
+                Артист
+              </label>
+              <input
+                {...register("primaryArtist")}
+                className={`${artistInputBase} ${borderForField(
+                  Boolean(errors.primaryArtist),
+                  touchedFields.primaryArtist,
+                  dirtyFields.primaryArtist,
+                  guidelineFieldFlags.primaryArtist
+                )}`}
+                placeholder="Имя на обложке"
+                autoComplete="off"
+              />
+              <FormFieldError message={errors.primaryArtist?.message} />
             </div>
 
             <div className="min-w-0 space-y-1.5">
@@ -384,6 +361,56 @@ function CreateMetadataPageInner() {
                 placeholder="Основное название релиза"
               />
               <FormFieldError message={errors.releaseTitle?.message} />
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="min-w-0 space-y-1.5">
+                <label className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.18em] text-white/60">
+                  <Languages className="h-3.5 w-3.5 text-white/50" aria-hidden />
+                  Язык исполнения
+                </label>
+                <select
+                  {...register("language")}
+                  className={`${GLASS_FIELD_BASE} [color-scheme:dark] ${borderForField(
+                    Boolean(errors.language),
+                    touchedFields.language,
+                    dirtyFields.language
+                  )}`}
+                >
+                  {PERFORMANCE_LANGUAGE_VALUES.map((code) => (
+                    <option key={code} value={code}>
+                      {PERFORMANCE_LANGUAGE_LABELS[code]}
+                    </option>
+                  ))}
+                </select>
+                <FormFieldError message={errors.language?.message} />
+              </div>
+              <div className="flex items-center justify-between gap-2 rounded-[12px] border border-white/[0.08] bg-black/35 px-2.5 py-1.5">
+                <div className="min-w-0 flex-1">
+                  <p className="flex items-center gap-1.5 text-[11px] font-medium leading-tight text-white">
+                    <AlertTriangle className="h-3 w-3 shrink-0 text-amber-400/90" aria-hidden />
+                    Explicit
+                  </p>
+                  <p className="mt-0.5 text-[9px] leading-snug text-white/40">
+                    Для корректного размещения на площадках
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  aria-label="Explicit content"
+                  onClick={() => setValue("explicit", !values.explicit, { shouldValidate: true })}
+                  className={`inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full px-[2px] transition-colors ${
+                    values.explicit ? "bg-[#EF4444]" : "bg-white/20"
+                  }`}
+                >
+                  <motion.span
+                    layout
+                    transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                    animate={{ x: values.explicit ? 22 : 0 }}
+                    className="h-4 w-4 rounded-full bg-white"
+                  />
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -428,10 +455,11 @@ function CreateMetadataPageInner() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="space-y-2">
               <div className="min-w-0 space-y-1.5">
-                <label className="block text-[11px] font-medium uppercase tracking-[0.18em] text-white/60">
-                  Дата релиза
+                <label className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.18em] text-white/60">
+                  <Calendar className="h-3.5 w-3.5 text-white/45" strokeWidth={1.5} aria-hidden />
+                  Плановая дата релиза
                 </label>
                 <div
                   className={`${GLASS_DATE_WRAP_BASE} ${borderForDateWrap(
@@ -454,6 +482,12 @@ function CreateMetadataPageInner() {
                 </div>
                 <FormFieldError message={errors.releaseDate?.message} />
               </div>
+              {isEarlyReleaseDate && (
+                <p className="rounded-[12px] border border-sky-500/30 bg-sky-950/35 px-3 py-2.5 text-[11px] leading-relaxed text-sky-100/90">
+                  Внимание: при раннем релизе шанс попасть в редакционные плейлисты снижается.
+                  Рекомендуем выбирать дату за 2 недели.
+                </p>
+              )}
               <div className="min-w-0 space-y-1.5">
                 <label className="block text-[11px] font-medium uppercase tracking-[0.18em] text-white/60">
                   Лейбл
@@ -471,29 +505,7 @@ function CreateMetadataPageInner() {
               </div>
             </div>
 
-            <div className="flex items-center justify-between gap-4 rounded-[18px] border border-white/[0.08] bg-black/40 px-4 py-3">
-              <div className="min-w-0 flex-1 space-y-0.5">
-                <p className="text-[13px] font-medium">Explicit (18+)</p>
-                <p className="break-words text-[11px] leading-relaxed text-white/50">
-                  Отметьте, если в тексте есть ненормативная лексика.
-                </p>
-              </div>
-              <button
-                type="button"
-                aria-label="Ненормативная лексика"
-                onClick={() => setValue("explicit", !values.explicit, { shouldValidate: true })}
-                className={`inline-flex h-7 w-12 flex-shrink-0 items-center rounded-full px-[3px] transition-colors ${
-                  values.explicit ? "bg-[#EF4444]" : "bg-white/20"
-                }`}
-              >
-                <motion.span
-                  layout
-                  transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                  animate={{ x: values.explicit ? 18 : 0 }}
-                  className="h-5 w-5 rounded-full bg-white"
-                />
-              </button>
-            </div>
+            <ArtistProfileLinksSection />
 
             <MagneticButton
               type="submit"

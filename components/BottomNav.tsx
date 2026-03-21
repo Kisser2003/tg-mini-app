@@ -1,17 +1,16 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { memo, useMemo } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import type { LucideIcon } from "lucide-react";
 import { Library, Shield, Wallet } from "lucide-react";
+import { useKeyboardVisible } from "@/hooks/useKeyboardVisible";
 import { useScrollDirection } from "@/hooks/useScrollDirection";
 import { isAdminUi } from "@/lib/admin";
 import { hapticMap } from "@/lib/haptic-map";
 import { SPRING_UI } from "@/lib/motion-spring";
 import { initTelegramWebApp } from "@/lib/telegram";
-
-const MAG_MAX_PX = 6;
 
 type NavItem = {
   label: string;
@@ -29,77 +28,51 @@ function BottomNavItem({
   onNavigate: () => void;
 }) {
   const Icon = item.icon;
-  const btnRef = useRef<HTMLButtonElement>(null);
-  const [mag, setMag] = useState({ x: 0, y: 0 });
-
-  const onPointerMove = useCallback((e: React.PointerEvent<HTMLButtonElement>) => {
-    const el = btnRef.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    const cx = r.left + r.width / 2;
-    const cy = r.top + r.height / 2;
-    const nx = (e.clientX - cx) / (r.width / 2);
-    const ny = (e.clientY - cy) / (r.height / 2);
-    setMag({
-      x: Math.max(-1, Math.min(1, nx)) * MAG_MAX_PX,
-      y: Math.max(-1, Math.min(1, ny)) * MAG_MAX_PX
-    });
-  }, []);
-
-  const onPointerLeave = useCallback(() => {
-    setMag({ x: 0, y: 0 });
-  }, []);
 
   return (
     <motion.button
-      ref={btnRef}
       type="button"
-      onPointerMove={onPointerMove}
-      onPointerLeave={onPointerLeave}
-      whileTap={{ scale: 0.92 }}
+      whileTap={{ scale: 0.96 }}
       transition={SPRING_UI}
       onClick={onNavigate}
-      className={`relative flex flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 text-[11px] transition-colors ${
+      className={`relative flex min-h-0 min-w-0 flex-col items-center justify-center rounded-2xl px-0 py-2 text-[11px] leading-tight transition-colors ${
         active ? "text-white" : "text-white/60 hover:text-white"
       }`}
     >
-      <div className="relative flex h-10 w-full items-center justify-center">
-        {active && (
-          <motion.div
-            layoutId="activeTab"
-            className="absolute left-1/2 top-1/2 h-9 w-11 -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white/15"
+      {/* Фиксированный квадрат 40×40: без layoutId — иначе shared layout ломает позицию при transform у предков */}
+      <div className="relative mx-auto flex h-10 w-10 shrink-0 items-center justify-center">
+        {active ? (
+          <div
+            className="pointer-events-none absolute inset-0 z-0 rounded-2xl bg-white/15"
             style={{
               boxShadow:
                 "0 0 22px color-mix(in srgb, var(--tg-theme-button-color, #3390ec) 42%, transparent), inset 0 1px 0 rgba(255,255,255,0.12)"
             }}
-            transition={SPRING_UI}
+            aria-hidden
           />
-        )}
+        ) : null}
         <span
-          className="relative z-10 flex items-center justify-center will-change-transform"
-          style={{ transform: `translate(${mag.x}px, ${mag.y}px)` }}
+          className="relative z-10 flex items-center justify-center"
+          style={
+            active
+              ? {
+                  filter:
+                    "drop-shadow(0 0 10px color-mix(in srgb, var(--tg-theme-button-color, #3390ec) 50%, transparent))"
+                }
+              : undefined
+          }
         >
-          <span
-            className="rounded-full p-1"
-            style={
-              active
-                ? {
-                    filter:
-                      "drop-shadow(0 0 10px color-mix(in srgb, var(--tg-theme-button-color, #3390ec) 50%, transparent))"
-                  }
-                : undefined
-            }
-          >
-            <Icon className="h-4 w-4" />
+          <span className="rounded-full p-1">
+            <Icon className="h-4 w-4 shrink-0" strokeWidth={2} />
           </span>
         </span>
       </div>
-      <span className="relative z-10">{item.label}</span>
+      <span className="relative z-10 max-w-full whitespace-nowrap text-center">{item.label}</span>
     </motion.button>
   );
 }
 
-export function BottomNav() {
+function BottomNavInner() {
   const pathname = usePathname();
   const router = useRouter();
   const showAdminTab = useMemo(() => {
@@ -117,28 +90,33 @@ export function BottomNav() {
   );
 
   const scrollHideEnabled = pathname !== "/create/success";
-  const navVisible = useScrollDirection({
+  const scrollNavVisible = useScrollDirection({
     enabled: scrollHideEnabled,
     pathname,
     threshold: 16
   });
 
+  const isKeyboardOpen = useKeyboardVisible();
+
+  if (isKeyboardOpen) {
+    return null;
+  }
+
+  const showBar = scrollNavVisible;
+
   return (
     <nav
       aria-label="Основная навигация"
-      className="fixed bottom-4 left-1/2 z-40 w-[calc(100%-1.5rem)] max-w-[450px] -translate-x-1/2 pb-[env(safe-area-inset-bottom,0px)]"
+      className="fixed bottom-0 left-1/2 z-40 w-[calc(100%-1.5rem)] max-w-[450px] -translate-x-1/2 px-3 pb-[calc(env(safe-area-inset-bottom,0px)+0.5rem)] pt-2"
     >
       <motion.div
         initial={false}
-        animate={{ y: navVisible ? 0 : "115%" }}
+        animate={{ y: showBar ? 0 : "115%" }}
         transition={{ type: "tween", ease: "circOut", duration: 0.2 }}
         className="will-change-transform"
         style={{ willChange: "transform" }}
       >
-        <div
-          className="grid gap-1 rounded-[24px] border-t border-white/10 border-x border-b border-white/[0.06] bg-black/60 p-2 backdrop-blur-xl shadow-[0_-8px_32px_rgba(0,0,0,0.45)]"
-          style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}
-        >
+        <div className="grid w-full grid-cols-3 rounded-[24px] border border-white/[0.06] border-t-white/10 bg-black/60 p-2 backdrop-blur-xl shadow-[0_-8px_32px_rgba(0,0,0,0.45)]">
           {items.map((item) => {
             const active =
               item.href === "/library"
@@ -162,3 +140,5 @@ export function BottomNav() {
     </nav>
   );
 }
+
+export const BottomNav = memo(BottomNavInner);

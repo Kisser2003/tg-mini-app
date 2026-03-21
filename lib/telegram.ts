@@ -65,15 +65,14 @@ export function isTelegramMiniApp(): boolean {
   return Boolean(getTelegramWebApp()?.initData);
 }
 
-/**
- * Подтверждение закрытия мини-приложения (пока идёт загрузка и т.п.).
- * В обычном браузере — no-op.
- */
-export function setTelegramClosingConfirmation(enabled: boolean): void {
+/** Счётчик причин держать enableClosingConfirmation (bootstrap + загрузки). */
+let closingConfirmationRefCount = 0;
+
+function applyTelegramClosingConfirmationFromRefCount(): void {
   const webApp = getTelegramWebApp();
   if (!webApp) return;
   try {
-    if (enabled) {
+    if (closingConfirmationRefCount > 0) {
       webApp.enableClosingConfirmation?.();
     } else {
       webApp.disableClosingConfirmation?.();
@@ -81,6 +80,31 @@ export function setTelegramClosingConfirmation(enabled: boolean): void {
   } catch {
     /* ignore */
   }
+}
+
+/**
+ * Запросить подтверждение при закрытии (увеличить счётчик).
+ * Пока счётчик > 0, WebApp спросит перед выходом.
+ */
+export function acquireTelegramClosingConfirmation(): void {
+  closingConfirmationRefCount += 1;
+  applyTelegramClosingConfirmationFromRefCount();
+}
+
+/**
+ * Снять один запрос подтверждения (уменьшить счётчик).
+ */
+export function releaseTelegramClosingConfirmation(): void {
+  closingConfirmationRefCount = Math.max(0, closingConfirmationRefCount - 1);
+  applyTelegramClosingConfirmationFromRefCount();
+}
+
+/**
+ * @deprecated Используйте пару acquire/release — иначе ломается общий счётчик с bootstrap.
+ */
+export function setTelegramClosingConfirmation(enabled: boolean): void {
+  if (enabled) acquireTelegramClosingConfirmation();
+  else releaseTelegramClosingConfirmation();
 }
 
 export function initTelegramWebApp() {

@@ -6,6 +6,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { toast } from "sonner";
 import { AnimatePresence, motion } from "framer-motion";
+import confetti from "canvas-confetti";
+import { Music } from "lucide-react";
 import { GlassCard } from "@/components/GlassCard";
 import { CreateShell } from "@/features/release/createRelease/components/CreateShell";
 import { hapticMap } from "@/lib/haptic-map";
@@ -15,7 +17,15 @@ import { useCreateReleaseDraftStore } from "@/features/release/createRelease/sto
 import { submitTracksAndFinalize } from "@/features/release/createRelease/actions";
 import { UploadProgress } from "@/components/UploadProgress";
 import { logClientError } from "@/lib/logger";
-import { setTelegramClosingConfirmation, triggerHaptic } from "@/lib/telegram";
+import {
+  acquireTelegramClosingConfirmation,
+  releaseTelegramClosingConfirmation,
+  triggerHaptic
+} from "@/lib/telegram";
+import {
+  PERFORMANCE_LANGUAGE_LABELS,
+  type PerformanceLanguage
+} from "@/lib/performance-language";
 
 function SectionDivider() {
   return (
@@ -26,36 +36,73 @@ function SectionDivider() {
   );
 }
 
-function AudioVisualizerBars() {
-  const pxHeights = [11, 16, 9, 14];
-  const patterns: [number, number, number, number, number][] = [
-    [0.45, 1, 0.55, 0.8, 0.45],
-    [0.5, 0.75, 1, 0.6, 0.5],
-    [0.4, 0.95, 0.5, 0.85, 0.4],
-    [0.55, 0.65, 0.9, 1, 0.55]
-  ];
+function formatReleaseDateBadge(iso: string | undefined): string {
+  const d = iso?.trim();
+  if (!d) return "—";
+  const parsed = new Date(`${d}T12:00:00`);
+  if (Number.isNaN(parsed.getTime())) return d;
+  return parsed.toLocaleDateString("ru-RU", {
+    day: "numeric",
+    month: "short",
+    year: "numeric"
+  });
+}
+
+const RELEASE_TYPE_RU: Record<string, string> = {
+  single: "Сингл",
+  ep: "EP",
+  album: "Альбом"
+};
+
+function PulsingTrackIcon() {
   return (
-    <div
-      className="flex h-[18px] w-[22px] shrink-0 items-end justify-center gap-[3px]"
+    <motion.span
+      className="inline-flex shrink-0"
       aria-hidden
+      animate={{
+        scale: [1, 1.08, 1],
+        opacity: [0.75, 1, 0.75]
+      }}
+      transition={{
+        duration: 2,
+        repeat: Infinity,
+        ease: "easeInOut"
+      }}
     >
-      {pxHeights.map((h, i) => (
-        <motion.span
-          // eslint-disable-next-line react/no-array-index-key
-          key={i}
-          className="w-[3px] origin-bottom rounded-full bg-gradient-to-t from-violet-500/40 to-fuchsia-400/90"
-          style={{ height: h }}
-          animate={{ scaleY: patterns[i] ?? [0.5, 1, 0.5] }}
-          transition={{
-            duration: 0.75 + i * 0.08,
-            repeat: Infinity,
-            ease: "easeInOut",
-            delay: i * 0.11
-          }}
-        />
-      ))}
-    </div>
+      <Music className="h-[18px] w-[18px] text-violet-400/95 drop-shadow-[0_0_12px_rgba(167,139,250,0.35)]" />
+    </motion.span>
   );
+}
+
+function fireLaunchConfetti() {
+  const colors = ["#a855f7", "#6366f1", "#e879f9", "#f0abfc", "#ffffff"];
+  const base = { origin: { y: 0.72 }, colors };
+  void confetti({ ...base, particleCount: 90, spread: 58, startVelocity: 32 });
+  window.setTimeout(() => {
+    void confetti({
+      ...base,
+      particleCount: 55,
+      spread: 100,
+      scalar: 0.9,
+      ticks: 220
+    });
+  }, 180);
+  window.setTimeout(() => {
+    void confetti({
+      particleCount: 40,
+      angle: 120,
+      spread: 55,
+      origin: { x: 0.15, y: 0.75 },
+      colors
+    });
+    void confetti({
+      particleCount: 40,
+      angle: 60,
+      spread: 55,
+      origin: { x: 0.85, y: 0.75 },
+      colors
+    });
+  }, 320);
 }
 
 function VinylWithArtwork({ artworkUrl }: { artworkUrl: string | null }) {
@@ -64,7 +111,7 @@ function VinylWithArtwork({ artworkUrl }: { artworkUrl: string | null }) {
       <motion.div
         className="absolute inset-0 rounded-full bg-gradient-to-br from-zinc-800 via-zinc-950 to-black shadow-[inset_0_0_48px_rgba(0,0,0,0.85),0_12px_40px_rgba(0,0,0,0.5)]"
         animate={{ rotate: 360 }}
-        transition={{ duration: 28, repeat: Infinity, ease: "linear" }}
+        transition={{ repeat: Infinity, duration: 10, ease: "linear" }}
       >
         <div
           className="absolute inset-0 rounded-full opacity-[0.45]"
@@ -146,7 +193,7 @@ export default function CreateReviewPage() {
     (submitStatus === "success" && !progressDismissed);
 
   const releaseTitle = metadata.releaseTitle?.trim() || "Релиз";
-  const artistName = metadata.artists?.[0]?.name?.trim() || "Артист";
+  const artistName = metadata.primaryArtist?.trim() || "Артист";
 
   useEffect(() => {
     if (submitStatus === "success") {
@@ -166,8 +213,9 @@ export default function CreateReviewPage() {
 
   useEffect(() => {
     const busy = isSubmitting || submitStatus === "submitting";
-    setTelegramClosingConfirmation(busy);
-    return () => setTelegramClosingConfirmation(false);
+    if (!busy) return;
+    acquireTelegramClosingConfirmation();
+    return () => releaseTelegramClosingConfirmation();
   }, [isSubmitting, submitStatus]);
 
   useEffect(() => {
@@ -222,6 +270,7 @@ export default function CreateReviewPage() {
       });
       return;
     }
+    fireLaunchConfetti();
     pendingSuccessNavRef.current = true;
     if (successNavFallbackTimerRef.current != null) {
       window.clearTimeout(successNavFallbackTimerRef.current);
@@ -325,10 +374,26 @@ export default function CreateReviewPage() {
                   <p className="mt-2 break-words text-[15px] text-white/92">
                     {artistName} — {releaseTitle}
                   </p>
-                  <p className="mt-1.5 break-words text-[12px] text-white/50">
-                    {metadata.releaseType} · {metadata.genre || "жанр"} ·{" "}
-                    {metadata.releaseDate || "дата"}
-                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <span className="inline-flex items-center rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-medium text-white/90 backdrop-blur-md">
+                      {RELEASE_TYPE_RU[metadata.releaseType] ?? metadata.releaseType}
+                    </span>
+                    <span className="inline-flex items-center rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-medium text-white/90 backdrop-blur-md">
+                      {metadata.genre?.trim() || "Жанр"}
+                    </span>
+                    <span className="inline-flex items-center rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-medium text-white/90 backdrop-blur-md">
+                      {PERFORMANCE_LANGUAGE_LABELS[metadata.language as PerformanceLanguage] ??
+                        metadata.language}
+                    </span>
+                    <span className="inline-flex items-center rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-medium text-white/90 backdrop-blur-md">
+                      {formatReleaseDateBadge(metadata.releaseDate)}
+                    </span>
+                    {metadata.explicit ? (
+                      <span className="inline-flex items-center rounded-full border border-red-500/25 bg-red-500/15 px-3 py-1 text-xs font-medium text-red-100/95 backdrop-blur-md">
+                        Explicit
+                      </span>
+                    ) : null}
+                  </div>
                 </section>
 
                 <SectionDivider />
@@ -369,7 +434,7 @@ export default function CreateReviewPage() {
                           transition={{ delay: 0.05 * i, duration: 0.35 }}
                         >
                           <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                            <AudioVisualizerBars />
+                            <PulsingTrackIcon />
                             <span className="min-w-0 truncate text-[14px]">
                               {i + 1}. {t.title || "Без названия"}
                             </span>
@@ -407,20 +472,32 @@ export default function CreateReviewPage() {
                 type="button"
                 disabled={submitBlocked}
                 onClick={() => void handleSubmit()}
-                whileTap={submitBlocked ? undefined : { scale: 0.95 }}
-                className="relative inline-flex h-[58px] w-full items-center justify-center overflow-hidden rounded-[22px] bg-gradient-to-r from-[#6366f1] via-[#a855f7] to-[#ec4899] text-[16px] font-semibold text-white shadow-[0_16px_44px_rgba(168,85,247,0.35)] disabled:cursor-not-allowed disabled:opacity-55 disabled:shadow-none"
+                whileTap={submitBlocked ? undefined : { scale: 0.98 }}
+                whileHover={submitBlocked ? undefined : { scale: 1.02 }}
+                transition={{ type: "spring", stiffness: 420, damping: 28 }}
+                className="group relative inline-flex h-[58px] w-full items-center justify-center overflow-hidden rounded-[22px] bg-gradient-to-r from-[#6366f1] via-[#a855f7] to-[#ec4899] text-[16px] font-semibold text-white shadow-[0_16px_44px_rgba(168,85,247,0.35)] transition-transform duration-200 hover:shadow-[0_18px_52px_rgba(168,85,247,0.45)] disabled:cursor-not-allowed disabled:opacity-55 disabled:shadow-none disabled:hover:scale-100"
               >
+                <span
+                  className="pointer-events-none absolute inset-0 opacity-40 mix-blend-overlay"
+                  style={{
+                    background:
+                      "linear-gradient(110deg, transparent 0%, transparent 38%, rgba(255,255,255,0.12) 50%, transparent 62%, transparent 100%)",
+                    backgroundSize: "200% 100%",
+                    animation: submitBlocked ? "none" : "review-btn-shimmer 3.2s ease-in-out infinite"
+                  }}
+                  aria-hidden
+                />
                 <motion.span
-                  className="pointer-events-none absolute inset-y-0 left-0 w-[42%] skew-x-[-18deg] bg-gradient-to-r from-transparent via-white/35 to-transparent opacity-70"
-                  animate={submitBlocked ? undefined : { x: ["-120%", "220%"] }}
+                  className="pointer-events-none absolute inset-y-0 left-0 w-[38%] skew-x-[-16deg] bg-gradient-to-r from-transparent via-white/40 to-transparent opacity-60"
+                  animate={submitBlocked ? undefined : { x: ["-130%", "230%"] }}
                   transition={{
-                    duration: 2.4,
+                    duration: 2.8,
                     repeat: Infinity,
-                    ease: "easeInOut",
-                    repeatDelay: 0.2
+                    ease: "linear",
+                    repeatDelay: 0.35
                   }}
                 />
-                <span className="relative z-[1]">
+                <span className="relative z-[1] drop-shadow-sm">
                   {tracksUploadInProgress
                     ? "Загрузка WAV…"
                     : isSubmitting || submitStatus === "submitting"

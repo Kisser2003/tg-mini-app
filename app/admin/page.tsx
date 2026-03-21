@@ -24,7 +24,8 @@ import { sendApprovalNotification } from "@/lib/bot-api";
 import { hapticMap } from "@/lib/haptic-map";
 import { getTelegramUserId, initTelegramWebApp, triggerHaptic } from "@/lib/telegram";
 import { AdminModerationQueueSkeleton } from "@/components/ui/Skeleton";
-import { USER_REQUEST_TIMEOUT_MESSAGE } from "@/lib/errors";
+import { errorToUserString, USER_REQUEST_TIMEOUT_MESSAGE } from "@/lib/errors";
+import { SWR_LIST_OPTIONS } from "@/lib/swr-config";
 import { withRequestTimeout } from "@/lib/withRequestTimeout";
 
 type ModerationQueueRow = {
@@ -73,6 +74,12 @@ export default function AdminPage() {
     debugInit("admin", "init done");
   }, []);
 
+  useEffect(() => {
+    if (!isAdmin) {
+      router.replace("/");
+    }
+  }, [isAdmin, router]);
+
   const swrKey = isAdmin ? (["admin-moderation-queue"] as const) : null;
   const statsKey = isAdmin ? (["admin-stats"] as const) : null;
 
@@ -96,6 +103,7 @@ export default function AdminPage() {
         USER_REQUEST_TIMEOUT_MESSAGE
       ),
     {
+      ...SWR_LIST_OPTIONS,
       refreshInterval: 8000,
       keepPreviousData: true
     }
@@ -106,13 +114,13 @@ export default function AdminPage() {
     error: statsError,
     mutate: mutateStats
   } = useSWR(statsKey, fetchAdminStats, {
-    refreshInterval: 15000,
-    dedupingInterval: 5000
+    ...SWR_LIST_OPTIONS,
+    refreshInterval: 15000
   });
 
   const moderationQueue = data ?? [];
-  const errorMessage =
-    error instanceof Error ? error.message : error != null ? String(error) : null;
+  const errorMessage = errorToUserString(error);
+  const statsErrorMessage = errorToUserString(statsError);
 
   const refreshAll = useCallback(async () => {
     await Promise.all([mutate(undefined, { revalidate: true }), mutateStats(undefined, { revalidate: true })]);
@@ -167,6 +175,10 @@ export default function AdminPage() {
     [refreshAll, router]
   );
 
+  if (!isAdmin) {
+    return null;
+  }
+
   if (userId == null && process.env.NODE_ENV === "production") {
     return (
       <GlassCard className="p-5">
@@ -178,20 +190,10 @@ export default function AdminPage() {
     );
   }
 
-  if (!isAdmin) {
-    return (
-      <GlassCard className="p-5">
-        <h1 className="text-xl font-semibold tracking-tight">Панель модерации</h1>
-        <p className="mt-2 text-sm text-white/65">Доступ только для администратора.</p>
-      </GlassCard>
-    );
-  }
-
   const showQueueSkeleton = isLoading && data === undefined;
   const pendingQueueCount = stats?.pending_queue ?? moderationQueue.length;
   const readyToday = stats?.ready_today ?? 0;
   const holdSum = stats?.pending_hold_sum ?? 0;
-  const statsLoadError = statsError instanceof Error ? statsError.message : null;
 
   return (
     <div className="flex min-h-[100dvh] flex-col gap-4 pb-10">
@@ -244,9 +246,9 @@ export default function AdminPage() {
             <p className="mt-1 text-[10px] text-white/35">Сумма по операциям «ожидает»</p>
           </div>
         </div>
-        {statsLoadError && (
+        {statsErrorMessage && (
           <p className="mt-3 text-[11px] text-amber-200/90">
-            Счётчики: {statsLoadError} (очередь по списку ниже)
+            Счётчики: {statsErrorMessage} (очередь по списку ниже)
           </p>
         )}
       </GlassCard>

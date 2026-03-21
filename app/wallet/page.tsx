@@ -19,6 +19,7 @@ import { PullRefreshBrand } from "@/components/PullRefreshBrand";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { debugInit } from "@/lib/debug";
 import { fetchWalletStats } from "@/lib/fetch-wallet-stats";
+import { SWR_LIST_OPTIONS } from "@/lib/swr-config";
 import { holdingPeriodUserMessage, MIN_WITHDRAW_RUB } from "@/lib/wallet-payout-policy";
 import { getReleaseStatusMeta, normalizeReleaseStatus } from "@/lib/release-status";
 import { supabase } from "@/lib/supabase";
@@ -158,10 +159,7 @@ export default function WalletPage() {
     error: walletError,
     isLoading: walletLoading,
     mutate: mutateWallet
-  } = useSWR(userId != null ? "wallet-stats" : null, fetchWalletStats, {
-    revalidateOnFocus: false,
-    dedupingInterval: 5000
-  });
+  } = useSWR(userId != null ? "wallet-stats" : null, fetchWalletStats, SWR_LIST_OPTIONS);
 
   const loadRows = useCallback(async () => {
     if (userId == null) {

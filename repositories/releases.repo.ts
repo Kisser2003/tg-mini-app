@@ -64,6 +64,14 @@ export type ReleaseRecord = {
   admin_notes?: string | null;
   /** Пользователь начал загрузку WAV, не довёл до конца. */
   draft_upload_started?: boolean;
+  /** У пользователя уже есть страницы артиста на DSP. */
+  has_existing_profiles?: boolean;
+  /** Ссылки на профили артиста (JSON). */
+  artist_links?: Record<string, unknown> | null;
+  /** Язык исполнения (RU, EN, …). */
+  performance_language?: string | null;
+  /** Участники релиза с ролями и ссылками (JSON). */
+  collaborators?: unknown;
 } & ReleaseStep2Payload;
 
 const releaseStep1Schema = z.object({
@@ -316,6 +324,10 @@ export async function updateRelease(
     error_message?: string | null;
     admin_notes?: string | null;
     draft_upload_started?: boolean;
+    has_existing_profiles?: boolean;
+    artist_links?: Record<string, string> | Record<string, unknown>;
+    performance_language?: string | null;
+    collaborators?: Record<string, unknown>[] | unknown;
   }
 ): Promise<ReleaseRecord> {
   const base: Partial<ReleaseStep1Payload & ReleaseStep2Payload> = {};

@@ -8,7 +8,7 @@ export default function OnboardingPage() {
   const router = useRouter();
 
   return (
-    <div className="flex min-h-[calc(100vh-8rem)] flex-col items-center justify-center gap-6 pb-12 text-center">
+    <div className="flex min-h-[calc(100dvh-8rem)] flex-col items-center justify-center gap-6 pb-12 text-center">
       <motion.div
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}

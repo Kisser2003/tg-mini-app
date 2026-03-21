@@ -15,7 +15,7 @@ export default function GlobalError({
 
   return (
     <html lang="ru">
-      <body className="min-h-screen bg-[#030303] px-4 py-10 text-white">
+      <body className="min-h-[100dvh] bg-[#030303] px-4 py-10 text-white">
         <div className="mx-auto w-full max-w-[440px] rounded-[20px] border border-red-500/25 bg-red-950/30 p-5">
           <p className="text-base font-semibold">Критическая ошибка приложения</p>
           <p className="mt-2 text-sm text-white/80">

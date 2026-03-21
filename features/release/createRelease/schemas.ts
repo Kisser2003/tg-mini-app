@@ -1,21 +1,17 @@
 import { z } from "zod";
-import { ARTIST_ROLE_VALUES, RELEASE_TYPE_VALUES } from "@/lib/db-enums";
-
-export const artistRoleEnum = z.enum(ARTIST_ROLE_VALUES);
-
-export const artistSchema = z.object({
-  name: z.string().min(1, "Укажите имя артиста"),
-  role: artistRoleEnum
-});
+import { RELEASE_TYPE_VALUES } from "@/lib/db-enums";
+import { PERFORMANCE_LANGUAGE_VALUES } from "@/lib/performance-language";
 
 export const metadataSchema = z.object({
   releaseTitle: z.string().min(1, "Укажите название релиза"),
   releaseType: z.enum(RELEASE_TYPE_VALUES),
   genre: z.string().min(1, "Выберите основной жанр"),
   subgenre: z.string().default(""),
-  language: z.string().default(""),
+  language: z.enum(PERFORMANCE_LANGUAGE_VALUES, {
+    message: "Выберите язык исполнения"
+  }),
   label: z.string().default(""),
-  artists: z.array(artistSchema).min(1, "Добавьте хотя бы одного артиста"),
+  primaryArtist: z.string().min(1, "Укажите имя артиста"),
   releaseDate: z
     .string()
     .min(1, "Укажите дату релизного издания")
@@ -49,7 +45,7 @@ export function isMetadataComplete(input: unknown): boolean {
 }
 
 export function isAssetsComplete(input: unknown): boolean {
-  return assetsSchema.safeParse(input).success && Boolean((input as any)?.artworkUrl);
+  return assetsSchema.safeParse(input).success && Boolean((input as { artworkUrl?: unknown })?.artworkUrl);
 }
 
 /**
@@ -68,4 +64,3 @@ export function isTracksComplete(input: unknown, releaseType?: string): boolean 
   if (releaseType === "ep" || releaseType === "album") return tracks.length >= 2;
   return tracks.length >= 1;
 }
-

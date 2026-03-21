@@ -6,6 +6,7 @@ import { Inter } from "next/font/google";
 import { AppProviders } from "@/components/AppProviders";
 import { AppErrorBoundary } from "@/components/ErrorBoundary";
 import { PageTransition } from "@/components/PageTransition";
+import { InputFocusScroll } from "@/components/InputFocusScroll";
 import { TelegramBootstrap } from "@/components/TelegramBootstrap";
 import { BottomNavHost } from "@/components/BottomNavHost";
 import { NoiseOverlay } from "@/components/NoiseOverlay";
@@ -61,6 +62,7 @@ export default function RootLayout({
         style={{ backgroundColor: "#030303", color: "#fff" }}
       >
         <TelegramBootstrap />
+        <InputFocusScroll />
         <Toaster richColors expand position="top-center" />
         <Script
           src="https://telegram.org/js/telegram-web-app.js"
