@@ -52,10 +52,9 @@ npm install
   - опционально: `isrc`, `authors`, `splits`
   - `created_at` timestamptz default now()
 
-- `release_tracks` — треки для EP/альбома:
-  - `release_id` uuid references `releases`
-  - `index` int
-  - `title`, `explicit`, `audio_url`
+- `tracks` — треки для EP/альбома (миграция [supabase/migrations/20260330120000_tracks_table.sql](supabase/migrations/20260330120000_tracks_table.sql)):
+  - `id` uuid, `release_id` uuid references `releases`, `user_id` bigint (Telegram)
+  - `title`, `file_path` (публичный URL WAV), `index` int, `explicit` bool
   - уникальность по `(release_id, index)`
 
 - `release_logs` — журнал этапов:
@@ -82,6 +81,7 @@ Then hook the URL as a Telegram WebApp URL in your bot, so that Telegram passes 
 - **Источник initData на сервере:** заголовок `X-Telegram-Init-Data` (сырой query-string, как в `Telegram.WebApp.initData`) или cookie `tg_init_data` (задаётся в [`lib/telegram.ts`](lib/telegram.ts) после `initTelegramWebApp()`).
 - **Вызов из браузера:** при `fetch("/api/...")` укажите `credentials: "same-origin"` (или `"include"`), чтобы cookie дошла до API.
 - Без валидного `initData` и токена бота ответ: **401** `{ "ok": false, "error": "Unauthorized" }`.
+- **Локальная разработка без Telegram:** в `.env.local` задайте `ALLOW_DEV_API_AUTH=true` и `NEXT_PUBLIC_ALLOW_DEV_API_AUTH=true`, перезапустите `npm run dev`. Клиент шлёт заголовок `X-Dev-Telegram-User-Id` (совпадает с `user_id` в сторе мастера). В production эти переменные не включайте.
 
 Пример: [`app/api/notify-admin/route.ts`](app/api/notify-admin/route.ts) — `POST` защищён через `withTelegramAuth`.
 

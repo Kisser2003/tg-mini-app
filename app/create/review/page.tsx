@@ -14,7 +14,11 @@ import { hapticMap } from "@/lib/haptic-map";
 import { StepGate } from "@/features/release/createRelease/components/StepGate";
 import { useStepGuard } from "@/features/release/createRelease/guards";
 import { useCreateReleaseDraftStore } from "@/features/release/createRelease/store";
-import { submitTracksAndFinalize } from "@/features/release/createRelease/actions";
+import {
+  getLastSubmitPrecheckHttpStatus,
+  submitTracksAndFinalize
+} from "@/features/release/createRelease/actions";
+import { getTelegramApiAuthHeaders, getTelegramInitDataForApiHeader } from "@/lib/telegram";
 import { UploadProgress } from "@/components/UploadProgress";
 import { logClientError } from "@/lib/logger";
 import {
@@ -254,6 +258,37 @@ export default function CreateReviewPage() {
     if (!ok) {
       const st = useCreateReleaseDraftStore.getState();
       const msg = st.submitError;
+      const precheckStatus = getLastSubmitPrecheckHttpStatus();
+      const authHeaders = getTelegramApiAuthHeaders({
+        userId: st.userId ?? undefined
+      });
+      const authDebug = {
+        note:
+          "Authorization не используется; для API нужны X-Telegram-Init-Data и/или (в dev) X-Dev-Telegram-User-Id — см. Network.",
+        xTelegramInitDataLength: getTelegramInitDataForApiHeader().length,
+        xTelegramInitDataPreview: getTelegramInitDataForApiHeader().slice(0, 320),
+        devUserIdHeader: authHeaders["X-Dev-Telegram-User-Id"] ?? null,
+        storeUserId: st.userId
+      };
+      console.error("[CreateReview] submitTracksAndFinalize failed", {
+        submitError: msg,
+        submitStage: st.submitStage,
+        submitStatus: st.submitStatus,
+        releaseId: st.releaseId,
+        clientRequestId: st.clientRequestId,
+        userId: st.userId,
+        lastSubmitPrecheckHttpStatus: precheckStatus
+      });
+      if (
+        precheckStatus === 401 ||
+        msg === "Unauthorized" ||
+        (typeof msg === "string" && msg.includes("подтвердить сессию"))
+      ) {
+        console.error("[CreateReview] 401 / Telegram auth debug (full)", authDebug);
+        alert(
+          `401 / Telegram auth\n\n${authDebug.note}\n\ninitData length: ${authDebug.xTelegramInitDataLength}\npreview (truncated):\n${authDebug.xTelegramInitDataPreview}\n\nstore userId: ${String(authDebug.storeUserId)}\nX-Dev-Telegram-User-Id (dev): ${authDebug.devUserIdHeader ?? "—"}`
+        );
+      }
       const toastText = msg ?? "Не удалось отправить релиз на модерацию. Статус не изменён.";
       hapticMap.notificationError();
       toast.error(toastText);

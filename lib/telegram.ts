@@ -128,6 +128,115 @@ export function initTelegramWebApp() {
   return webApp;
 }
 
+/**
+ * Сырой initData для API с подписью Telegram (заголовок `X-Telegram-Init-Data` или cookie `tg_init_data`).
+ * Перед чтением вызывает `initTelegramWebApp()`, чтобы обновить cookie.
+ */
+export function getTelegramInitDataForApiHeader(): string {
+  if (typeof window === "undefined") return "";
+  initTelegramWebApp();
+  return getTelegramWebApp()?.initData?.trim() ?? "";
+}
+
+/** Синхронизация с `userId` в сторе мастера создания релиза (для RLS в PostgREST/Storage). */
+let rlsTelegramUserIdOverride: number | null = null;
+
+export function setRlsTelegramUserIdOverride(userId: number | null): void {
+  rlsTelegramUserIdOverride = userId;
+}
+
+function devUserIdFromQuery(): number | null {
+  if (process.env.NODE_ENV === "production") return null;
+  if (typeof window === "undefined") return null;
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const raw = params.get("devUserId");
+    if (raw) {
+      const n = Number(raw);
+      if (Number.isFinite(n) && n > 0) return Math.trunc(n);
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+function devUserIdWhenNoTelegramWebApp(): number | null {
+  if (process.env.NODE_ENV === "production") return null;
+  if (typeof window === "undefined") return null;
+  const hasTelegram = Boolean(getTelegramWebApp()?.initDataUnsafe?.user?.id);
+  if (hasTelegram) return null;
+  return 1;
+}
+
+/**
+ * Тот же расчёт, что в `initUserContextInStore` (create release): заголовок `x-telegram-user-id`
+ * для Supabase должен совпадать с `user_id` в `releases` / `tracks`, иначе RLS даёт отказ.
+ * Раньше в dev без Telegram подставлялся ID админа — строки с `user_id: 1` не проходили.
+ */
+export function getTelegramUserIdForSupabaseRequests(): number | null {
+  if (rlsTelegramUserIdOverride != null) return rlsTelegramUserIdOverride;
+  const devUserId = devUserIdFromQuery() ?? devUserIdWhenNoTelegramWebApp();
+  return devUserId ?? getTelegramUserId() ?? null;
+}
+
+/** Заголовок для dev-only обхода без initData (см. `withTelegramAuth` + `ALLOW_DEV_API_AUTH`). */
+export const TELEGRAM_DEV_USER_ID_HEADER = "X-Dev-Telegram-User-Id";
+
+/**
+ * Тот же `userId`, что в `getDevUserIdOverride` / `getDevUserIdDefault` в create-release actions:
+ * localhost без Telegram WebApp — подставляется число, чтобы совпадать с черновиком в БД.
+ */
+function getDevUserIdForApiHeaders(): number | null {
+  if (process.env.NODE_ENV === "production") return null;
+  if (typeof window === "undefined") return null;
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const raw = params.get("devUserId");
+    if (raw) {
+      const n = Number(raw);
+      if (Number.isFinite(n) && n > 0) return Math.trunc(n);
+    }
+  } catch {
+    /* ignore */
+  }
+  const hasTelegram = Boolean(getTelegramWebApp()?.initDataUnsafe?.user?.id);
+  if (hasTelegram) return null;
+  return 1;
+}
+
+/**
+ * Заголовки для `fetch` к API с `withTelegramAuth`.
+ * - Сначала подписанный `X-Telegram-Init-Data` (если есть).
+ * - В development при `NEXT_PUBLIC_ALLOW_DEV_API_AUTH=true` дополнительно `X-Dev-Telegram-User-Id`
+ *   (совпадает с `user_id` в сторе — важно для localhost без Telegram).
+ * - При несовпадении токена бота в dev сервер может принять запрос, если id из initData совпадает с заголовком.
+ */
+export function getTelegramApiAuthHeaders(options?: { userId?: number | null }): Record<string, string> {
+  initTelegramWebApp();
+  const initData = getTelegramWebApp()?.initData?.trim() ?? "";
+  const headers: Record<string, string> = {};
+  if (initData.length > 0) {
+    headers["X-Telegram-Init-Data"] = initData;
+  }
+
+  const devUid =
+    options?.userId != null && options.userId > 0
+      ? options.userId
+      : getTelegramUserId() ?? getDevUserIdForApiHeaders();
+
+  if (
+    process.env.NODE_ENV !== "production" &&
+    process.env.NEXT_PUBLIC_ALLOW_DEV_API_AUTH === "true" &&
+    devUid != null &&
+    devUid > 0
+  ) {
+    headers[TELEGRAM_DEV_USER_ID_HEADER] = String(devUid);
+  }
+
+  return headers;
+}
+
 export function getTelegramUser(): TelegramUser | null {
   const webApp = getTelegramWebApp();
   if (!webApp) return null;

@@ -1,21 +1,13 @@
 import { createClient } from "@supabase/supabase-js";
-import { getExpectedAdminTelegramId } from "./admin";
-import { getTelegramUserId } from "./telegram";
+import { getTelegramUserIdForSupabaseRequests } from "./telegram";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 /**
- * ID для заголовка `x-telegram-user-id`: реальный пользователь или в development без Telegram — ID админа (RLS).
+ * Схема таблицы треков в БД: `public.tracks` (не `release_tracks`), см. миграцию
+ * `supabase/migrations/20260330120000_tracks_table.sql` и тип `ReleaseTrackRow` в `repositories/releases.repo.ts`.
  */
-function getTelegramUserIdForRequest(): number | null {
-  const id = getTelegramUserId();
-  if (id != null) return id;
-  if (process.env.NODE_ENV === "development") {
-    return getExpectedAdminTelegramId();
-  }
-  return null;
-}
 
 /**
  * Кастомный fetch для динамической подстановки `x-telegram-user-id` под RLS (PostgREST request.headers).
@@ -23,7 +15,7 @@ function getTelegramUserIdForRequest(): number | null {
  */
 function createTelegramAwareFetch(): typeof fetch {
   return (input, init) => {
-    const userId = getTelegramUserIdForRequest();
+    const userId = getTelegramUserIdForSupabaseRequests();
     if (userId == null) {
       return fetch(input, init);
     }

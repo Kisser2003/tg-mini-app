@@ -3,6 +3,8 @@
  * Клиент @supabase/supabase-js для upload не отдаёт onUploadProgress в текущей версии.
  */
 
+import { getTelegramUserIdForSupabaseRequests } from "./telegram";
+
 function encodeStorageObjectPath(path: string): string {
   return path
     .split("/")
@@ -49,6 +51,10 @@ export function uploadToSupabaseStorageObject(
     xhr.open("POST", endpoint);
     xhr.setRequestHeader("Authorization", `Bearer ${anonKey}`);
     xhr.setRequestHeader("apikey", anonKey);
+    const rlsUserId = getTelegramUserIdForSupabaseRequests();
+    if (rlsUserId != null) {
+      xhr.setRequestHeader("x-telegram-user-id", String(rlsUserId));
+    }
     if (options.upsert) {
       xhr.setRequestHeader("x-upsert", "true");
     }

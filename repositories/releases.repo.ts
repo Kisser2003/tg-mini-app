@@ -108,9 +108,11 @@ const releaseStep2Schema = z.object({
 
 const trackInsertSchema = z.object({
   releaseId: z.string().min(1),
+  userId: z.number().int().nonnegative(),
   index: z.number().int().nonnegative(),
   title: z.string().min(1).max(256).trim(),
   explicit: z.boolean(),
+  /** Публичный URL после загрузки в Storage — в БД пишется в колонку `file_path`. */
   audioUrl: z.string().url()
 });
 
@@ -718,6 +720,7 @@ export async function uploadReleaseTrackAudio(params: {
 
 export async function addReleaseTrack(params: {
   releaseId: string;
+  userId: number;
   index: number;
   title: string;
   explicit: boolean;
@@ -726,18 +729,17 @@ export async function addReleaseTrack(params: {
   const validated = trackInsertSchema.parse(params);
 
   const { error } = await withRetry(async () => {
-    const response = await supabase
-      .from("release_tracks")
-      .upsert(
-        {
-          release_id: validated.releaseId,
-          index: validated.index,
-          title: validated.title,
-          explicit: validated.explicit,
-          audio_url: validated.audioUrl
-        },
-        { onConflict: "release_id,index" }
-      );
+    const response = await supabase.from("tracks").upsert(
+      {
+        release_id: validated.releaseId,
+        user_id: validated.userId,
+        index: validated.index,
+        title: validated.title,
+        explicit: validated.explicit,
+        file_path: validated.audioUrl
+      },
+      { onConflict: "release_id,index" }
+    );
     return response;
   });
 
@@ -780,21 +782,22 @@ export async function deleteReleaseFiles(params: {
 
 export async function cleanupReleaseTracks(releaseId: string): Promise<void> {
   await withRetry(async () => {
-    const response = await supabase
-      .from("release_tracks")
-      .delete()
-      .eq("release_id", releaseId);
+    const response = await supabase.from("tracks").delete().eq("release_id", releaseId);
     if (response.error) throw response.error;
     return response;
   });
 }
 
+/** Строка таблицы `public.tracks` (см. миграцию 20260330120000_tracks_table.sql). */
 export type ReleaseTrackRow = {
+  id?: string;
   release_id: string;
+  user_id?: number;
   index: number;
   title: string;
   explicit: boolean;
-  audio_url: string | null;
+  /** Публичный URL аудио (в SQL колонка `file_path`). */
+  file_path: string | null;
 };
 
 /**
@@ -804,8 +807,8 @@ export type ReleaseTrackRow = {
 export async function getReleaseTracksByReleaseId(releaseId: string): Promise<ReleaseTrackRow[]> {
   const { data, error } = await withRetry(async () => {
     const response = await supabase
-      .from("release_tracks")
-      .select("release_id, index, title, explicit, audio_url")
+      .from("tracks")
+      .select("id, release_id, user_id, index, title, explicit, file_path")
       .eq("release_id", releaseId)
       .order("index", { ascending: true });
     return response;

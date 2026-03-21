@@ -29,7 +29,7 @@ export type CreateReleaseDraftState = {
   /** URL аудио из БД после резюме черновика (подсказки UX; не заменяют File при отправке). */
   trackAudioUrlsFromDb: (string | null)[];
   /**
-   * WAV уже загружены в Storage и записаны в release_tracks на шаге «Треки»
+   * WAV уже загружены в Storage и записаны в таблицу `tracks` на шаге «Треки»
    * (чтобы не дублировать upload на «Проверке»).
    */
   tracksWavSyncedToDb: boolean;

@@ -129,7 +129,7 @@
 | Таблица | Роль |
 |---------|------|
 | **`releases`** | Главная сущность релиза: `user_id` (Telegram), `client_request_id` (идемпотентность), метаданные, `status`, URL файлов, `error_message`, опционально `isrc` / `authors` / `splits`, `created_at`. |
-| **`release_tracks`** | Треки мульти-релиза: связь `release_id` → `releases`, индекс трека, `title`, `explicit`, `audio_url`. |
+| **`tracks`** | Треки мульти-релиза: `release_id` → `releases`, `user_id`, `title`, `file_path` (URL), `index`, `explicit`. |
 | **`release_logs`** | Журнал этапов обработки (статус/ошибки по стадиям). |
 | **`error_logs`** | Ошибки клиентского UI, записанные через API с service role (см. миграции). |
 

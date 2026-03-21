@@ -117,3 +117,41 @@ export function verifyTelegramInitData(
     authDate: authDateSeconds
   };
 }
+
+/**
+ * Разбор `user` и `auth_date` из initData **без** проверки HMAC.
+ * Только для узкого allowlist (см. `withTelegramAuth`); не использовать как общую авторизацию.
+ */
+export function parseTelegramInitDataWithoutVerification(
+  initDataRaw: string
+): VerifiedTelegramInitData | null {
+  if (!initDataRaw?.trim()) return null;
+
+  const params = new URLSearchParams(initDataRaw);
+  const userRaw = params.get("user");
+  if (!userRaw) return null;
+
+  let parsedUser: unknown;
+  try {
+    parsedUser = JSON.parse(userRaw) as unknown;
+  } catch {
+    return null;
+  }
+
+  const userResult = webAppUserSchema.safeParse(parsedUser);
+  if (!userResult.success) {
+    return null;
+  }
+
+  const authDateRaw = params.get("auth_date");
+  const authDate = authDateRaw ? Number(authDateRaw) : Number.NaN;
+  const authDateSeconds = Number.isFinite(authDate) ? Math.trunc(authDate) : null;
+
+  return {
+    user: {
+      ...userResult.data,
+      id: Math.trunc(userResult.data.id)
+    },
+    authDate: authDateSeconds
+  };
+}

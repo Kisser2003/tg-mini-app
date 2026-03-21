@@ -57,6 +57,8 @@ async function handleSubmitPrecheck(
   const { releaseId, clientRequestId, declaredTrackCount } = parsed.data;
   const telegramUserId = ctx.user.id;
 
+  console.log("Submit attempt by user:", telegramUserId, "for release:", releaseId);
+
   const { data: releaseRow, error: relErr } = await admin
     .from("releases")
     .select(
@@ -92,12 +94,12 @@ async function handleSubmitPrecheck(
   }
 
   const { count: dbCount, error: cntErr } = await admin
-    .from("release_tracks")
+    .from("tracks")
     .select("*", { count: "exact", head: true })
     .eq("release_id", releaseId);
 
   if (cntErr) {
-    console.error("[releases/submit-precheck] release_tracks count:", cntErr.message);
+    console.error("[releases/submit-precheck] tracks count:", cntErr.message);
     return NextResponse.json({ ok: false, error: "Не удалось проверить треки." }, { status: 500 });
   }
 
@@ -119,13 +121,13 @@ async function handleSubmitPrecheck(
   }
 
   const { data: trackRows, error: trErr } = await admin
-    .from("release_tracks")
+    .from("tracks")
     .select("title, index")
     .eq("release_id", releaseId)
     .order("index", { ascending: true });
 
   if (trErr) {
-    console.error("[releases/submit-precheck] release_tracks titles:", trErr.message);
+    console.error("[releases/submit-precheck] tracks titles:", trErr.message);
     return NextResponse.json({ ok: false, error: "Не удалось загрузить названия треков." }, { status: 500 });
   }
 

@@ -26,11 +26,11 @@ const ARTWORK_SIZES = "(max-width: 768px) 100vw, 33vw";
 function buildAudioItems(release: ReleaseRecord, tracks: ReleaseTrackRow[]) {
   if (tracks.length > 0) {
     return tracks
-      .filter((t) => t.audio_url && t.audio_url.length > 0)
+      .filter((t) => t.file_path && t.file_path.length > 0)
       .map((t, i) => ({
         key: `${t.index}-${i}`,
         label: t.title.trim() || `Трек ${t.index + 1}`,
-        src: t.audio_url as string
+        src: t.file_path as string
       }));
   }
   if (release.audio_url) {

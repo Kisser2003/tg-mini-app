@@ -1,11 +1,13 @@
-import { formatErrorMessage } from "@/lib/errors";
+import { formatErrorMessage, getPostgrestErrorPayload } from "@/lib/errors";
 import { getUploadErrorDetails, logClientError } from "@/lib/logger";
 import { getExpectedAdminTelegramId } from "@/lib/admin";
 import {
+  getTelegramApiAuthHeaders,
   getTelegramUserDisplayName,
   getTelegramUserId,
   getTelegramWebApp,
-  initTelegramWebApp
+  initTelegramWebApp,
+  setRlsTelegramUserIdOverride
 } from "@/lib/telegram";
 import { hapticMap } from "@/lib/haptic-map";
 import {
@@ -33,28 +35,142 @@ import { parsePerformanceLanguage } from "@/lib/performance-language";
 /** Защита от двойного сабмита (двойной тап в Telegram). */
 let submitTracksInFlight = false;
 
+/** HTTP-статус последнего ответа submit-precheck (для отладки 401 на экране Review). */
+let lastSubmitPrecheckHttpStatus: number | null = null;
+
+export function getLastSubmitPrecheckHttpStatus(): number | null {
+  return lastSubmitPrecheckHttpStatus;
+}
+
+/** Заголовки Telegram / dev для API мастера создания релиза (user_id должен совпадать с владельцем в БД). */
+function getCreateReleaseApiAuthHeaders(): Record<string, string> {
+  const uid = useCreateReleaseDraftStore.getState().userId;
+  return getTelegramApiAuthHeaders(uid != null ? { userId: uid } : undefined);
+}
+
+async function saveDraftPatchViaServiceApi(
+  releaseId: string,
+  patch: Record<string, unknown>
+): Promise<boolean> {
+  const doFetch = (authHeaders: Record<string, string>) =>
+    fetch("/api/releases/save-draft-patch", {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeaders
+      },
+      body: JSON.stringify({ releaseId, patch })
+    });
+
+  let authHeaders =
+    typeof window !== "undefined" ? getCreateReleaseApiAuthHeaders() : {};
+  let res = await doFetch(authHeaders);
+
+  if (res.status === 401 && typeof window !== "undefined") {
+    initTelegramWebApp();
+    authHeaders = getCreateReleaseApiAuthHeaders();
+    res = await doFetch(authHeaders);
+  }
+
+  if (res.status === 503) {
+    return false;
+  }
+
+  return res.ok;
+}
+
+/**
+ * Финальная отправка через service role на сервере (обход RLS), если задан `SUPABASE_SERVICE_ROLE_KEY`.
+ * Иначе вернуть `null` — вызывающий код использует клиентский `submitRelease`.
+ */
+async function submitReleaseViaServiceApi(params: {
+  releaseId: string;
+  clientRequestId: string;
+}): Promise<ReleaseRecord | null> {
+  const doFetch = (authHeaders: Record<string, string>) =>
+    fetch("/api/releases/finalize-submit", {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeaders
+      },
+      body: JSON.stringify(params)
+    });
+
+  let authHeaders =
+    typeof window !== "undefined" ? getCreateReleaseApiAuthHeaders() : {};
+  let res = await doFetch(authHeaders);
+
+  if (res.status === 401 && typeof window !== "undefined") {
+    initTelegramWebApp();
+    authHeaders = getCreateReleaseApiAuthHeaders();
+    res = await doFetch(authHeaders);
+  }
+
+  if (res.status === 503) {
+    return null;
+  }
+
+  let body: { ok?: boolean; record?: ReleaseRecord; error?: string } = {};
+  try {
+    body = (await res.json()) as typeof body;
+  } catch {
+    /* ignore */
+  }
+
+  if (!res.ok || !body.ok || !body.record) {
+    console.error("[submitReleaseViaServiceApi] failed", {
+      status: res.status,
+      body
+    });
+    throw new Error(
+      typeof body.error === "string" && body.error.length > 0
+        ? body.error
+        : "Не удалось отправить релиз на модерацию."
+    );
+  }
+
+  return body.record;
+}
+
 async function requestReleaseSubmitPrecheck(params: {
   releaseId: string;
   clientRequestId: string;
   declaredTrackCount: number;
 }): Promise<{ ok: true } | { ok: false; message: string }> {
-  const initData =
-    typeof window !== "undefined" ? getTelegramWebApp()?.initData?.trim() ?? "" : "";
-  const res = await fetch("/api/releases/submit-precheck", {
-    method: "POST",
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...(initData.length > 0 ? { "X-Telegram-Init-Data": initData } : {})
-    },
-    body: JSON.stringify({
-      releaseId: params.releaseId,
-      clientRequestId: params.clientRequestId,
-      declaredTrackCount: params.declaredTrackCount
-    })
+  lastSubmitPrecheckHttpStatus = null;
+  const bodyJson = JSON.stringify({
+    releaseId: params.releaseId,
+    clientRequestId: params.clientRequestId,
+    declaredTrackCount: params.declaredTrackCount
   });
 
-  let body: { ok?: boolean; error?: string } = {};
+  const fetchPrecheck = (authHeaders: Record<string, string>) =>
+    fetch("/api/releases/submit-precheck", {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeaders
+      },
+      body: bodyJson
+    });
+
+  let authHeaders =
+    typeof window !== "undefined" ? getCreateReleaseApiAuthHeaders() : {};
+  let res = await fetchPrecheck(authHeaders);
+
+  if (res.status === 401 && typeof window !== "undefined") {
+    initTelegramWebApp();
+    authHeaders = getCreateReleaseApiAuthHeaders();
+    res = await fetchPrecheck(authHeaders);
+  }
+
+  lastSubmitPrecheckHttpStatus = res.status;
+
+  let body: { ok?: boolean; error?: string; details?: unknown } = {};
   try {
     body = (await res.json()) as typeof body;
   } catch {
@@ -62,6 +178,16 @@ async function requestReleaseSubmitPrecheck(params: {
   }
 
   if (!res.ok) {
+    const errPayload = {
+      status: res.status,
+      statusText: res.statusText,
+      body,
+      hadInitDataHeader: Boolean(authHeaders["X-Telegram-Init-Data"]),
+      hadDevUserHeader: Boolean(authHeaders["X-Dev-Telegram-User-Id"]),
+      releaseId: params.releaseId
+    };
+    console.error("[requestReleaseSubmitPrecheck] failed", errPayload);
+
     const msg =
       typeof body.error === "string" && body.error.length > 0
         ? body.error
@@ -134,6 +260,7 @@ export function initUserContextInStore() {
     store.resetDraft();
   }
   store.setUserContext({ userId, telegramName });
+  setRlsTelegramUserIdOverride(userId);
 }
 
 /** Паспорт релиза из строки `releases` (общий маппинг для hydrate и резюме черновика). */
@@ -181,7 +308,7 @@ function buildTrackAudioUrlsFromDb(
   if (rows.length > 0) {
     for (const r of rows) {
       if (r.index >= 0 && r.index < len) {
-        out[r.index] = r.audio_url ?? null;
+        out[r.index] = r.file_path ?? null;
       }
     }
     return out;
@@ -464,6 +591,10 @@ export async function saveDraftAction(): Promise<{ ok: true } | { ok: false; mes
     }
 
     try {
+      const viaService = await saveDraftPatchViaServiceApi(rid, finalData);
+      if (viaService) {
+        return { ok: true };
+      }
       await updateRelease(rid, finalData as Parameters<typeof updateRelease>[1]);
     } catch (e: unknown) {
       console.error("FULL DB ERROR:", e);
@@ -518,18 +649,29 @@ async function postDraftUploadState(
   releaseId: string,
   phase: "start" | "complete" | "failed"
 ): Promise<boolean> {
-  const initData =
-    typeof window !== "undefined" ? getTelegramWebApp()?.initData?.trim() ?? "" : "";
-  try {
-    const res = await fetch("/api/releases/draft-upload-state", {
+  const bodyJson = JSON.stringify({ releaseId, phase });
+  const doFetch = (authHeaders: Record<string, string>) =>
+    fetch("/api/releases/draft-upload-state", {
       method: "POST",
       credentials: "include",
       headers: {
         "Content-Type": "application/json",
-        ...(initData.length > 0 ? { "X-Telegram-Init-Data": initData } : {})
+        ...authHeaders
       },
-      body: JSON.stringify({ releaseId, phase })
+      body: bodyJson
     });
+
+  try {
+    let authHeaders =
+      typeof window !== "undefined" ? getCreateReleaseApiAuthHeaders() : {};
+    let res = await doFetch(authHeaders);
+
+    if (res.status === 401 && typeof window !== "undefined") {
+      initTelegramWebApp();
+      authHeaders = getCreateReleaseApiAuthHeaders();
+      res = await doFetch(authHeaders);
+    }
+
     let body: { ok?: boolean; error?: string; degraded?: boolean } = {};
     try {
       body = (await res.json()) as typeof body;
@@ -544,10 +686,19 @@ async function postDraftUploadState(
         body
       });
     }
+    if (!res.ok && res.status === 401) {
+      console.error("[postDraftUploadState] Unauthorized", {
+        phase,
+        releaseId,
+        body,
+        hadInitDataHeader: Boolean(authHeaders["X-Telegram-Init-Data"]),
+        hadDevUserHeader: Boolean(authHeaders["X-Dev-Telegram-User-Id"])
+      });
+    }
   } catch (e) {
     console.warn("[postDraftUploadState] bypass — fetch failed:", phase, releaseId, e);
   }
-  /** TEMP: всегда true, чтобы не блокировать «Далее» на шаге треков */
+   /** TEMP: всегда true, чтобы не блокировать «Далее» на шаге треков */
   return true;
 }
 
@@ -587,27 +738,70 @@ export async function uploadTracksForDraftStep(options: {
         const file = trackFiles[index]!;
         const track = tracks[index];
         options.onTrackProgress(index, 0);
-        const audioUrl = await uploadReleaseTrackAudio({
-          userId,
-          releaseId,
-          trackIndex: index,
-          file,
-          options: {
-            markReleaseFailedOnError: { releaseId },
-            onProgress: (pct) => options.onTrackProgress(index, pct)
-          }
-        });
-        await addReleaseTrack({
-          releaseId,
-          index,
-          title: track.title,
-          explicit: Boolean(track.explicit),
-          audioUrl
-        });
+
+        let audioUrl: string;
+        try {
+          audioUrl = await uploadReleaseTrackAudio({
+            userId,
+            releaseId,
+            trackIndex: index,
+            file,
+            options: {
+              markReleaseFailedOnError: { releaseId },
+              onProgress: (pct) => options.onTrackProgress(index, pct)
+            }
+          });
+        } catch (e: unknown) {
+          void postDraftUploadState(releaseId, "failed");
+          console.error("[uploadTracksForDraftStep] Storage (WAV) upload failed", {
+            phase: "storage",
+            trackIndex: index,
+            releaseId,
+            hint: "Network → POST …/storage/v1/object/audio/…",
+            error: e
+          });
+          useCreateReleaseDraftStore.getState().setSubmitError(
+            formatErrorMessage(
+              e,
+              "Не удалось загрузить WAV в хранилище. Проверьте политику bucket «audio», размер и формат файла."
+            )
+          );
+          return false;
+        }
+
+        try {
+          await addReleaseTrack({
+            releaseId,
+            userId,
+            index,
+            title: track.title,
+            explicit: Boolean(track.explicit),
+            audioUrl
+          });
+        } catch (e: unknown) {
+          void postDraftUploadState(releaseId, "failed");
+          console.error("[uploadTracksForDraftStep] DB tracks upsert failed", {
+            phase: "database",
+            trackIndex: index,
+            releaseId,
+            hint: "Network → POST …/rest/v1/tracks — колонка file_path, RLS, UNIQUE(release_id,index)",
+            postgrest: getPostgrestErrorPayload(e),
+            error: e
+          });
+          useCreateReleaseDraftStore.getState().setSubmitError(
+            formatErrorMessage(
+              e,
+              "Файл в хранилище загружен, но не удалось сохранить строку в таблице tracks. Проверьте схему БД и RLS."
+            )
+          );
+          return false;
+        }
+
         useCreateReleaseDraftStore.getState().setTrackAudioUrlAt(index, audioUrl);
       }
     } catch (e: unknown) {
       void postDraftUploadState(releaseId, "failed");
+      console.error("[uploadTracksForDraftStep] unexpected", { error: e });
       useCreateReleaseDraftStore
         .getState()
         .setSubmitError(formatErrorMessage(e, "Ошибка загрузки WAV."));
@@ -720,6 +914,7 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
           uploadPhase = "db_release_track";
           await addReleaseTrack({
             releaseId,
+            userId: store.userId,
             index,
             title: track.title,
             explicit: Boolean(track.explicit),
@@ -743,6 +938,24 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
           supabaseStorageHint: up.supabaseHint
         }
       });
+      if (uploadPhase === "db_release_track") {
+        console.error("[submitTracksAndFinalize] DB tracks upsert failed", {
+          phase: "database",
+          trackIndex: uploadTrackIndex,
+          releaseId,
+          hint: "Network → POST …/rest/v1/tracks — колонка file_path, RLS, UNIQUE(release_id,index)",
+          postgrest: getPostgrestErrorPayload(e),
+          error: e
+        });
+      } else if (uploadPhase === "storage_track_wav") {
+        console.error("[submitTracksAndFinalize] Storage (WAV) upload failed", {
+          phase: "storage",
+          trackIndex: uploadTrackIndex,
+          releaseId,
+          hint: "Network → POST …/storage/v1/object/audio/…",
+          error: e
+        });
+      }
       let cleanupFailed = false;
       let existingMessage: string | null = null;
       try {
@@ -774,10 +987,23 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
       useCreateReleaseDraftStore.getState().setSubmitStage("error");
       const detail = e instanceof Error ? e.message : JSON.stringify(e);
 
+      const defaultMessage =
+        uploadPhase === "storage_track_wav"
+          ? formatErrorMessage(
+              e,
+              "Не удалось загрузить WAV в хранилище. Проверьте политику bucket «audio», размер и формат файла."
+            )
+          : uploadPhase === "db_release_track"
+            ? formatErrorMessage(
+                e,
+                "Файл в хранилище загружен, но не удалось сохранить строку в таблице tracks. Проверьте схему БД и RLS."
+              )
+            : `Ошибка отправки: ${detail}`;
+
       const primary =
         existingMessage && existingMessage.length > 0
           ? existingMessage
-          : `Ошибка отправки: ${detail}`;
+          : defaultMessage;
 
       useCreateReleaseDraftStore.getState().setSubmitError(
         cleanupFailed
@@ -802,6 +1028,11 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
         storeAfterUpload.setSubmitStatus("error");
         storeAfterUpload.setSubmitStage("error");
         storeAfterUpload.setSubmitError(precheck.message);
+        console.error("[submitTracksAndFinalize] submit-precheck rejected", {
+          message: precheck.message,
+          releaseId,
+          clientRequestId
+        });
         try {
           hapticMap.notificationWarning();
         } catch {
@@ -816,9 +1047,19 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
         return false;
       }
 
-      await submitRelease({ releaseId, clientRequestId });
-
-      const verified = await ensureReleaseProcessing(releaseId, clientRequestId);
+      let verified: ReleaseRecord;
+      const viaService = await submitReleaseViaServiceApi({ releaseId, clientRequestId }).catch(
+        (e: unknown) => {
+          console.error("[submitTracksAndFinalize] service finalize failed, falling back to client", e);
+          return null;
+        }
+      );
+      if (viaService) {
+        verified = viaService;
+      } else {
+        await submitRelease({ releaseId, clientRequestId });
+        verified = await ensureReleaseProcessing(releaseId, clientRequestId);
+      }
 
       if (process.env.NODE_ENV === "development") {
         if (verified.status !== "processing" && verified.status !== "ready") {
@@ -853,6 +1094,7 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
         route: "/create/review",
         extra: { flow: "submitTracksAndFinalize", uploadPhase: "finalizing_submit" }
       });
+      console.error("[submitTracksAndFinalize] finalize error (full)", e);
       const storeFail = useCreateReleaseDraftStore.getState();
       storeFail.setSubmitStatus("error");
       storeFail.setSubmitStage("error");

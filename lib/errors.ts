@@ -46,6 +46,23 @@ export function tryOmitMissingReleasesColumns(
   return null;
 }
 
+/** Поля PostgREST/Supabase для логов и отладки (Network /rest/v1/...). */
+export function getPostgrestErrorPayload(err: unknown): {
+  message: string;
+  code?: string;
+  details?: string;
+  hint?: string;
+} {
+  const message = formatErrorMessage(err, "unknown_error");
+  const o = err && typeof err === "object" ? (err as Record<string, unknown>) : null;
+  return {
+    message,
+    ...(typeof o?.code === "string" ? { code: o.code } : {}),
+    ...(typeof o?.details === "string" ? { details: o.details } : {}),
+    ...(typeof o?.hint === "string" ? { hint: o.hint } : {})
+  };
+}
+
 /** Лог в терминал (API routes / server actions): полный объект PostgREST. */
 export function logSupabaseUpdateError(context: string, err: unknown): void {
   const msg = formatErrorMessage(err, "");
