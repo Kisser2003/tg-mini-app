@@ -64,7 +64,7 @@ export function FeedbackButton() {
           setOpen(true);
         }}
         whileTap={{ scale: 0.94 }}
-        className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom,0px))] right-4 z-[45] flex h-12 w-12 items-center justify-center rounded-full border border-white/20 bg-black/50 text-white shadow-[0_14px_40px_rgba(0,0,0,0.55)] backdrop-blur-xl backdrop-saturate-150"
+        className="fixed bottom-[calc(var(--bottom-nav-height,4.5rem)+env(safe-area-inset-bottom,0px)+1rem)] right-3 z-[45] flex h-12 w-12 items-center justify-center rounded-full border border-white/20 bg-black/50 text-white shadow-[0_14px_40px_rgba(0,0,0,0.55)] backdrop-blur-xl backdrop-saturate-150 sm:right-4"
       >
         <MessageCircle className="h-5 w-5 text-violet-200" strokeWidth={2} />
       </motion.button>

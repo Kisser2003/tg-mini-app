@@ -108,6 +108,7 @@ function BottomNavInner() {
     <nav
       aria-label="Основная навигация"
       className="fixed bottom-0 left-1/2 z-40 w-[calc(100%-1.5rem)] max-w-[450px] -translate-x-1/2 px-3 pb-[calc(env(safe-area-inset-bottom,0px)+0.5rem)] pt-2"
+      style={{ ["--bottom-nav-height" as string]: "4.5rem" }}
     >
       <motion.div
         initial={false}

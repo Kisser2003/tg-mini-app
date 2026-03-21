@@ -252,8 +252,7 @@ export async function resumeDraftFromRelease(releaseId: string): Promise<string 
       artworkUrl: existing.artwork_url ?? null,
       tracks,
       trackAudioUrlsFromDb,
-      releaseArtistLinks: parseArtistLinksFromJson(existing.artist_links),
-      artistSetupGateCompleted: true
+      releaseArtistLinks: parseArtistLinksFromJson(existing.artist_links)
     });
 
     const next = getResumeCreatePath({
@@ -297,7 +296,6 @@ export async function hydrateFromReleaseId(releaseId: string): Promise<void> {
     store.setMetadata(metadata);
     store.setArtworkUrl(existing.artwork_url ?? null);
     store.setReleaseArtistLinks(parseArtistLinksFromJson(existing.artist_links));
-    store.setArtistSetupGateCompleted(true);
     store.setSubmitError(null);
   } catch (e: unknown) {
     useCreateReleaseDraftStore

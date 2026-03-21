@@ -1,0 +1,57 @@
+"use client";
+
+import { forwardRef, useId } from "react";
+import type { LucideIcon } from "lucide-react";
+import { ChevronDown } from "lucide-react";
+import { FormFieldError } from "@/components/FormFieldError";
+import { GLASS_FIELD_BASE } from "@/lib/glass-form-classes";
+
+const METADATA_LABEL_CLASS =
+  "mb-1.5 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-white/40";
+
+export type MetadataSelectFieldProps = {
+  label: string;
+  Icon: LucideIcon;
+  /** Доп. классы для иконки в лейбле (например, предупреждающий цвет для Explicit). */
+  iconClassName?: string;
+  errorMessage?: string;
+  /** Дополнительные классы для `<select>` (границы ошибок и т.д.). */
+  selectClassName?: string;
+} & Omit<React.ComponentPropsWithRef<"select">, "className">;
+
+export const MetadataSelectField = forwardRef<HTMLSelectElement, MetadataSelectFieldProps>(
+  function MetadataSelectField(
+    { label, Icon, iconClassName, errorMessage, selectClassName = "", id, children, ...rest },
+    ref
+  ) {
+    const autoId = useId();
+    const selectId = id ?? autoId;
+
+    const iconTone = iconClassName ?? "text-white/40";
+
+    return (
+      <div className="min-w-0">
+        <label htmlFor={selectId} className={METADATA_LABEL_CLASS}>
+          <Icon className={`h-3.5 w-3.5 shrink-0 ${iconTone}`} aria-hidden />
+          {label}
+        </label>
+        <div className="relative">
+          <select
+            ref={ref}
+            id={selectId}
+            className={`${GLASS_FIELD_BASE} !h-[52px] !min-h-[52px] !max-h-[52px] !py-2.5 [color-scheme:dark] w-full appearance-none pr-10 ${selectClassName}`.trim()}
+            {...rest}
+          >
+            {children}
+          </select>
+          <ChevronDown
+            className="pointer-events-none absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-white/35"
+            strokeWidth={2}
+            aria-hidden
+          />
+        </div>
+        <FormFieldError message={errorMessage} />
+      </div>
+    );
+  }
+);

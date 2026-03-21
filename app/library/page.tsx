@@ -221,7 +221,6 @@ function LibraryPageInner() {
     if (statusFilter === "all") return releases;
     return releases.filter((r) => normalizeReleaseStatus(r.status) === statusFilter);
   }, [releases, statusFilter]);
-  const hasFetchError = error != null;
 
   useEffect(() => {
     if (searchParams.get("fromCreate") !== "1") return;
@@ -271,6 +270,23 @@ function LibraryPageInner() {
   const showTelegramWait = userId === null;
   const showListSkeleton = userId != null && isLoading && data === undefined;
 
+  const showEmptyState = useMemo(
+    () =>
+      userId != null &&
+      !isLoading &&
+      !showListSkeleton &&
+      (error != null || releases.length === 0),
+    [userId, isLoading, showListSkeleton, error, releases.length]
+  );
+
+  const displayStats = useMemo(
+    () =>
+      error != null
+        ? { ready: 0, processing: 0, failed: 0 }
+        : releaseStats,
+    [error, releaseStats]
+  );
+
   return (
     <div className="min-h-[100dvh] bg-background px-5 py-6 pb-10 text-text">
       <PullRefreshBrand />
@@ -304,7 +320,7 @@ function LibraryPageInner() {
           </div>
         </div>
 
-        {hasReleases && (
+        {hasReleases && error == null && (
           <div className="-mx-1 flex gap-2 overflow-x-auto pb-1 pt-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {STATUS_FILTER_CHIPS.map((chip) => {
               const active = statusFilter === chip.id;
@@ -332,15 +348,15 @@ function LibraryPageInner() {
         <div className="grid grid-cols-3 gap-2">
           <div className="rounded-[16px] border border-emerald-500/30 bg-emerald-500/10 px-3 py-3 shadow-[0_0_15px_rgba(34,197,94,0.3)]">
             <p className="text-[10px] uppercase tracking-[0.14em] text-emerald-200/80">Готово</p>
-            <p className="mt-1 text-lg font-semibold text-emerald-100">{releaseStats.ready}</p>
+            <p className="mt-1 text-lg font-semibold text-emerald-100">{displayStats.ready}</p>
           </div>
           <div className="rounded-[16px] border border-amber-500/30 bg-amber-500/10 px-3 py-3">
             <p className="text-[10px] uppercase tracking-[0.14em] text-amber-200/80">Проверка</p>
-            <p className="mt-1 text-lg font-semibold text-amber-100">{releaseStats.processing}</p>
+            <p className="mt-1 text-lg font-semibold text-amber-100">{displayStats.processing}</p>
           </div>
           <div className="rounded-[16px] border border-rose-500/30 bg-rose-500/10 px-3 py-3">
             <p className="text-[10px] uppercase tracking-[0.14em] text-rose-200/80">Ошибки</p>
-            <p className="mt-1 text-lg font-semibold text-rose-100">{releaseStats.failed}</p>
+            <p className="mt-1 text-lg font-semibold text-rose-100">{displayStats.failed}</p>
           </div>
         </div>
 
@@ -362,17 +378,7 @@ function LibraryPageInner() {
             )}
           </AnimatePresence>
 
-          {hasFetchError && (
-            <div className="text-sm text-red-400/80">
-              Ошибка загрузки. Попробуйте обновить.
-            </div>
-          )}
-
-          {userId != null &&
-            !isLoading &&
-            !hasFetchError &&
-            !hasReleases &&
-            !showListSkeleton && (
+          {showEmptyState && (
             <div className="flex min-h-[52vh] flex-1 flex-col items-center justify-center px-2">
               <div className="flex w-full max-w-[360px] flex-col items-center justify-center gap-6 rounded-[24px] border border-white/[0.08] bg-surface/80 px-6 py-12 text-center shadow-[0_18px_40px_rgba(0,0,0,0.7)] backdrop-blur-2xl">
                 <div className="relative mx-auto flex h-[88px] w-[88px] items-center justify-center">
@@ -403,14 +409,14 @@ function LibraryPageInner() {
 
           {userId != null &&
             hasReleases &&
-            !hasFetchError &&
+            error == null &&
             filteredReleases.length === 0 && (
             <p className="text-center text-[13px] text-text-muted">
               Нет релизов с выбранным статусом. Смените фильтр выше.
             </p>
           )}
 
-          {userId != null && hasReleases && filteredReleases.length > 0 && (
+          {userId != null && error == null && hasReleases && filteredReleases.length > 0 && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}

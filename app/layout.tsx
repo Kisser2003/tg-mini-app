@@ -59,7 +59,11 @@ export default function RootLayout({
       </head>
       <body
         className={`${inter.variable} bg-[#030303] font-sans text-white antialiased`}
-        style={{ backgroundColor: "#030303", color: "#fff" }}
+        style={{
+          backgroundColor: "#030303",
+          color: "#fff",
+          ["--bottom-nav-height" as string]: "4.5rem"
+        }}
       >
         <TelegramBootstrap />
         <InputFocusScroll />

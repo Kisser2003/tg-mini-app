@@ -2,10 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronDown, Disc3, MessageCircle, Music2, Radio } from "lucide-react";
+import { Disc3, MessageCircle, Music2, Radio } from "lucide-react";
 import { useCreateReleaseDraftStore } from "@/features/release/createRelease/store";
 import type { ArtistLinksState } from "@/lib/artist-links";
+import { EMPTY_ARTIST_LINKS } from "@/lib/artist-links";
 import { GLASS_FIELD_BASE } from "@/lib/glass-form-classes";
+import { hapticMap } from "@/lib/haptic-map";
 
 const FIELDS: {
   key: keyof ArtistLinksState;
@@ -44,44 +46,64 @@ export function ArtistProfileLinksSection() {
   const setReleaseArtistLinks = useCreateReleaseDraftStore((s) => s.setReleaseArtistLinks);
 
   const hasAnyLink = FIELDS.some(({ key }) => releaseArtistLinks[key].trim().length > 0);
-  /** По умолчанию свёрнуто; раскрывается при клике или если уже есть сохранённые ссылки. */
-  const [open, setOpen] = useState(false);
+  /** По умолчанию «новый артист»; раскрытие только после включения тумблера или при уже сохранённых ссылках. */
+  const [hasProfiles, setHasProfiles] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (hasAnyLink) setOpen(true);
+    if (hasAnyLink) setHasProfiles(true);
   }, [hasAnyLink]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!hasProfiles) return;
     const id = window.requestAnimationFrame(() => {
       panelRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     });
     return () => window.cancelAnimationFrame(id);
-  }, [open]);
+  }, [hasProfiles]);
+
+  const toggleProfiles = (next: boolean) => {
+    hapticMap.impactLight();
+    setHasProfiles(next);
+    if (!next) {
+      setReleaseArtistLinks({ ...EMPTY_ARTIST_LINKS });
+    }
+  };
 
   return (
-    <div ref={panelRef} className="min-w-0 space-y-2 rounded-[16px] border border-white/[0.08] bg-black/25 p-3">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-start justify-between gap-3 text-left"
-      >
-        <div className="min-w-0 space-y-0.5">
-          <p className="text-[12px] font-semibold text-white">Профили на площадках</p>
-          <p className="text-[10px] leading-snug text-white/45">
-            Если карточки уже есть — укажите ссылки, чтобы релиз не привязался к чужой странице.
-            Необязательно.
-          </p>
-        </div>
-        <ChevronDown
-          className={`mt-0.5 h-5 w-5 shrink-0 text-white/40 transition-transform ${open ? "rotate-180" : ""}`}
-          aria-hidden
-        />
-      </button>
+    <div ref={panelRef} className="min-w-0 space-y-3 rounded-[16px] border border-white/[0.08] bg-black/25 p-3">
+      <div className="flex items-center justify-between gap-3">
+        <label
+          htmlFor="artist-has-profiles"
+          className="min-w-0 flex-1 cursor-pointer text-[13px] leading-snug text-white/85"
+        >
+          У меня уже есть профили на площадках
+        </label>
+        <button
+          id="artist-has-profiles"
+          type="button"
+          role="switch"
+          aria-checked={hasProfiles}
+          onClick={() => toggleProfiles(!hasProfiles)}
+          className={`relative inline-flex h-8 w-[52px] flex-shrink-0 items-center rounded-full px-[3px] transition-colors ${
+            hasProfiles ? "bg-blue-600" : "bg-white/15"
+          }`}
+        >
+          <motion.span
+            layout
+            transition={{ type: "spring", stiffness: 500, damping: 32 }}
+            animate={{ x: hasProfiles ? 22 : 0 }}
+            className="h-6 w-6 rounded-full bg-white shadow-sm"
+          />
+        </button>
+      </div>
+      <p className="text-[10px] leading-snug text-white/40">
+        Не включайте, если вы только начинаете — ссылки необязательны. При включении укажите хотя бы
+        одну корректную ссылку на карточку артиста.
+      </p>
 
       <AnimatePresence initial={false}>
-        {open && (
+        {hasProfiles && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
@@ -89,7 +111,7 @@ export function ArtistProfileLinksSection() {
             transition={{ type: "spring", bounce: 0, duration: 0.32 }}
             className="overflow-hidden"
           >
-            <div className="flex flex-col gap-3 pt-1">
+            <div className="flex flex-col gap-3 border-t border-white/[0.06] pt-3">
               {FIELDS.map(({ key, label, Icon, placeholder }) => (
                 <div key={key} className="min-w-0 space-y-1">
                   <label className="flex items-center gap-2 text-[10px] font-medium uppercase tracking-[0.14em] text-white/55">

@@ -38,11 +38,6 @@ export type CreateReleaseDraftState = {
 
   /** Ссылки на карточки артиста на DSP (глобально на релиз). */
   releaseArtistLinks: ArtistLinksState;
-  /**
-   * Пользователь прошёл модалку «У вас уже есть профили?» (не показывать снова до resetDraft).
-   * При открытии черновика из БД выставляется в true.
-   */
-  artistSetupGateCompleted: boolean;
 
   // submission / status
   submitError: string | null;
@@ -72,7 +67,6 @@ type CreateReleaseDraftActions = {
   setTracksUploadInProgress: (value: boolean) => void;
 
   setReleaseArtistLinks: (patch: Partial<ArtistLinksState>) => void;
-  setArtistSetupGateCompleted: (value: boolean) => void;
 
   setSubmitStatus: (status: SubmissionStatus) => void;
   setSubmitStage: (stage: SubmissionStage) => void;
@@ -122,8 +116,6 @@ export type ResumeDraftPayload = {
   /** Параллельно индексам `tracks`; для подсказок после резюме. */
   trackAudioUrlsFromDb: (string | null)[];
   releaseArtistLinks: ArtistLinksState;
-  /** При резюме черновика модалка artist setup не показывается. */
-  artistSetupGateCompleted: boolean;
 };
 
 const EMPTY_METADATA: CreateMetadata = {
@@ -231,7 +223,6 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
         tracksUploadInProgress: false,
 
         releaseArtistLinks: { ...EMPTY_ARTIST_LINKS },
-        artistSetupGateCompleted: false,
 
         submitError: null,
         submitStatus: "idle",
@@ -352,10 +343,6 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
             if (areReleaseArtistLinksEqual(state.releaseArtistLinks, next)) return state;
             return { releaseArtistLinks: next, ...stamp() };
           }),
-        setArtistSetupGateCompleted: (value) =>
-          set((state) =>
-            state.artistSetupGateCompleted === value ? state : { artistSetupGateCompleted: value }
-          ),
         syncTrackFilesLength: (len) =>
           set((state) => {
             const prev = state.trackFiles;
@@ -387,7 +374,6 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
             tracksWavSyncedToDb: false,
             tracksUploadInProgress: false,
             releaseArtistLinks: { ...EMPTY_ARTIST_LINKS },
-            artistSetupGateCompleted: false,
             submitError: null,
             submitStatus: "idle",
             submitStage: "idle",
@@ -409,7 +395,6 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
             tracksWavSyncedToDb: false,
             tracksUploadInProgress: false,
             releaseArtistLinks: { ...EMPTY_ARTIST_LINKS },
-            artistSetupGateCompleted: false,
             submitError: null,
             submitStatus: "idle",
             submitStage: "idle",
@@ -430,7 +415,6 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
             tracksWavSyncedToDb: false,
             tracksUploadInProgress: false,
             releaseArtistLinks: { ...EMPTY_ARTIST_LINKS },
-            artistSetupGateCompleted: false,
             submitError: null,
             lastModified: null,
             hasHydrated: true
@@ -487,7 +471,6 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
               tracksWavSyncedToDb: false,
               tracksUploadInProgress: false,
               releaseArtistLinks: { ...payload.releaseArtistLinks },
-              artistSetupGateCompleted: payload.artistSetupGateCompleted,
               submitError: null,
               submitStatus: "idle" as SubmissionStatus,
               submitStage: "idle" as SubmissionStage,
@@ -545,11 +528,7 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
           ...currentState,
           ...p,
           metadata: mergedMeta,
-          releaseArtistLinks: mergedLinks,
-          artistSetupGateCompleted:
-            typeof p.artistSetupGateCompleted === "boolean"
-              ? p.artistSetupGateCompleted
-              : currentState.artistSetupGateCompleted
+          releaseArtistLinks: mergedLinks
         };
       },
       // artworkFile and trackFiles are intentionally excluded: File objects
@@ -563,7 +542,6 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
         trackAudioUrlsFromDb: state.trackAudioUrlsFromDb,
         tracksWavSyncedToDb: state.tracksWavSyncedToDb,
         releaseArtistLinks: state.releaseArtistLinks,
-        artistSetupGateCompleted: state.artistSetupGateCompleted,
         lastModified: state.lastModified,
         successSummary: state.successSummary
       })
