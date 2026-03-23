@@ -206,12 +206,11 @@ function looksLikeHttpOrHttpsUrl(value: unknown): boolean {
 }
 
 /**
- * На строке `releases` есть загруженный контент: только непустые `audio_url` / `artwork_url`,
- * причём значения должны выглядеть как URL. `track_name`, `title` и т.п. не учитываются.
- * Файлы только в `tracks.file_path` здесь не видны — см. `assertReleaseAudioReady`.
+ * На строке `releases` оба файла: и `audio_url`, и `artwork_url` (http(s)). Без одного из полей — false.
+ * `track_name`, `title` и т.п. не учитываются. Аудио только в `tracks` — см. `assertFullReleaseReady`.
  */
 function hasReleaseFileLinks(record: Record<string, unknown>): boolean {
-  return looksLikeHttpOrHttpsUrl(record.audio_url) || looksLikeHttpOrHttpsUrl(record.artwork_url);
+  return looksLikeHttpOrHttpsUrl(record.audio_url) && looksLikeHttpOrHttpsUrl(record.artwork_url);
 }
 
 function releaseContentReadySync(record: Record<string, unknown>): boolean {
@@ -219,13 +218,23 @@ function releaseContentReadySync(record: Record<string, unknown>): boolean {
 }
 
 /**
- * Есть ли загруженное аудио: либо строки в `tracks`, либо `audio_url`/`artwork_url` на релизе.
+ * Полная готовность к уведомлению: обложка на релизе обязательна; аудио — `audio_url` или все треки с `file_path`.
+ * При отсутствии service role в вебхуке без обоих URL на строке `releases` уведомление не отправится —
+ * при финальном сабмите можно дублировать публичный URL аудио в `releases.audio_url`.
  */
-async function assertReleaseAudioReady(
+async function assertFullReleaseReady(
   admin: NonNullable<ReturnType<typeof createSupabaseAdmin>>,
   releaseId: string,
   record: Record<string, unknown>
 ): Promise<{ ok: true } | { ok: false; reason: string }> {
+  if (!looksLikeHttpOrHttpsUrl(record.artwork_url)) {
+    return { ok: false, reason: "missing_artwork" };
+  }
+
+  if (looksLikeHttpOrHttpsUrl(record.audio_url)) {
+    return { ok: true };
+  }
+
   const { data: trackRows, error } = await admin
     .from("tracks")
     .select("file_path")
@@ -236,17 +245,15 @@ async function assertReleaseAudioReady(
   }
 
   const rows = trackRows ?? [];
-  if (rows.length > 0) {
-    const emptyPaths = rows.filter((t) => !isNonEmptyField(t?.file_path));
-    if (emptyPaths.length > 0) {
-      return { ok: false, reason: "missing_tracks_file_path" };
-    }
-    return { ok: true };
+  if (rows.length === 0) {
+    return { ok: false, reason: "missing_audio_no_tracks" };
   }
 
-  if (!hasReleaseFileLinks(record)) {
-    return { ok: false, reason: "missing_audio_url_and_artwork_url_and_no_tracks" };
+  const emptyPaths = rows.filter((t) => !isNonEmptyField(t?.file_path));
+  if (emptyPaths.length > 0) {
+    return { ok: false, reason: "missing_tracks_file_path" };
   }
+
   return { ok: true };
 }
 
@@ -385,7 +392,7 @@ export async function POST(request: Request): Promise<Response> {
         return NextResponse.json({ message: "Ignore initial draft" }, { status: 200 });
       }
       if (!hasReleaseFileLinks(row)) {
-        console.log("Skip: No audio or artwork yet", { phase: "insert" });
+        console.log("Skip: Missing audio or artwork for full release", { phase: "insert" });
         return NextResponse.json({ message: "Ignore initial draft" }, { status: 200 });
       }
     } else if (type === "UPDATE") {
@@ -431,7 +438,7 @@ export async function POST(request: Request): Promise<Response> {
       !hasReleaseFileLinks(row) &&
       !(type === "UPDATE" && transitionToPending)
     ) {
-      console.log("Skip: No audio or artwork yet", {
+      console.log("Skip: Missing audio or artwork for full release", {
         type,
         transitionToPending,
         audio_url: row.audio_url,
@@ -461,28 +468,29 @@ export async function POST(request: Request): Promise<Response> {
 
     const adminForAudio = createSupabaseAdmin();
     if (adminForAudio) {
-      const audioReady = await assertReleaseAudioReady(adminForAudio, releaseId, row);
-      if (!audioReady.ok) {
-        console.log("Skip Telegram: release is not fully filled yet", {
-          reason: audioReady.reason
+      const fullReady = await assertFullReleaseReady(adminForAudio, releaseId, row);
+      if (!fullReady.ok) {
+        console.log("Skip: Missing audio or artwork for full release", {
+          phase: "assert_full_release",
+          reason: fullReady.reason
         });
         return NextResponse.json({
           ok: true,
           skipped: true,
-          reason: "release_not_ready_audio",
-          detail: audioReady.reason
+          reason: "release_not_full",
+          detail: fullReady.reason
         });
       }
     } else {
       if (!hasReleaseFileLinks(row)) {
-        console.log("Skip Telegram: release is not fully filled yet", {
-          reason: "missing_audio_artwork_no_service_role_for_tracks",
-          hint: "SUPABASE_SERVICE_ROLE_KEY needed to verify tracks.file_path"
+        console.log("Skip: Missing audio or artwork for full release", {
+          phase: "no_service_role",
+          hint: "SUPABASE_SERVICE_ROLE_KEY needed to verify tracks when audio_url is empty"
         });
         return NextResponse.json({
           ok: true,
           skipped: true,
-          reason: "release_not_ready_audio_fallback"
+          reason: "release_not_full_no_service_role"
         });
       }
     }
