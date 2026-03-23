@@ -203,7 +203,8 @@ function LibraryPageInner() {
     {
       ...SWR_LIST_OPTIONS,
       refreshInterval: 7000,
-      keepPreviousData: true
+      /** Не держим предыдущий пустой список при смене ключа / ревалидации (отладка пустой библиотеки). */
+      keepPreviousData: false
     }
   );
 
@@ -285,7 +286,24 @@ function LibraryPageInner() {
       <div className="mx-auto flex w-full max-w-[440px] flex-col gap-6 font-sans">
         <div className="sticky top-0 z-40 -mx-5 border-b border-white/[0.06] bg-black/40 px-5 py-5 backdrop-blur-xl backdrop-saturate-150">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <h1 className="min-w-0 text-[20px] font-semibold tracking-tight">Мои релизы</h1>
+            <div className="min-w-0 flex-1">
+              <h1 className="truncate text-[20px] font-semibold tracking-tight">Мои релизы</h1>
+              <pre className="mt-2 max-h-[120px] overflow-auto rounded-lg border border-white/10 bg-black/50 px-2 py-1.5 font-mono text-[10px] leading-snug text-amber-100/90">
+                {JSON.stringify(data ?? null)}
+                {"\n"}
+                {JSON.stringify({
+                  error:
+                    error == null
+                      ? null
+                      : error instanceof Error
+                        ? error.message
+                        : String(error),
+                  isLoading,
+                  isValidating,
+                  userId
+                })}
+              </pre>
+            </div>
             <div className="flex flex-wrap items-center gap-2">
               <motion.button
                 type="button"

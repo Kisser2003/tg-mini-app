@@ -920,6 +920,7 @@ export async function getMyReleases(userId: number | string): Promise<ReleaseRec
   });
 
   if (error) {
+    console.error("Supabase Error:", error);
     logSupabaseUpdateError("getMyReleases", error);
     throw error;
   }
