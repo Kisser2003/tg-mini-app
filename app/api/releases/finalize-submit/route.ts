@@ -5,7 +5,19 @@ import type { TelegramAuthContext } from "@/lib/api/with-telegram-auth";
 import { withTelegramAuth } from "@/lib/api/with-telegram-auth";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
 import { formatErrorMessage } from "@/lib/errors";
+import { escapeHtml } from "@/lib/telegram-bot.server";
+import { sendTelegramNotification } from "@/lib/telegram-notifications";
 import type { ReleaseRecord } from "@/repositories/releases.repo";
+
+function notifyReleaseSubmittedForModeration(record: ReleaseRecord): void {
+  const uid = String(record.user_id);
+  const rawTitle = String(record.track_name ?? "").trim();
+  const title = escapeHtml(rawTitle.length > 0 ? rawTitle : "релиз");
+  const text =
+    `🚀 <b>Ваш релиз «${title}» отправлен на модерацию!</b>\n\n` +
+    `Мы проверим его в течение 24 часов и пришлем уведомление здесь.`;
+  void sendTelegramNotification(uid, text);
+}
 
 const bodySchema = z.object({
   releaseId: z.string().uuid(),
@@ -81,7 +93,9 @@ async function handleFinalizeSubmit(
   if (!rpcError) {
     const rows = Array.isArray(rpcData) ? rpcData : rpcData ? [rpcData] : [];
     if (rows.length > 0) {
-      return NextResponse.json({ ok: true, record: rows[0] as ReleaseRecord });
+      const rec = rows[0] as ReleaseRecord;
+      notifyReleaseSubmittedForModeration(rec);
+      return NextResponse.json({ ok: true, record: rec });
     }
   } else {
     const isMissing =
@@ -134,6 +148,7 @@ async function handleFinalizeSubmit(
     );
   }
 
+  notifyReleaseSubmittedForModeration(rows[0]);
   return NextResponse.json({ ok: true, record: rows[0] });
 }
 

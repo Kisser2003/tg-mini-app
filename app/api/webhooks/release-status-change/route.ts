@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { escapeHtml, sendTelegramBotMessage } from "@/lib/telegram-bot.server";
+import { createSupabaseAdmin } from "@/lib/supabase-admin";
 
 export const runtime = "nodejs";
 
@@ -37,24 +38,20 @@ function checkWebhookSecret(request: Request): WebhookSecretCheck {
   return "ok";
 }
 
-function buildReadyMessage(releaseId: string): string {
-  const idShort = escapeHtml(releaseId.slice(0, 8));
+function buildReadyMessage(title: string): string {
+  const t = escapeHtml(title.trim().length > 0 ? title.trim() : "релиз");
   return (
-    `<b>Релиз одобрен</b>\n\n` +
-    `Поздравляем! Твой релиз прошёл проверку и скоро появится на площадках.\n\n` +
-    `<code>id: ${idShort}…</code>`
+    `✅ <b>Поздравляем!</b> Ваш релиз «${t}» одобрен и скоро появится на площадках.`
   );
 }
 
-function buildFailedMessage(releaseId: string, errorMessage: string | null | undefined): string {
-  const idShort = escapeHtml(releaseId.slice(0, 8));
+function buildFailedMessage(title: string, errorMessage: string | null | undefined): string {
+  const t = escapeHtml(title.trim().length > 0 ? title.trim() : "релиз");
   let body =
-    `<b>Релиз отклонён</b>\n\n` +
-    `К сожалению, релиз не прошёл модерацию. Проверь данные в приложении и при необходимости загрузи заново.\n\n` +
-    `<code>id: ${idShort}…</code>`;
+    `⚠️ <b>Нужны правки.</b> В вашем релизе «${t}» найдены ошибки. Пожалуйста, проверьте комментарии в приложении.`;
 
   if (errorMessage && errorMessage.trim().length > 0) {
-    body += `\n\n<i>Подробности:</i>\n${escapeHtml(errorMessage.trim())}`;
+    body += `\n\n<i>Комментарий модератора:</i>\n${escapeHtml(errorMessage.trim())}`;
   }
 
   return body;
@@ -98,10 +95,18 @@ export async function POST(request: Request): Promise<Response> {
     return NextResponse.json({ ok: true, skipped: true });
   }
 
+  let trackName = "";
+  const admin = createSupabaseAdmin();
+  if (admin) {
+    const { data: row } = await admin.from("releases").select("track_name").eq("id", id).maybeSingle();
+    const name = row && typeof row === "object" && "track_name" in row ? row.track_name : null;
+    if (typeof name === "string") trackName = name;
+  }
+
   const text =
     new_status === "ready"
-      ? buildReadyMessage(id)
-      : buildFailedMessage(id, errorMessage ?? null);
+      ? buildReadyMessage(trackName)
+      : buildFailedMessage(trackName, errorMessage ?? null);
 
   const send = await sendTelegramBotMessage({
     chatId: user_id,

@@ -20,7 +20,6 @@ import {
   type ReleaseRecord,
   type ReleaseTrackRow
 } from "@/repositories/releases.repo";
-import { sendApprovalNotification } from "@/lib/bot-api";
 import { hapticMap } from "@/lib/haptic-map";
 import { getTelegramUserId, initTelegramWebApp, triggerHaptic } from "@/lib/telegram";
 import { AdminModerationQueueSkeleton } from "@/components/ui/Skeleton";
@@ -131,14 +130,9 @@ export default function AdminPage() {
       setBusyId(release.id);
       setActionError(null);
       try {
-        const updated = await approveRelease(release.id);
+        await approveRelease(release.id);
         triggerHaptic("success");
         setRejectModalReleaseId(null);
-        try {
-          await sendApprovalNotification(updated);
-        } catch (e: unknown) {
-          console.error("sendApprovalNotification failed:", e);
-        }
         await refreshAll();
         toast.success("Релиз одобрен");
         router.replace("/admin");

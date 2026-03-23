@@ -92,9 +92,9 @@
 - **Маршрут:** [`app/admin/page.tsx`](../app/admin/page.tsx) — очередь релизов в статусе ожидания, SWR с таймаутом, карточки [`AdminReleaseCard`](../components/AdminReleaseCard.tsx).
 - **Доступ в UI:** вкладка «Админ» в [`BottomNav`](../components/BottomNav.tsx) только если [`isAdminUi()`](../lib/admin.ts) (сопоставление Telegram user id с `ADMIN_TELEGRAM_ID` / fallback).
 - **Действия:** [`features/admin/actions.ts`](../features/admin/actions.ts) — `approveRelease` / `rejectRelease`; в production вызывается **`assertAdmin()`** по `getTelegramUserId()` vs ожидаемый id админа. В **development** проверка отключена для удобства отладки.
-- **Уведомление артисту после одобрения:** [`lib/bot-api.ts`](../lib/bot-api.ts) → `POST /api/notify-release-approved` с заголовком initData; на сервере — **`withTelegramAuth`** и дополнительная проверка, что `telegram.user.id` совпадает с админом ([`app/api/notify-release-approved/route.ts`](../app/api/notify-release-approved/route.ts)).
+- **Уведомления артисту в Telegram:** после сабмита — [`app/api/releases/finalize-submit/route.ts`](../app/api/releases/finalize-submit/route.ts) вызывает [`sendTelegramNotification`](../lib/telegram-notifications.ts) (обёртка над [`lib/telegram-bot.server.ts`](../lib/telegram-bot.server.ts)). После смены статуса на `ready` / `failed` — триггер БД → [`app/api/webhooks/release-status-change/route.ts`](../app/api/webhooks/release-status-change/route.ts) (секрет `SUPABASE_WEBHOOK_SECRET`).
 
-**Telegram и «HMAC»:** подпись **не** проверяется отдельным HMAC в админских server actions — идентификация для Supabase идёт через кастомный заголовок (см. раздел 5). Для **HTTP API** защита строится на **верификации `initData`** по алгоритму Telegram: HMAC-SHA256 над `data_check_string` с секретом из `TELEGRAM_BOT_TOKEN` ([`lib/telegram-init-data.server.ts`](../lib/telegram-init-data.server.ts)), обёртка [`withTelegramAuth`](../lib/api/with-telegram-auth.ts) — это и есть серверная граница доверия для маршрутов вроде `notify-admin` / `notify-release-approved`.
+**Telegram и «HMAC»:** подпись **не** проверяется отдельным HMAC в админских server actions — идентификация для Supabase идёт через кастомный заголовок (см. раздел 5). Для **HTTP API** защита строится на **верификации `initData`** по алгоритму Telegram: HMAC-SHA256 над `data_check_string` с секретом из `TELEGRAM_BOT_TOKEN` ([`lib/telegram-init-data.server.ts`](../lib/telegram-init-data.server.ts)), обёртка [`withTelegramAuth`](../lib/api/with-telegram-auth.ts) — это и есть серверная граница доверия для маршрутов вроде `notify-admin` / `finalize-submit`.
 
 ---
 
@@ -183,7 +183,8 @@ flowchart TB
   subgraph nextapi [Next_API]
     CE[POST_api_client-error]
     NA[POST_api_notify-admin]
-    NR[POST_api_notify-release-approved]
+    WH[POST_webhooks_release-status-change]
+    FS[POST_releases_finalize-submit]
   end
   subgraph supa [Supabase]
     PG[(Postgres)]
@@ -198,9 +199,11 @@ flowchart TB
   SBClient --> PG
   SBClient --> St
   Pages -->|initData_optional| NA
-  Pages -->|initData| NR
+  Pages -->|initData| FS
   NA --> Bot
-  NR --> Bot
+  FS --> Bot
+  PG -.->|pg_net| WH
+  WH --> Bot
   CE -->|service_role| PG
 ```
 

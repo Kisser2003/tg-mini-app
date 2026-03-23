@@ -11,7 +11,6 @@ import { AudioPlayerLazy } from "@/components/AudioPlayerLazy";
 import { GlassCard } from "@/components/GlassCard";
 import { approveRelease, rejectRelease } from "@/features/admin/actions";
 import { isAdminUi } from "@/lib/admin";
-import { sendApprovalNotification } from "@/lib/bot-api";
 import { getReleaseStatusMeta, normalizeReleaseStatus } from "@/lib/release-status";
 import {
   getReleaseById,
@@ -92,13 +91,8 @@ export default function AdminReleaseDetailPage() {
     if (!release) return;
     setBusy(true);
     try {
-      const updated = await approveRelease(release.id);
+      await approveRelease(release.id);
       triggerHaptic("success");
-      try {
-        await sendApprovalNotification(updated);
-      } catch (e) {
-        console.error("sendApprovalNotification failed:", e);
-      }
       toast.success("Релиз одобрен");
       router.push("/admin");
     } catch (e: unknown) {
