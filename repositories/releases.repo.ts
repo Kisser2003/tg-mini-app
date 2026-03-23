@@ -910,6 +910,7 @@ export async function getMyReleases(userId: number | string): Promise<ReleaseRec
   }
   console.log("Fetching releases for ID:", idStr);
   const { data, error } = await withRetry(async () => {
+    /** Не использовать `.single()` / `.maybeSingle()` — нужен массив строк. */
     return await supabase
       .from("releases")
       .select(

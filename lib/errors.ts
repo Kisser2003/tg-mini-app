@@ -2,6 +2,22 @@
 export const USER_REQUEST_TIMEOUT_MESSAGE =
   "Сервер не ответил вовремя. Проверьте интернет и попробуйте ещё раз.";
 
+/**
+ * Для отладки: Supabase/PostgREST часто отдаёт plain object — `String(err)` даёт `[object Object]`.
+ * Сериализует собственные поля объекта (в т.ч. message, code, details, hint).
+ */
+export function stringifyErrorForDebug(err: unknown): string | null {
+  if (err == null) return null;
+  if (typeof err === "object" && err !== null) {
+    try {
+      return JSON.stringify(err, Object.getOwnPropertyNames(err));
+    } catch {
+      return String(err);
+    }
+  }
+  return String(err);
+}
+
 /** Сообщение для UI из Error, PostgREST или plain object (Supabase часто кидает не Error). */
 export function formatErrorMessage(err: unknown, fallback: string): string {
   if (err instanceof Error && err.message) return err.message;

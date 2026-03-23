@@ -27,7 +27,7 @@ import {
 } from "@/lib/release-status";
 import { getMyReleases, getReleaseDisplayTitle, type ReleaseRecord } from "@/repositories/releases.repo";
 import { getTelegramUserId, initTelegramWebApp, triggerHaptic } from "@/lib/telegram";
-import { USER_REQUEST_TIMEOUT_MESSAGE } from "@/lib/errors";
+import { stringifyErrorForDebug, USER_REQUEST_TIMEOUT_MESSAGE } from "@/lib/errors";
 import { ARTWORK_BLUR_DATA_URL } from "@/lib/image-blur";
 import { SWR_LIST_OPTIONS } from "@/lib/swr-config";
 import { withRequestTimeout } from "@/lib/withRequestTimeout";
@@ -292,12 +292,7 @@ function LibraryPageInner() {
                 {JSON.stringify(data ?? null)}
                 {"\n"}
                 {JSON.stringify({
-                  error:
-                    error == null
-                      ? null
-                      : error instanceof Error
-                        ? error.message
-                        : String(error),
+                  error: stringifyErrorForDebug(error),
                   isLoading,
                   isValidating,
                   userId

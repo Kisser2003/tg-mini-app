@@ -1,8 +1,14 @@
 import { createClient } from "@supabase/supabase-js";
 import { getTelegramUserIdForSupabaseRequests } from "./telegram";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ?? "";
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() ?? "";
+
+if (typeof window !== "undefined" && (!supabaseUrl || !supabaseAnonKey)) {
+  console.error(
+    "[supabase] Задайте NEXT_PUBLIC_SUPABASE_URL и NEXT_PUBLIC_SUPABASE_ANON_KEY (локально в .env.local, на Vercel — Environment Variables)."
+  );
+}
 
 /**
  * Схема таблицы треков в БД: `public.tracks` (не `release_tracks`), см. миграцию
