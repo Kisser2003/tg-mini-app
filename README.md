@@ -85,12 +85,11 @@ Then hook the URL as a Telegram WebApp URL in your bot, so that Telegram passes 
 
 Пример: [`app/api/notify-admin/route.ts`](app/api/notify-admin/route.ts) — `POST` защищён через `withTelegramAuth`.
 
-### Webhook: смена статуса релиза (Supabase → Next → Telegram)
+### Webhook: смена статуса релиза (Supabase → Next, без Telegram)
 
-- **Route:** [`app/api/webhooks/release-status-change/route.ts`](app/api/webhooks/release-status-change/route.ts) — `POST`. Проверка секрета включается только если в Vercel **`WEBHOOK_REQUIRE_SECRET=true`**. Заголовки (любой из): **`x-supabase-signature`**, **`x-supabase-webhook-secret`**, **`Authorization: Bearer …`** — значение = **`SUPABASE_WEBHOOK_SECRET`**; при необходимости проверяется HMAC-SHA256 тела в `x-supabase-signature`. Отладка: `SKIP_WEBHOOK_SECRET_VERIFY=true` или `WEBHOOK_DISABLE_SECRET_CHECK=true`.
-- **Supabase Database Webhooks → Telegram:** уведомление «релиз получен» только при **`status === pending`**: на **INSERT** — если сразу `pending` (иначе `{ message: 'Ignore initial draft' }`); на **UPDATE** — только переход **в** `pending` из другого статуса (`old_record.status` не `pending`). Отладка: логи `eventType`, `newStatus`, `oldStatus`.
-- **Триггер БД:** см. миграцию с `pg_net` и `net.http_post`; в SQL замените плейсхолдеры `YOUR_PUBLIC_APP_DOMAIN` и секрет на свои (тот же секрет, что в `.env` у деплоя Next.js).
-- Уведомления пользователю в Telegram отправляются при переходе статуса в `ready` или `failed` (см. `lib/db-enums.ts`).
+- **Route:** [`app/api/webhooks/release-status-change/route.ts`](app/api/webhooks/release-status-change/route.ts) — `POST`, отвечает **200** (ACK для Supabase / триггеров). **Сообщения в Telegram из этого маршрута не отправляются** — текст «отправлен на модерацию» уходит только из [`finalize-submit`](app/api/releases/finalize-submit/route.ts).
+- Проверка секрета: только если в Vercel **`WEBHOOK_REQUIRE_SECRET=true`**. Заголовки: **`x-supabase-signature`**, **`x-supabase-webhook-secret`**, **`Authorization: Bearer …`** = **`SUPABASE_WEBHOOK_SECRET`**; при необходимости HMAC-SHA256 тела. Отладка: `SKIP_WEBHOOK_SECRET_VERIFY=true` или `WEBHOOK_DISABLE_SECRET_CHECK=true`.
+- **Триггер БД / Database Webhooks:** см. миграции с `pg_net`; URL и секрет должны совпадать с деплоем.
 - **Кошелёк:** [`GET /api/wallet/stats`](app/api/wallet/stats/route.ts) — `withTelegramAuth`, данные через `SUPABASE_SERVICE_ROLE_KEY` (баланс RPC, список транзакций).
 
 ## Security incident checklist (secrets)

@@ -1,38 +1,13 @@
 import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { escapeHtml, sendTelegramBotMessage } from "@/lib/telegram-bot.server";
-import { createSupabaseAdmin } from "@/lib/supabase-admin";
 
 export const runtime = "nodejs";
 
 const WEBHOOK_VERBOSE =
   process.env.WEBHOOK_VERBOSE_LOGS === "true" || process.env.NODE_ENV !== "production";
 
-type SupabaseAdmin = NonNullable<ReturnType<typeof createSupabaseAdmin>>;
-
-/**
- * Атомарно помечаем «короткое» уведомление pending+tracks как отправленное (без дублей при PATCH).
- * Нужна колонка `telegram_pending_ack_sent_at` (миграция 20260331220000).
- */
-async function claimPendingWebhookAck(admin: SupabaseAdmin, releaseId: string): Promise<boolean> {
-  const { data, error } = await admin
-    .from("releases")
-    .update({ telegram_pending_ack_sent_at: new Date().toISOString() })
-    .eq("id", releaseId)
-    .is("telegram_pending_ack_sent_at", null)
-    .select("id");
-  if (error) {
-    console.error(
-      "[webhooks/release-status-change] claim telegram_pending_ack_sent_at:",
-      error.message
-    );
-    return false;
-  }
-  return Array.isArray(data) && data.length > 0;
-}
-
-/** Supabase Database Webhooks (INSERT / UPDATE на `releases`). */
+/** Supabase Database Webhooks (INSERT / UPDATE / DELETE на `releases`). */
 const supabaseWebhookSchema = z.object({
   type: z.enum(["INSERT", "UPDATE", "DELETE"]),
   table: z.string().optional(),
@@ -68,10 +43,6 @@ function timingSafeEqualHex(aHex: string, bHex: string): boolean {
   }
 }
 
-/**
- * Плоский секрет из заголовков (как в Supabase → Database Webhooks → HTTP Headers).
- * Порядок: `x-supabase-signature` (часто так называют кастомный секрет), затем остальные.
- */
 function collectPlainSecretsFromHeaders(request: Request): string[] {
   const names = [
     "x-supabase-signature",
@@ -91,9 +62,6 @@ function collectPlainSecretsFromHeaders(request: Request): string[] {
   return out;
 }
 
-/**
- * Проверка HMAC-SHA256(rawBody), если в `x-supabase-signature` приходит дайджест, а не плоский секрет.
- */
 function verifyHmacSignature(
   rawBody: string,
   signatureHeader: string | undefined,
@@ -113,11 +81,6 @@ function verifyHmacSignature(
 }
 
 function checkWebhookAuth(request: Request, rawBody: string): WebhookAuthResult {
-  /**
-   * По умолчанию проверка **выключена**, чтобы вебхук из Supabase не получал 401, пока заголовки не совпали.
-   * Для продакшена: задай в Vercel `WEBHOOK_REQUIRE_SECRET=true` и те же секреты в HTTP Headers Supabase
-   * (`x-supabase-signature` или `x-supabase-webhook-secret` = `SUPABASE_WEBHOOK_SECRET`).
-   */
   if (process.env.WEBHOOK_REQUIRE_SECRET !== "true") {
     const g = globalThis as typeof globalThis & { __tgWebhookSecretWarned?: boolean };
     if (!g.__tgWebhookSecretWarned) {
@@ -167,48 +130,10 @@ function checkWebhookAuth(request: Request, rawBody: string): WebhookAuthResult 
   return { ok: false, reason: "mismatch" };
 }
 
-function displayTitleFromRecord(record: Record<string, unknown>): string {
-  const raw = record.title ?? record.track_name;
-  if (typeof raw === "string") return raw.trim();
-  if (raw == null) return "";
-  return String(raw).trim();
-}
-
-function buildPendingMessage(title: string): string {
-  const t = escapeHtml(title.length > 0 ? title : "релиз");
-  return `Бро, релиз <b>${t}</b> получен! Скоро проверим. ⚡️`;
-}
-
-function buildLegacyReadyMessage(title: string, artistName: string): string {
-  const t = escapeHtml(title.trim().length > 0 ? title.trim() : "релиз");
-  const a = escapeHtml(artistName.trim().length > 0 ? artistName.trim() : "Артист");
-  return `Бро, твой релиз <b>${t}</b> от артиста <b>${a}</b> успешно прошел модерацию и отправлен на площадки! 🚀`;
-}
-
-function buildFailedMessage(title: string, errorMessage: string | null | undefined): string {
-  const t = escapeHtml(title.trim().length > 0 ? title.trim() : "релиз");
-  let body =
-    `⚠️ <b>Нужны правки.</b> В вашем релизе «${t}» найдены ошибки. Пожалуйста, проверьте комментарии в приложении.`;
-
-  if (errorMessage && errorMessage.trim().length > 0) {
-    body += `\n\n<i>Комментарий модератора:</i>\n${escapeHtml(errorMessage.trim())}`;
-  }
-
-  return body;
-}
-
-function chatIdFromTelegramId(raw: unknown): string | null {
-  if (raw === null || raw === undefined) return null;
-  const s = String(raw).trim();
-  if (s === "" || s === "0") return null;
-  return s;
-}
-
-/** Статус из Supabase record (без падений при отсутствии поля). */
 function statusFromRow(row: Record<string, unknown> | null | undefined): string {
   if (!row || typeof row !== "object") return "";
   const s = row.status;
-  if (s === null || s === undefined) return "";
+  if (s == null) return "";
   return String(s).trim();
 }
 
@@ -221,68 +146,6 @@ function unwrapSupabaseWebhookJson(json: unknown): unknown {
     return p;
   }
   return json;
-}
-
-/** Реальная ссылка на файл: только http(s), не `track_name` / не произвольная строка. */
-function looksLikeHttpOrHttpsUrl(value: unknown): boolean {
-  if (value === null || value === undefined) return false;
-  const s = String(value).trim();
-  return /^https?:\/\/.+/i.test(s);
-}
-
-/**
- * Быстрая проверка по строке `releases`: оба поля `audio_url` и `artwork_url` (http(s)).
- * Для аудио только в `tracks` см. `isReleaseFullyReady` / `releaseFullyReadyFromRowAndTracks`.
- */
-function hasReleaseFileLinks(record: Record<string, unknown>): boolean {
-  return looksLikeHttpOrHttpsUrl(record.audio_url) && looksLikeHttpOrHttpsUrl(record.artwork_url);
-}
-
-function releaseContentReadySync(record: Record<string, unknown>): boolean {
-  return hasReleaseFileLinks(record);
-}
-
-/** Синхронная «глубокая» готовность при уже известном числе треков (один запрос на релиз). */
-function releaseFullyReadyFromRowAndTracks(
-  record: Record<string, unknown>,
-  tracksCount: number
-): boolean {
-  return (
-    looksLikeHttpOrHttpsUrl(record.artwork_url) &&
-    (looksLikeHttpOrHttpsUrl(record.audio_url) || tracksCount > 0)
-  );
-}
-
-/**
- * Глубокая готовность: есть `artwork_url` на релизе и (есть `audio_url` ИЛИ хотя бы одна строка в `tracks`).
- * Запрос к `tracks` через service role (RLS).
- */
-async function isReleaseFullyReady(
-  admin: NonNullable<ReturnType<typeof createSupabaseAdmin>>,
-  releaseId: string,
-  record: Record<string, unknown>
-): Promise<{ ok: boolean; tracksCount: number; error?: string }> {
-  const { count, error } = await admin
-    .from("tracks")
-    .select("id", { count: "exact", head: true })
-    .eq("release_id", releaseId);
-
-  const tracksCount = error ? 0 : (count ?? 0);
-
-  console.log("Deep content check:", {
-    hasArt: !!record.artwork_url,
-    hasAudioUrl: !!record.audio_url,
-    hasTracks: tracksCount > 0
-  });
-
-  if (error) {
-    return { ok: false, tracksCount: 0, error: error.message };
-  }
-
-  return {
-    ok: releaseFullyReadyFromRowAndTracks(record, tracksCount),
-    tracksCount
-  };
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -338,296 +201,31 @@ export async function POST(request: Request): Promise<Response> {
   const unwrapped = unwrapSupabaseWebhookJson(json);
   const supa = supabaseWebhookSchema.safeParse(unwrapped);
   if (supa.success) {
-    const { type, table, record, old_record: oldRecord } = supa.data;
-
-    const newStatus = record != null && typeof record === "object" ? statusFromRow(record) : "";
-    const oldStatus =
-      oldRecord != null && typeof oldRecord === "object"
-        ? statusFromRow(oldRecord as Record<string, unknown>)
-        : "";
-
-    console.log("[webhooks/release-status-change] supabase event", {
-      eventType: type,
-      table: table ?? "(unset)",
-      newStatus: newStatus || "(empty)",
-      oldStatus: oldRecord == null ? "(no old_record)" : oldStatus || "(empty)"
-    });
+    const { type, table, record } = supa.data;
 
     if (table && table.toLowerCase() !== "releases") {
-      console.log("[webhooks/release-status-change] skip: wrong_table", { table });
       return NextResponse.json({ ok: true, skipped: true, reason: "wrong_table" });
     }
-
     if (type === "DELETE") {
-      console.log("[webhooks/release-status-change] skip: DELETE");
       return NextResponse.json({ ok: true, skipped: true, reason: "delete" });
     }
-
     if (record == null || typeof record !== "object") {
-      console.log("[webhooks/release-status-change] skip: no record");
       return NextResponse.json({ ok: true, skipped: true, reason: "no_record" });
     }
 
-    const row = record as Record<string, unknown>;
-
-    const oldRow =
-      oldRecord != null && typeof oldRecord === "object"
-        ? (oldRecord as Record<string, unknown>)
-        : null;
-
-    const transitionToPending =
-      type === "UPDATE" &&
-      oldRow != null &&
-      oldStatus !== "pending" &&
-      newStatus === "pending";
-
-    const gainedFilesWhilePending =
-      type === "UPDATE" &&
-      oldRow != null &&
-      oldStatus === "pending" &&
-      newStatus === "pending" &&
-      !hasReleaseFileLinks(oldRow) &&
-      hasReleaseFileLinks(row);
-
-    const releaseIdRawEarly = row.id;
-    const releaseIdEarly =
-      typeof releaseIdRawEarly === "string" && releaseIdRawEarly.length > 0 ? releaseIdRawEarly : null;
-
-    const adminDeep = createSupabaseAdmin();
-    let deepReadyNew = false;
-    let tracksCountForRelease = 0;
-    if (adminDeep && releaseIdEarly && newStatus === "pending") {
-      const deep = await isReleaseFullyReady(adminDeep, releaseIdEarly, row);
-      tracksCountForRelease = deep.tracksCount;
-      deepReadyNew = deep.ok;
-      if (deep.error) {
-        console.error("[webhooks/release-status-change] tracks count query failed:", deep.error);
-      }
-    }
-
-    /**
-     * Для «стал полным сейчас» нельзя подмешивать текущий tracksCount к old_record:
-     * в old_row нет треков, а tracksCount из БД один на релиз — тогда старое состояние
-     * ошибочно считается уже готовым (обложка + треки), и gainedFullWhilePending = false.
-     * Снимок old сравниваем только по колонкам releases (tracksCount = 0 для old).
-     */
-    const deepReadyOldSyncOnly =
-      oldRow != null && newStatus === "pending"
-        ? releaseFullyReadyFromRowAndTracks(oldRow, 0)
-        : false;
-
-    const gainedFullWhilePending =
-      type === "UPDATE" &&
-      oldRow != null &&
-      oldStatus === "pending" &&
-      newStatus === "pending" &&
-      deepReadyNew &&
-      !deepReadyOldSyncOnly;
-
     if (WEBHOOK_VERBOSE) {
-      console.log(
-        "REAL_FIELDS_IN_RECORD:",
-        Object.keys(row),
-        "VALUES:",
-        {
-          audio: row.audio_url,
-          art: row.artwork_url,
-          track: row.track_url
-        }
-      );
-      console.log(
-        "[webhooks/release-status-change] note: WAV/треки в таблице `tracks` (file_path) не приходят в record вебхука по `releases` — только колонки этой строки"
-      );
+      const row = record as Record<string, unknown>;
+      console.log("[webhooks/release-status-change] ack (Telegram только из finalize-submit)", {
+        type,
+        status: statusFromRow(row)
+      });
     }
 
-    if (WEBHOOK_VERBOSE) console.log("Content check:", {
-      hasAudioUrl: looksLikeHttpOrHttpsUrl(row.audio_url),
-      hasArtworkUrl: looksLikeHttpOrHttpsUrl(row.artwork_url),
-      hasReleaseFileLinks: hasReleaseFileLinks(row),
-      deepReadyNew,
-      transitionToPending,
-      gainedFilesWhilePending,
-      gainedFullWhilePending,
-      type
+    return NextResponse.json({
+      ok: true,
+      skipped: true,
+      reason: "telegram_from_finalize_submit_only"
     });
-
-    if (type === "INSERT") {
-      if (newStatus !== "pending") {
-        console.log("[webhooks/release-status-change] ignore INSERT (not pending yet)", {
-          newStatus: newStatus || "(empty)"
-        });
-        return NextResponse.json({ message: "Ignore initial draft" }, { status: 200 });
-      }
-      if (adminDeep && releaseIdEarly) {
-        if (!deepReadyNew) {
-          console.log("Skip: Missing audio or artwork for full release", { phase: "insert", deep: true });
-          return NextResponse.json({ message: "Ignore initial draft" }, { status: 200 });
-        }
-      } else if (!hasReleaseFileLinks(row)) {
-        console.log("Skip: Missing audio or artwork for full release", { phase: "insert" });
-        return NextResponse.json({ message: "Ignore initial draft" }, { status: 200 });
-      }
-    } else if (type === "UPDATE") {
-      if (newStatus !== "pending") {
-        console.log("[webhooks/release-status-change] skip UPDATE (new status is not pending)", {
-          newStatus: newStatus || "(empty)"
-        });
-        return NextResponse.json({
-          ok: true,
-          skipped: true,
-          reason: "update_new_not_pending"
-        });
-      }
-      if (oldRow == null) {
-        console.log("[webhooks/release-status-change] skip UPDATE (missing old_record, cannot verify transition)");
-        return NextResponse.json({
-          ok: true,
-          skipped: true,
-          reason: "missing_old_record"
-        });
-      }
-
-      /**
-       * `gainedFullWhilePending`: треки в `tracks`, без audio_url в строке releases — шлём Telegram
-       * только один раз через атомарный `claimPendingWebhookAck` (колонка `telegram_pending_ack_sent_at`).
-       */
-      if (!transitionToPending && !gainedFilesWhilePending && !gainedFullWhilePending) {
-        console.log("[webhooks/release-status-change] skip UPDATE (no notify rule)", {
-          oldStatus,
-          newStatus,
-          transitionToPending,
-          gainedFilesWhilePending,
-          gainedFullWhilePending
-        });
-        return NextResponse.json({
-          ok: true,
-          skipped: true,
-          reason: "update_no_notify_rule"
-        });
-      }
-    } else {
-      console.log("[webhooks/release-status-change] skip: event type not handled", { eventType: type });
-      return NextResponse.json({ ok: true, skipped: true, reason: "unhandled_event_type" });
-    }
-
-    if (newStatus === "pending" && !(type === "UPDATE" && transitionToPending)) {
-      if (adminDeep && releaseIdEarly) {
-        if (!deepReadyNew) {
-          console.log("Skip: Missing audio or artwork for full release", {
-            type,
-            transitionToPending,
-            phase: "pending_not_transition",
-            audio_url: row.audio_url,
-            artwork_url: row.artwork_url
-          });
-          return NextResponse.json({
-            ok: true,
-            skipped: true,
-            reason: "no_audio_or_artwork"
-          });
-        }
-      } else if (!hasReleaseFileLinks(row)) {
-        console.log("Skip: Missing audio or artwork for full release", {
-          type,
-          transitionToPending,
-          phase: "no_service_role_sync_only",
-          audio_url: row.audio_url,
-          artwork_url: row.artwork_url
-        });
-        return NextResponse.json({
-          ok: true,
-          skipped: true,
-          reason: "no_audio_or_artwork"
-        });
-      }
-    }
-
-    console.log("release row file links OK:", releaseContentReadySync(row), {
-      audio_url: row.audio_url,
-      artwork_url: row.artwork_url
-    });
-
-    const releaseId = releaseIdEarly;
-    if (!releaseId) {
-      console.log("Skip Telegram: release is not fully filled yet", {
-        reason: "no_release_id_in_record"
-      });
-      return NextResponse.json({ ok: true, skipped: true, reason: "no_release_id" });
-    }
-
-    if (adminDeep && releaseId) {
-      if (!deepReadyNew) {
-        console.log("Skip: Missing audio or artwork for full release", {
-          phase: "final_gate",
-          hint: "isReleaseFullyReady: artwork + (audio_url or tracks)"
-        });
-        return NextResponse.json({
-          ok: true,
-          skipped: true,
-          reason: "release_not_full"
-        });
-      }
-    } else if (!hasReleaseFileLinks(row)) {
-      console.log("Skip: Missing audio or artwork for full release", {
-        phase: "no_service_role",
-        hint: "SUPABASE_SERVICE_ROLE_KEY needed to verify tracks when audio_url is empty"
-      });
-      return NextResponse.json({
-        ok: true,
-        skipped: true,
-        reason: "release_not_full_no_service_role"
-      });
-    }
-
-    const chatId = chatIdFromTelegramId(row.telegram_id);
-    if (!chatId) {
-      console.error("Ошибка: У релиза нет telegram_id, некуда слать уведомление");
-      return NextResponse.json({ ok: true, skipped: true, reason: "no_telegram_id" });
-    }
-
-    const onlyFullPendingAck =
-      type === "UPDATE" &&
-      gainedFullWhilePending &&
-      !transitionToPending &&
-      !gainedFilesWhilePending;
-
-    if (onlyFullPendingAck && adminDeep) {
-      const claimed = await claimPendingWebhookAck(adminDeep, releaseId);
-      if (!claimed) {
-        return NextResponse.json({
-          ok: true,
-          skipped: true,
-          reason: "pending_ack_already_sent"
-        });
-      }
-    }
-
-    const title = displayTitleFromRecord(row);
-    const text = buildPendingMessage(title);
-
-    if (WEBHOOK_VERBOSE) {
-      console.log("[webhooks/release-status-change] sending Telegram (pending)", {
-        eventType: type,
-        newStatus,
-        oldStatus: oldRecord != null ? oldStatus : "(n/a)"
-      });
-    }
-
-    const send = await sendTelegramBotMessage({
-      chatId,
-      text,
-      parseMode: "HTML"
-    });
-
-    if (!send.ok) {
-      console.error("[webhooks/release-status-change] Telegram send failed:", send.error);
-      return NextResponse.json(
-        { ok: false, error: "Telegram send failed" },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({ ok: true });
   }
 
   const legacy = legacyWebhookBodySchema.safeParse(json);
@@ -638,66 +236,19 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  const { id, new_status, error_message: errorMessage } = legacy.data;
+  const { new_status } = legacy.data;
 
   if (new_status !== "ready" && new_status !== "failed") {
     return NextResponse.json({ ok: true, skipped: true });
   }
 
-  const admin = createSupabaseAdmin();
-  if (!admin) {
-    console.error("[webhooks/release-status-change] Supabase admin client not configured");
-    return NextResponse.json({ ok: false, error: "Server misconfigured" }, { status: 503 });
+  if (WEBHOOK_VERBOSE) {
+    console.log("[webhooks/release-status-change] legacy ack (no Telegram)", { new_status });
   }
 
-  const { data: release, error: relErr } = await admin
-    .from("releases")
-    .select("telegram_id, title, artist_name, track_name")
-    .eq("id", id)
-    .maybeSingle();
-
-  if (relErr) {
-    console.error("[webhooks/release-status-change] releases select:", relErr.message);
-    return NextResponse.json({ ok: false, error: "Failed to load release" }, { status: 500 });
-  }
-
-  if (!release) {
-    console.error("[webhooks/release-status-change] release not found:", id);
-    return NextResponse.json({ ok: false, error: "Release not found" }, { status: 404 });
-  }
-
-  const chatId = chatIdFromTelegramId(release.telegram_id);
-  if (!chatId) {
-    console.error("Ошибка: У релиза нет telegram_id, некуда слать уведомление");
-    return NextResponse.json({ ok: true, skipped: true, reason: "no_telegram_id" });
-  }
-
-  const rel = release as {
-    title?: string | null;
-    artist_name?: string | null;
-    track_name?: string | null;
-  };
-  const displayTitle = String(rel.title ?? rel.track_name ?? "").trim();
-  const displayArtist = String(rel.artist_name ?? "").trim();
-
-  const text =
-    new_status === "ready"
-      ? buildLegacyReadyMessage(displayTitle, displayArtist)
-      : buildFailedMessage(displayTitle, errorMessage ?? null);
-
-  const send = await sendTelegramBotMessage({
-    chatId,
-    text,
-    parseMode: "HTML"
+  return NextResponse.json({
+    ok: true,
+    skipped: true,
+    reason: "telegram_from_finalize_submit_only"
   });
-
-  if (!send.ok) {
-    console.error("[webhooks/release-status-change] Telegram send failed:", send.error);
-    return NextResponse.json(
-      { ok: false, error: "Telegram send failed" },
-      { status: 500 }
-    );
-  }
-
-  return NextResponse.json({ ok: true });
 }
