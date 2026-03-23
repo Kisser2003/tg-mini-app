@@ -85,6 +85,23 @@ const librarySkeletonRow = {
   }
 };
 
+/** Три карточки статистики под шапкой библиотеки (пока SWR грузит список). */
+export function LibraryStatsSkeletonRow() {
+  return (
+    <div className="grid grid-cols-3 gap-2" aria-hidden>
+      {[0, 1, 2].map((i) => (
+        <div
+          key={i}
+          className="rounded-[16px] border border-white/[0.06] bg-white/[0.03] px-3 py-3"
+        >
+          <Skeleton className="mb-2 h-2.5 w-14 rounded" />
+          <Skeleton className="h-7 w-10 rounded-md" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function LibraryReleaseSkeletonGrid({ count = 6 }: { count?: number }) {
   return (
     <motion.div

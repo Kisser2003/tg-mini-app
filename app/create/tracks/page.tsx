@@ -148,6 +148,14 @@ export default function CreateTracksPage() {
   const [activeUploadIndex, setActiveUploadIndex] = useState<number | null>(null);
   const [isUploadingWav, setIsUploadingWav] = useState(false);
 
+  /** Локальный прогресс XHR + флаг стора — блокируем «Далее», пока идёт реальный аплоад. */
+  const isWavTransferActive = useMemo(
+    () =>
+      tracksUploadInProgress ||
+      Object.keys(trackUploadProgress).length > 0,
+    [tracksUploadInProgress, trackUploadProgress]
+  );
+
   const handleNext = useCallback(
     async (data: CreateTracks) => {
       triggerHaptic("light");
@@ -352,10 +360,10 @@ export default function CreateTracksPage() {
 
           <MagneticButton
             type="submit"
-            disabled={!isValid || isSubmitting || isUploadingWav || tracksUploadInProgress}
+            disabled={!isValid || isSubmitting || isUploadingWav || isWavTransferActive}
             className="inline-flex h-[56px] w-full items-center justify-center rounded-[20px] bg-gradient-to-tr from-[#4F46E5] to-[#7C3AED] text-[16px] font-semibold text-white shadow-[0_14px_40px_rgba(88,80,236,0.6)] disabled:opacity-60 disabled:shadow-none"
           >
-            {isUploadingWav || tracksUploadInProgress
+            {isUploadingWav || isWavTransferActive
               ? "Загружаем WAV…"
               : isSubmitting
                 ? "Сохраняем…"

@@ -39,6 +39,7 @@ import { supabase } from "@/lib/supabase";
 import { parseArtistLinksFromJson } from "@/lib/artist-links";
 import { parseCollaboratorsFromDb } from "@/lib/collaborators";
 import { parsePerformanceLanguage } from "@/lib/performance-language";
+import { celebrateReleaseSubmission } from "@/lib/confetti-release-success";
 
 /** Таймаут коротких операций Supabase (insert/upsert в БД). Загрузка WAV идёт напрямую в Storage без лимита. */
 const SUPABASE_DB_OP_TIMEOUT_MS = 15000;
@@ -1250,6 +1251,10 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
             verified.status
           );
         }
+      }
+
+      if (verified.status === "pending" || verified.status === "processing") {
+        celebrateReleaseSubmission();
       }
 
       const storeOk = useCreateReleaseDraftStore.getState();

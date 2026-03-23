@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { CreateShell } from "@/features/release/createRelease/components/CreateShell";
 import { StepGate } from "@/features/release/createRelease/components/StepGate";
 import { useCreateReleaseDraftStore } from "@/features/release/createRelease/store";
-import { SuccessScreen } from "@/components/SuccessScreen";
+import { SuccessReleaseModal } from "@/components/SuccessReleaseModal";
 import { triggerHaptic } from "@/lib/telegram";
 
 type LeavingIntent = "home" | "create" | null;
@@ -59,7 +59,7 @@ export default function CreateSuccessPage() {
           onAction={() => router.push("/create/metadata")}
         />
       ) : (
-        <SuccessScreen
+        <SuccessReleaseModal
           summary={summary}
           onGoHome={() => {
             leavingRef.current = "home";

@@ -82,6 +82,7 @@ export default function RootLayout({
             <NoiseOverlay />
             <AppProviders>
               <AppErrorBoundary>
+                {/* AnimatePresence + motion: см. `PageTransition` (fade между страницами) */}
                 <PageTransition>{children}</PageTransition>
               </AppErrorBoundary>
             </AppProviders>

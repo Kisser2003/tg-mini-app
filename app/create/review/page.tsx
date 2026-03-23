@@ -6,7 +6,6 @@ import Link from "next/link";
 import Image from "next/image";
 import { toast } from "sonner";
 import { AnimatePresence, motion } from "framer-motion";
-import confetti from "canvas-confetti";
 import { Music } from "lucide-react";
 import { GlassCard } from "@/components/GlassCard";
 import { CreateShell } from "@/features/release/createRelease/components/CreateShell";
@@ -23,6 +22,7 @@ import {
 } from "@/features/release/createRelease/actions";
 import { getTelegramApiAuthHeaders, getTelegramInitDataForApiHeader } from "@/lib/telegram";
 import { UploadProgress } from "@/components/UploadProgress";
+import { FullScreenLoader } from "@/components/FullScreenLoader";
 import { logClientError } from "@/lib/logger";
 import {
   acquireTelegramClosingConfirmation,
@@ -81,37 +81,6 @@ function PulsingTrackIcon() {
   );
 }
 
-function fireLaunchConfetti() {
-  const colors = ["#a855f7", "#6366f1", "#e879f9", "#f0abfc", "#ffffff"];
-  const base = { origin: { y: 0.72 }, colors };
-  void confetti({ ...base, particleCount: 90, spread: 58, startVelocity: 32 });
-  window.setTimeout(() => {
-    void confetti({
-      ...base,
-      particleCount: 55,
-      spread: 100,
-      scalar: 0.9,
-      ticks: 220
-    });
-  }, 180);
-  window.setTimeout(() => {
-    void confetti({
-      particleCount: 40,
-      angle: 120,
-      spread: 55,
-      origin: { x: 0.15, y: 0.75 },
-      colors
-    });
-    void confetti({
-      particleCount: 40,
-      angle: 60,
-      spread: 55,
-      origin: { x: 0.85, y: 0.75 },
-      colors
-    });
-  }, 320);
-}
-
 function VinylWithArtwork({ artworkUrl }: { artworkUrl: string | null }) {
   return (
     <div className="relative mx-auto h-[168px] w-[168px] shrink-0 sm:mx-0">
@@ -163,6 +132,7 @@ export default function CreateReviewPage() {
   const submitError = useCreateReleaseDraftStore((s) => s.submitError);
   const setSubmitError = useCreateReleaseDraftStore((s) => s.setSubmitError);
   const submitStatus = useCreateReleaseDraftStore((s) => s.submitStatus);
+  const successSummary = useCreateReleaseDraftStore((s) => s.successSummary);
   const submitStage = useCreateReleaseDraftStore((s) => s.submitStage);
   const submitProgress = useCreateReleaseDraftStore((s) => s.submitProgress);
   const tracksWavSyncedToDb = useCreateReleaseDraftStore(selectTracksWavFullySynced);
@@ -171,8 +141,6 @@ export default function CreateReviewPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [progressDismissed, setProgressDismissed] = useState(false);
   const prevSubmitErrorRef = useRef<string | null>(null);
-  const pendingSuccessNavRef = useRef(false);
-  const successNavFallbackTimerRef = useRef<number | null>(null);
 
   const missingFiles = useMemo(() => {
     if (tracksWavSyncedToDb) return false;
@@ -212,14 +180,6 @@ export default function CreateReviewPage() {
   }, [submitStatus]);
 
   useEffect(() => {
-    return () => {
-      if (successNavFallbackTimerRef.current != null) {
-        window.clearTimeout(successNavFallbackTimerRef.current);
-      }
-    };
-  }, []);
-
-  useEffect(() => {
     const busy = isSubmitting || submitStatus === "submitting";
     if (!busy) return;
     acquireTelegramClosingConfirmation();
@@ -239,7 +199,6 @@ export default function CreateReviewPage() {
   const handleSubmit = useCallback(async () => {
     setSubmitError(null);
     setProgressDismissed(false);
-    pendingSuccessNavRef.current = false;
     if (missingFiles) {
       const msg =
         "Не хватает WAV-файлов в этой сессии. Загрузите их на шаге «Треки» — даже если в базе уже есть старые файлы.";
@@ -257,8 +216,12 @@ export default function CreateReviewPage() {
     hapticMap.notificationSuccess();
     const files = trackFiles.filter(Boolean) as File[];
     setIsSubmitting(true);
-    const ok = await submitTracksAndFinalize({ files });
-    setIsSubmitting(false);
+    let ok = false;
+    try {
+      ok = await submitTracksAndFinalize({ files });
+    } finally {
+      setIsSubmitting(false);
+    }
     if (!ok) {
       const st = useCreateReleaseDraftStore.getState();
       const msg = st.submitError;
@@ -314,42 +277,47 @@ export default function CreateReviewPage() {
       });
       return;
     }
-    fireLaunchConfetti();
-    pendingSuccessNavRef.current = true;
-    if (successNavFallbackTimerRef.current != null) {
-      window.clearTimeout(successNavFallbackTimerRef.current);
-    }
-    successNavFallbackTimerRef.current = window.setTimeout(() => {
-      successNavFallbackTimerRef.current = null;
-      if (pendingSuccessNavRef.current) {
-        pendingSuccessNavRef.current = false;
-        router.push("/create/success");
-      }
-    }, 2800);
+    router.replace("/create/success");
   }, [missingFiles, setSubmitError, trackFiles, router]);
 
-  const handleProgressExitComplete = useCallback(() => {
-    if (successNavFallbackTimerRef.current != null) {
-      window.clearTimeout(successNavFallbackTimerRef.current);
-      successNavFallbackTimerRef.current = null;
-    }
-    if (pendingSuccessNavRef.current) {
-      pendingSuccessNavRef.current = false;
-      router.push("/create/success");
-    }
-  }, [router]);
+  if (submitStatus === "success" && successSummary) {
+    return (
+      <CreateShell title="Релиз · Проверка">
+        <FullScreenLoader label="Готово — переходим…" />
+      </CreateShell>
+    );
+  }
 
-  return (
-    <CreateShell title="Релиз · Проверка">
-      {!guard.allowed ? (
+  if (!guard.allowed) {
+    if (guard.title === "Загрузка…") {
+      return (
+        <CreateShell title="Релиз · Проверка">
+          <FullScreenLoader />
+        </CreateShell>
+      );
+    }
+    if (isSubmitting || submitStatus === "submitting") {
+      return (
+        <CreateShell title="Релиз · Проверка">
+          <FullScreenLoader label="Отправляем релиз…" />
+        </CreateShell>
+      );
+    }
+    return (
+      <CreateShell title="Релиз · Проверка">
         <StepGate
           title={guard.title}
           description={guard.description}
           actionLabel={guard.actionLabel}
           onAction={() => router.push(`/create/${guard.redirectTo}`)}
         />
-      ) : (
-        <div className="relative isolate min-h-[min(100dvh,720px)]">
+      </CreateShell>
+    );
+  }
+
+  return (
+    <CreateShell title="Релиз · Проверка">
+      <div className="relative isolate min-h-[min(100dvh,720px)]">
           {artworkUrl ? (
             <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
               <motion.div
@@ -550,7 +518,7 @@ export default function CreateReviewPage() {
                 </span>
               </motion.button>
 
-              <AnimatePresence mode="wait" onExitComplete={handleProgressExitComplete}>
+              <AnimatePresence mode="wait">
                 {showProgressPanel && (
                   <motion.div
                     key="upload-progress"
@@ -584,7 +552,6 @@ export default function CreateReviewPage() {
             </motion.div>
           </AnimatePresence>
         </div>
-      )}
     </CreateShell>
   );
 }

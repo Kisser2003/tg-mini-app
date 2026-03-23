@@ -3,19 +3,7 @@
 import { CreateStepTransition } from "@/components/CreateStepTransition";
 import { useCreateReleaseDraftStore } from "@/features/release/createRelease/store";
 
-// Holds all /create/* pages behind a single hydration gate.
-// On a hard page refresh the Zustand persist middleware needs one async tick
-// to read localStorage and populate the store.  Until that tick completes,
-// hasHydrated is false and we show a full-page glassmorphism loader so child
-// pages never render with stale / empty default values.
-//
-// During client-side navigation (e.g. Dashboard → /create/metadata) the store
-// is already hydrated, so hasHydrated is true immediately and children render
-// without any loading flash.
-//
-// If you add redirect logic here (e.g. router.replace when the draft store is
-// empty), exclude /create/success — after submit the form may be cleared while
-// the user still sees the success screen or navigates away.
+/** Гидратор persist + `CreateStepTransition` (slide между шагами). */
 export default function CreateLayout({ children }: { children: React.ReactNode }) {
   const hasHydrated = useCreateReleaseDraftStore((s) => s.hasHydrated);
 

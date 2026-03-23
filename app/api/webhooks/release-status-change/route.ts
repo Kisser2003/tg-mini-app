@@ -38,11 +38,10 @@ function checkWebhookSecret(request: Request): WebhookSecretCheck {
   return "ok";
 }
 
-function buildReadyMessage(title: string): string {
+function buildReadyMessage(title: string, artistName: string): string {
   const t = escapeHtml(title.trim().length > 0 ? title.trim() : "релиз");
-  return (
-    `✅ <b>Поздравляем!</b> Ваш релиз «${t}» одобрен и скоро появится на площадках.`
-  );
+  const a = escapeHtml(artistName.trim().length > 0 ? artistName.trim() : "Артист");
+  return `Бро, твой релиз <b>${t}</b> от артиста <b>${a}</b> успешно прошел модерацию и отправлен на площадки! 🚀`;
 }
 
 function buildFailedMessage(title: string, errorMessage: string | null | undefined): string {
@@ -89,27 +88,61 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  const { id, user_id, new_status, error_message: errorMessage } = parsed.data;
+  const { id, new_status, error_message: errorMessage } = parsed.data;
 
   if (new_status !== "ready" && new_status !== "failed") {
     return NextResponse.json({ ok: true, skipped: true });
   }
 
-  let trackName = "";
   const admin = createSupabaseAdmin();
-  if (admin) {
-    const { data: row } = await admin.from("releases").select("track_name").eq("id", id).maybeSingle();
-    const name = row && typeof row === "object" && "track_name" in row ? row.track_name : null;
-    if (typeof name === "string") trackName = name;
+  if (!admin) {
+    console.error("[webhooks/release-status-change] Supabase admin client not configured");
+    return NextResponse.json({ ok: false, error: "Server misconfigured" }, { status: 503 });
   }
+
+  const { data: release, error: relErr } = await admin
+    .from("releases")
+    .select("telegram_id, title, artist_name, track_name")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (relErr) {
+    console.error("[webhooks/release-status-change] releases select:", relErr.message);
+    return NextResponse.json({ ok: false, error: "Failed to load release" }, { status: 500 });
+  }
+
+  if (!release) {
+    console.error("[webhooks/release-status-change] release not found:", id);
+    return NextResponse.json({ ok: false, error: "Release not found" }, { status: 404 });
+  }
+
+  const rawTg = release.telegram_id as unknown;
+  if (rawTg === null || rawTg === undefined) {
+    console.error("Ошибка: У релиза нет telegram_id, некуда слать уведомление");
+    return NextResponse.json({ ok: true, skipped: true, reason: "no_telegram_id" });
+  }
+
+  const chatId = String(release.telegram_id).trim();
+  if (chatId === "" || chatId === "0") {
+    console.error("Ошибка: У релиза нет telegram_id, некуда слать уведомление");
+    return NextResponse.json({ ok: true, skipped: true, reason: "no_telegram_id" });
+  }
+
+  const row = release as {
+    title?: string | null;
+    artist_name?: string | null;
+    track_name?: string | null;
+  };
+  const displayTitle = String(row.title ?? row.track_name ?? "").trim();
+  const displayArtist = String(row.artist_name ?? "").trim();
 
   const text =
     new_status === "ready"
-      ? buildReadyMessage(trackName)
-      : buildFailedMessage(trackName, errorMessage ?? null);
+      ? buildReadyMessage(displayTitle, displayArtist)
+      : buildFailedMessage(displayTitle, errorMessage ?? null);
 
   const send = await sendTelegramBotMessage({
-    chatId: user_id,
+    chatId,
     text,
     parseMode: "HTML"
   });

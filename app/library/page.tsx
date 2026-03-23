@@ -15,7 +15,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import { ArtworkCoverGlow } from "@/components/ArtworkCoverGlow";
 import { PullRefreshBrand } from "@/components/PullRefreshBrand";
-import { LibraryReleaseSkeletonGrid } from "@/components/ui/Skeleton";
+import { LibraryReleaseSkeletonGrid, LibraryStatsSkeletonRow } from "@/components/ui/Skeleton";
 import { resumeDraftFromRelease } from "@/features/release/createRelease/actions";
 import { useCreateReleaseDraftStore } from "@/features/release/createRelease/store";
 import {
@@ -198,7 +198,6 @@ function LibraryPageInner() {
     {
       ...SWR_LIST_OPTIONS,
       refreshInterval: 7000,
-      /** Не держим предыдущий пустой список при смене ключа / ревалидации (отладка пустой библиотеки). */
       keepPreviousData: false
     }
   );
@@ -335,20 +334,24 @@ function LibraryPageInner() {
           </div>
         )}
 
-        <div className="grid grid-cols-3 gap-2">
-          <div className="rounded-[16px] border border-emerald-500/30 bg-emerald-500/10 px-3 py-3 shadow-[0_0_15px_rgba(34,197,94,0.3)]">
-            <p className="text-[10px] uppercase tracking-[0.14em] text-emerald-200/80">Готово</p>
-            <p className="mt-1 text-lg font-semibold text-emerald-100">{displayStats.ready}</p>
+        {showTelegramWait || showListSkeleton ? (
+          <LibraryStatsSkeletonRow />
+        ) : (
+          <div className="grid grid-cols-3 gap-2">
+            <div className="rounded-[16px] border border-emerald-500/30 bg-emerald-500/10 px-3 py-3 shadow-[0_0_15px_rgba(34,197,94,0.3)]">
+              <p className="text-[10px] uppercase tracking-[0.14em] text-emerald-200/80">Готово</p>
+              <p className="mt-1 text-lg font-semibold text-emerald-100">{displayStats.ready}</p>
+            </div>
+            <div className="rounded-[16px] border border-amber-500/30 bg-amber-500/10 px-3 py-3">
+              <p className="text-[10px] uppercase tracking-[0.14em] text-amber-200/80">Проверка</p>
+              <p className="mt-1 text-lg font-semibold text-amber-100">{displayStats.processing}</p>
+            </div>
+            <div className="rounded-[16px] border border-rose-500/30 bg-rose-500/10 px-3 py-3">
+              <p className="text-[10px] uppercase tracking-[0.14em] text-rose-200/80">Ошибки</p>
+              <p className="mt-1 text-lg font-semibold text-rose-100">{displayStats.failed}</p>
+            </div>
           </div>
-          <div className="rounded-[16px] border border-amber-500/30 bg-amber-500/10 px-3 py-3">
-            <p className="text-[10px] uppercase tracking-[0.14em] text-amber-200/80">Проверка</p>
-            <p className="mt-1 text-lg font-semibold text-amber-100">{displayStats.processing}</p>
-          </div>
-          <div className="rounded-[16px] border border-rose-500/30 bg-rose-500/10 px-3 py-3">
-            <p className="text-[10px] uppercase tracking-[0.14em] text-rose-200/80">Ошибки</p>
-            <p className="mt-1 text-lg font-semibold text-rose-100">{displayStats.failed}</p>
-          </div>
-        </div>
+        )}
 
         <div className="mt-2 flex flex-col gap-4">
           <AnimatePresence mode="wait">

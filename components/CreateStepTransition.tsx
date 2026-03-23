@@ -34,8 +34,8 @@ export function CreateStepTransition({ children }: { children: React.ReactNode }
   }, [pathname]);
 
   const forward = direction === 1;
-  const xEnter = prefersReducedMotion ? 0 : forward ? 24 : -24;
-  const xExit = prefersReducedMotion ? 0 : forward ? -24 : 24;
+  const xEnter = prefersReducedMotion ? 0 : forward ? 36 : -36;
+  const xExit = prefersReducedMotion ? 0 : forward ? -28 : 28;
 
   return (
     <AnimatePresence mode="wait" initial={false}>
@@ -46,7 +46,9 @@ export function CreateStepTransition({ children }: { children: React.ReactNode }
         animate={{ opacity: 1, x: 0 }}
         exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, x: xExit }}
         transition={
-          prefersReducedMotion ? { duration: 0 } : { duration: 0.28, ease: "easeInOut" }
+          prefersReducedMotion
+            ? { duration: 0 }
+            : { duration: 0.32, ease: [0.22, 1, 0.36, 1] }
         }
       >
         {children}

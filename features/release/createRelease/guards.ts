@@ -24,6 +24,7 @@ export function useStepGuard(step: CreateStep): GuardResult {
   const hasHydrated = useCreateReleaseDraftStore((s) => s.hasHydrated);
   const releaseId = useCreateReleaseDraftStore((s) => s.releaseId);
   const successSummary = useCreateReleaseDraftStore((s) => s.successSummary);
+  const submitStatus = useCreateReleaseDraftStore((s) => s.submitStatus);
   const releaseType = useCreateReleaseDraftStore((s) => s.metadata.releaseType);
   const isMetadataComplete = useCreateReleaseDraftStore(selectIsMetadataComplete);
   const isAssetsComplete = useCreateReleaseDraftStore(selectIsAssetsComplete);
@@ -58,6 +59,15 @@ export function useStepGuard(step: CreateStep): GuardResult {
 
     // Экран «Готово» после сабмита: метаданные в сторе могут быть уже очищены, но summary есть.
     if (step === "success" && successSummary) return { allowed: true };
+
+    // После успешной отправки черновик очищается (`clearCreateFormKeepSummaryPreserveSubmit`), но
+    // `successSummary` остаётся — иначе на «Проверке» на 1–2 кадра показывалась заглушка про паспорт.
+    if (
+      step === "review" &&
+      (successSummary || submitStatus === "success")
+    ) {
+      return { allowed: true };
+    }
 
     if (!isMetadataComplete) {
       return {
@@ -124,6 +134,7 @@ export function useStepGuard(step: CreateStep): GuardResult {
     releaseId,
     releaseType,
     step,
+    submitStatus,
     successSummary
   ]);
 }

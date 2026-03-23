@@ -8,7 +8,8 @@ export function escapeHtml(text: string): string {
 }
 
 export type SendTelegramBotMessageOptions = {
-  chatId: number;
+  /** Telegram принимает и число, и строку; из БД bigint часто сериализуется как string. */
+  chatId: number | string;
   text: string;
   parseMode?: "HTML" | "MarkdownV2";
   disableWebPagePreview?: boolean;
