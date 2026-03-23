@@ -50,6 +50,9 @@ const SUPABASE_DB_OP_TIMEOUT_MS = 15000;
 /** Защита от двойного сабмита (двойной тап в Telegram). */
 let submitTracksInFlight = false;
 
+const ALIGN_RELEASES_SESSION_KEY = "tg-mini-app-align-releases-ok-v1";
+let alignReleasesFetchInFlight: Promise<void> | null = null;
+
 /** HTTP-статус последнего ответа submit-precheck (для отладки 401 на экране Review). */
 let lastSubmitPrecheckHttpStatus: number | null = null;
 
@@ -296,17 +299,42 @@ export function initUserContextInStore() {
   setRlsTelegramUserIdOverride(numericId != null && numericId > 0 ? Math.trunc(numericId) : null);
 
   if (typeof window !== "undefined" && isTelegramMiniApp()) {
+    try {
+      if (sessionStorage.getItem(ALIGN_RELEASES_SESSION_KEY) === "1") {
+        return;
+      }
+    } catch {
+      /* private mode / no storage */
+    }
+    if (alignReleasesFetchInFlight) {
+      return;
+    }
     const n =
       parseStoreUserId(useCreateReleaseDraftStore.getState().userId) ?? getTelegramUserId();
-    void fetch("/api/identity/align-releases", {
-      method: "POST",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-        ...getTelegramApiAuthHeaders(n != null && n > 0 ? { userId: n } : undefined)
-      },
-      body: JSON.stringify({})
-    }).catch(() => {});
+    alignReleasesFetchInFlight = (async () => {
+      try {
+        const res = await fetch("/api/identity/align-releases", {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            ...getTelegramApiAuthHeaders(n != null && n > 0 ? { userId: n } : undefined)
+          },
+          body: JSON.stringify({})
+        });
+        if (res.ok) {
+          try {
+            sessionStorage.setItem(ALIGN_RELEASES_SESSION_KEY, "1");
+          } catch {
+            /* ignore */
+          }
+        }
+      } catch {
+        /* ignore */
+      } finally {
+        alignReleasesFetchInFlight = null;
+      }
+    })();
   }
 }
 

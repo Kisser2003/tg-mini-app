@@ -455,7 +455,13 @@ export async function POST(request: Request): Promise<Response> {
         });
       }
 
-      if (!transitionToPending && !gainedFilesWhilePending && !gainedFullWhilePending) {
+      /**
+       * Не используем `gainedFullWhilePending` для Telegram: при pending + треках только в `tracks`
+       * (без audio_url в строке releases) это условие истинно на **каждом** UPDATE (save-draft-patch,
+       * правки метаданных и т.д.) — вебхук дублировал «Бро, релиз получен» много раз.
+       * Достаточно: переход в pending и появление ссылок на файлы в колонках releases.
+       */
+      if (!transitionToPending && !gainedFilesWhilePending) {
         console.log("[webhooks/release-status-change] skip UPDATE (no notify rule)", {
           oldStatus,
           newStatus,
