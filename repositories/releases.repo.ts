@@ -910,12 +910,14 @@ export async function getMyReleases(userId: number | string): Promise<ReleaseRec
   }
   console.log("Fetching releases for ID:", idStr);
   const { data, error } = await withRetry(async () => {
-    /** Не использовать `.single()` / `.maybeSingle()` — нужен массив строк. */
+    /**
+     * Только `.select()` без `.single()` — массив строк.
+     * Явный список колонок ломался при 42703 (колонка переименована/удалена в БД).
+     * `*` возвращает только существующие поля; фильтр по `user_id` / `telegram_id` (snake_case).
+     */
     return await supabase
       .from("releases")
-      .select(
-        "id, title, track_name, artwork_url, status, error_message, created_at, admin_notes, draft_upload_started"
-      )
+      .select("*")
       .or(`user_id.eq.${idStr},telegram_id.eq.${idStr}`)
       .order("created_at", { ascending: false });
   });
