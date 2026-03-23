@@ -5,6 +5,7 @@ import { motion, useMotionValue, useSpring } from "framer-motion";
 import { Music2, Image as ImageIcon } from "lucide-react";
 import confetti from "canvas-confetti";
 import { FormFieldError } from "@/components/FormFieldError";
+import { ALLOWED_AUDIO_MIME } from "@/repositories/releases.repo";
 import { triggerHaptic } from "@/lib/telegram";
 
 type Props = {
@@ -139,16 +140,35 @@ export function FileUploader({
       return;
     }
 
-    if (type === "wav" && !selected.name.toLowerCase().endsWith(".wav")) {
-      setError("Допустим только формат .wav");
-      setFile(null);
-      onFileChange(null);
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl);
-        setPreviewUrl(null);
+    if (type === "wav") {
+      if (!selected.name.toLowerCase().endsWith(".wav")) {
+        setError("Допустим только формат .wav");
+        setFile(null);
+        onFileChange(null);
+        if (previewUrl) {
+          URL.revokeObjectURL(previewUrl);
+          setPreviewUrl(null);
+        }
+        setIsUploading(false);
+        return;
       }
-      setIsUploading(false);
-      return;
+      const mime = selected.type.trim();
+      const mimeOk =
+        mime === "" ||
+        ALLOWED_AUDIO_MIME.has(mime) ||
+        mime === "application/octet-stream" ||
+        (mime.startsWith("audio/") && selected.name.toLowerCase().endsWith(".wav"));
+      if (!mimeOk) {
+        setError(`Неподдерживаемый тип файла (${mime || "пусто"}). Нужен WAV.`);
+        setFile(null);
+        onFileChange(null);
+        if (previewUrl) {
+          URL.revokeObjectURL(previewUrl);
+          setPreviewUrl(null);
+        }
+        setIsUploading(false);
+        return;
+      }
     }
 
     if (type === "cover") {

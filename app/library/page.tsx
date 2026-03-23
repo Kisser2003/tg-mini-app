@@ -25,7 +25,11 @@ import {
   type ReleaseStatusMeta
 } from "@/lib/release-status";
 import { getMyReleases, getReleaseDisplayTitle, type ReleaseRecord } from "@/repositories/releases.repo";
-import { getTelegramUserId, initTelegramWebApp, triggerHaptic } from "@/lib/telegram";
+import {
+  getTelegramUserIdForSupabaseRequests,
+  initTelegramWebApp,
+  triggerHaptic
+} from "@/lib/telegram";
 import { USER_REQUEST_TIMEOUT_MESSAGE } from "@/lib/errors";
 import { ARTWORK_BLUR_DATA_URL } from "@/lib/image-blur";
 import { SWR_LIST_OPTIONS } from "@/lib/swr-config";
@@ -186,7 +190,7 @@ function LibraryPageInner() {
 
   useEffect(() => {
     initTelegramWebApp();
-    const tid = getTelegramUserId();
+    const tid = getTelegramUserIdForSupabaseRequests();
     setUserId(tid != null ? String(tid) : null);
   }, []);
 

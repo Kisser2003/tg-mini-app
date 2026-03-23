@@ -9,6 +9,7 @@ import { PageTransition } from "@/components/PageTransition";
 import { InputFocusScroll } from "@/components/InputFocusScroll";
 import { TelegramBootstrap } from "@/components/TelegramBootstrap";
 import { BottomNavHost } from "@/components/BottomNavHost";
+import { DebugIdentityPanel } from "@/components/DebugIdentityPanel";
 import { NoiseOverlay } from "@/components/NoiseOverlay";
 function supabasePreconnectOrigin(): string | null {
   const raw = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -88,6 +89,7 @@ export default function RootLayout({
             </AppProviders>
           </div>
           <BottomNavHost />
+          <DebugIdentityPanel />
         </div>
       </body>
     </html>

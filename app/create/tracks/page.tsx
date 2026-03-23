@@ -291,7 +291,7 @@ export default function CreateTracksPage() {
                   state when the user navigates back to this step within the session. */}
               <FileUploader
                 label="WAV трека"
-                accept=".wav"
+                accept=".wav,audio/wav,audio/x-wav,audio/wave,audio/vnd.wave"
                 maxSizeMb={200}
                 type="wav"
                 initialFile={storeTrackFiles[index] ?? null}

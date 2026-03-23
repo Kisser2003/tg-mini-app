@@ -49,6 +49,7 @@ export function uploadToSupabaseStorageObject(
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", endpoint);
+    xhr.timeout = 600000;
     xhr.setRequestHeader("Authorization", `Bearer ${anonKey}`);
     xhr.setRequestHeader("apikey", anonKey);
     const rlsUserId = getTelegramUserIdForSupabaseRequests();
@@ -95,6 +96,7 @@ export function uploadToSupabaseStorageObject(
 
     xhr.onerror = () => reject(new Error("Сетевая ошибка при загрузке файла."));
     xhr.onabort = () => reject(new Error("Загрузка прервана."));
+    xhr.ontimeout = () => reject(new Error("Таймаут загрузки (проверьте сеть или размер файла)."));
 
     xhr.send(options.file);
   });

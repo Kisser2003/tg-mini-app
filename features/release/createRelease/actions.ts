@@ -5,6 +5,7 @@ import {
 } from "@/lib/errors";
 import { withRequestTimeout } from "@/lib/withRequestTimeout";
 import { getUploadErrorDetails, logClientError } from "@/lib/logger";
+import { requestScreenWakeLock, releaseWakeLock } from "@/lib/wake-lock";
 import { getExpectedAdminTelegramId } from "@/lib/admin";
 import {
   getTelegramApiAuthHeaders,
@@ -14,6 +15,7 @@ import {
   getTelegramUsername,
   getTelegramWebApp,
   initTelegramWebApp,
+  isTelegramMiniApp,
   setRlsTelegramUserIdOverride
 } from "@/lib/telegram";
 import { hapticMap } from "@/lib/haptic-map";
@@ -40,6 +42,7 @@ import { parseArtistLinksFromJson } from "@/lib/artist-links";
 import { parseCollaboratorsFromDb } from "@/lib/collaborators";
 import { parsePerformanceLanguage } from "@/lib/performance-language";
 import { celebrateReleaseSubmission } from "@/lib/confetti-release-success";
+import { toast } from "sonner";
 
 /** Таймаут коротких операций Supabase (insert/upsert в БД). Загрузка WAV идёт напрямую в Storage без лимита. */
 const SUPABASE_DB_OP_TIMEOUT_MS = 15000;
@@ -291,6 +294,20 @@ export function initUserContextInStore() {
   }
   store.setUserContext({ userId, telegramName, telegramUsername });
   setRlsTelegramUserIdOverride(numericId != null && numericId > 0 ? Math.trunc(numericId) : null);
+
+  if (typeof window !== "undefined" && isTelegramMiniApp()) {
+    const n =
+      parseStoreUserId(useCreateReleaseDraftStore.getState().userId) ?? getTelegramUserId();
+    void fetch("/api/identity/align-releases", {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        ...getTelegramApiAuthHeaders(n != null && n > 0 ? { userId: n } : undefined)
+      },
+      body: JSON.stringify({})
+    }).catch(() => {});
+  }
 }
 
 /** Паспорт релиза из строки `releases` (общий маппинг для hydrate и резюме черновика). */
@@ -795,6 +812,7 @@ export async function uploadTrackWavAtIndex(options: {
 
   const telegramId = getTrackRowTelegramId(userId);
   useCreateReleaseDraftStore.getState().setTracksUploadInProgress(true);
+  const wake = await requestScreenWakeLock();
   try {
     store.setSubmitError(null);
     options.onProgress?.(0);
@@ -813,12 +831,20 @@ export async function uploadTrackWavAtIndex(options: {
       });
     } catch (e: unknown) {
       console.error("[uploadTrackWavAtIndex] Storage (WAV) upload failed", { error: e });
-      useCreateReleaseDraftStore.getState().setSubmitError(
-        formatErrorMessage(
-          e,
-          "Не удалось загрузить WAV в хранилище. Проверьте политику bucket, размер и формат файла."
-        )
+      const up = getUploadErrorDetails(e);
+      const sc =
+        e && typeof e === "object" && "statusCode" in e
+          ? Number((e as { statusCode?: unknown }).statusCode)
+          : NaN;
+      const statusLabel = Number.isFinite(sc) ? String(sc) : "0 (сеть/обрыв)";
+      const msg = formatErrorMessage(
+        e,
+        "Не удалось загрузить WAV в хранилище. Проверьте политику bucket, размер и формат файла."
       );
+      useCreateReleaseDraftStore.getState().setSubmitError(msg);
+      toast.error(`Загрузка WAV: ${msg}`, {
+        description: `HTTP ${statusLabel}${up.supabaseHint ? ` · ${up.supabaseHint}` : ""}`
+      });
       return false;
     }
 
@@ -858,6 +884,7 @@ export async function uploadTrackWavAtIndex(options: {
     }
     return true;
   } finally {
+    releaseWakeLock(wake);
     useCreateReleaseDraftStore.getState().setTracksUploadInProgress(false);
   }
 }
@@ -894,6 +921,7 @@ export async function uploadTracksForDraftStep(options: {
   const telegramId = getTrackRowTelegramId(userId);
 
   useCreateReleaseDraftStore.getState().setTracksUploadInProgress(true);
+  const wake = await requestScreenWakeLock();
   try {
     store.setSubmitError(null);
     await postDraftUploadState(releaseId, "start");
@@ -932,12 +960,20 @@ export async function uploadTracksForDraftStep(options: {
             hint: "Network → POST …/storage/v1/object/releases/…",
             error: e
           });
-          useCreateReleaseDraftStore.getState().setSubmitError(
-            formatErrorMessage(
-              e,
-              "Не удалось загрузить WAV в хранилище. Проверьте политику bucket «releases», размер и формат файла."
-            )
+          const up = getUploadErrorDetails(e);
+          const sc =
+            e && typeof e === "object" && "statusCode" in e
+              ? Number((e as { statusCode?: unknown }).statusCode)
+              : NaN;
+          const statusLabel = Number.isFinite(sc) ? String(sc) : "0 (сеть/обрыв)";
+          const msg = formatErrorMessage(
+            e,
+            "Не удалось загрузить WAV в хранилище. Проверьте политику bucket «releases», размер и формат файла."
           );
+          useCreateReleaseDraftStore.getState().setSubmitError(msg);
+          toast.error(`Трек ${index + 1}: ${msg}`, {
+            description: `HTTP ${statusLabel}${up.supabaseHint ? ` · ${up.supabaseHint}` : ""}`
+          });
           return false;
         }
 
@@ -988,6 +1024,7 @@ export async function uploadTracksForDraftStep(options: {
     await postDraftUploadState(releaseId, "complete");
     return true;
   } finally {
+    releaseWakeLock(wake);
     useCreateReleaseDraftStore.getState().setTracksUploadInProgress(false);
   }
 }

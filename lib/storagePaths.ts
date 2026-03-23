@@ -15,3 +15,12 @@ export function getReleaseTrackAudioPath(
   return `${userId}/${releaseId}/tracks/${trackIndex}.wav`;
 }
 
+/** Временные части при чанковой загрузке (собираются на сервере). */
+export function getReleaseTrackAudioPartPath(
+  userId: number,
+  releaseId: string,
+  trackIndex: number,
+  partIndex: number
+): string {
+  return `${userId}/${releaseId}/tracks/${trackIndex}.wav.part.${partIndex}`;
+}

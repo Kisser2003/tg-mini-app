@@ -30,7 +30,12 @@ export const RELEASE_FILE_LIMITS = {
 } as const;
 
 /** WAV: только явные audio-типы или пустой type с расширением .wav */
-export const ALLOWED_AUDIO_MIME = new Set(["audio/wav", "audio/x-wav", "audio/wave"]);
+export const ALLOWED_AUDIO_MIME = new Set([
+  "audio/wav",
+  "audio/x-wav",
+  "audio/wave",
+  "audio/vnd.wave",
+]);
 
 /** Обложка: только JPEG / PNG */
 export const ALLOWED_ARTWORK_MIME = new Set(["image/jpeg", "image/png", "image/jpg"]);
@@ -744,7 +749,12 @@ export async function uploadReleaseTrackAudio(params: {
 
   try {
     await uploadReleaseTrackFileClient(path, params.file, {
-      onProgress: params.options?.onProgress
+      onProgress: params.options?.onProgress,
+      chunkedMeta: {
+        userId: params.userId,
+        releaseId: params.releaseId,
+        trackIndex: params.trackIndex
+      }
     });
   } catch (err) {
     if (params.options?.markReleaseFailedOnError?.releaseId) {
