@@ -198,12 +198,20 @@ function isNonEmptyField(value: unknown): boolean {
   return String(value).trim().length > 0;
 }
 
+/** Реальная ссылка на файл: только http(s), не `track_name` / не произвольная строка. */
+function looksLikeHttpOrHttpsUrl(value: unknown): boolean {
+  if (value === null || value === undefined) return false;
+  const s = String(value).trim();
+  return /^https?:\/\/.+/i.test(s);
+}
+
 /**
- * В строке `releases`: есть `audio_url` и/или `artwork_url` (не null и не "").
- * `tracks.file_path` в этот объект не входит — см. `assertReleaseAudioReady`.
+ * На строке `releases` есть загруженный контент: только непустые `audio_url` / `artwork_url`,
+ * причём значения должны выглядеть как URL. `track_name`, `title` и т.п. не учитываются.
+ * Файлы только в `tracks.file_path` здесь не видны — см. `assertReleaseAudioReady`.
  */
 function hasReleaseFileLinks(record: Record<string, unknown>): boolean {
-  return isNonEmptyField(record.audio_url) || isNonEmptyField(record.artwork_url);
+  return looksLikeHttpOrHttpsUrl(record.audio_url) || looksLikeHttpOrHttpsUrl(record.artwork_url);
 }
 
 function releaseContentReadySync(record: Record<string, unknown>): boolean {
@@ -327,6 +335,25 @@ export async function POST(request: Request): Promise<Response> {
 
     const row = record as Record<string, unknown>;
 
+    const oldRow =
+      oldRecord != null && typeof oldRecord === "object"
+        ? (oldRecord as Record<string, unknown>)
+        : null;
+
+    const transitionToPending =
+      type === "UPDATE" &&
+      oldRow != null &&
+      oldStatus !== "pending" &&
+      newStatus === "pending";
+
+    const gainedFilesWhilePending =
+      type === "UPDATE" &&
+      oldRow != null &&
+      oldStatus === "pending" &&
+      newStatus === "pending" &&
+      !hasReleaseFileLinks(oldRow) &&
+      hasReleaseFileLinks(row);
+
     console.log(
       "REAL_FIELDS_IN_RECORD:",
       Object.keys(row),
@@ -342,9 +369,11 @@ export async function POST(request: Request): Promise<Response> {
     );
 
     console.log("Content check:", {
-      hasAudioUrl: isNonEmptyField(row.audio_url),
-      hasArtworkUrl: isNonEmptyField(row.artwork_url),
+      hasAudioUrl: looksLikeHttpOrHttpsUrl(row.audio_url),
+      hasArtworkUrl: looksLikeHttpOrHttpsUrl(row.artwork_url),
       hasReleaseFileLinks: hasReleaseFileLinks(row),
+      transitionToPending,
+      gainedFilesWhilePending,
       type
     });
 
@@ -355,14 +384,8 @@ export async function POST(request: Request): Promise<Response> {
         });
         return NextResponse.json({ message: "Ignore initial draft" }, { status: 200 });
       }
-      if (!releaseContentReadySync(row)) {
-        console.log(
-          "[webhooks/release-status-change] ignore INSERT (pending but audio_url/artwork_url empty)",
-          {
-            audio_url: row.audio_url,
-            artwork_url: row.artwork_url
-          }
-        );
+      if (!hasReleaseFileLinks(row)) {
+        console.log("Skip: No audio or artwork yet", { phase: "insert" });
         return NextResponse.json({ message: "Ignore initial draft" }, { status: 200 });
       }
     } else if (type === "UPDATE") {
@@ -376,7 +399,7 @@ export async function POST(request: Request): Promise<Response> {
           reason: "update_new_not_pending"
         });
       }
-      if (oldRecord == null || typeof oldRecord !== "object") {
+      if (oldRow == null) {
         console.log("[webhooks/release-status-change] skip UPDATE (missing old_record, cannot verify transition)");
         return NextResponse.json({
           ok: true,
@@ -384,14 +407,6 @@ export async function POST(request: Request): Promise<Response> {
           reason: "missing_old_record"
         });
       }
-
-      const oldRow = oldRecord as Record<string, unknown>;
-      const transitionToPending = oldStatus !== "pending" && newStatus === "pending";
-      const gainedFilesWhilePending =
-        oldStatus === "pending" &&
-        newStatus === "pending" &&
-        !hasReleaseFileLinks(oldRow) &&
-        hasReleaseFileLinks(row);
 
       if (!transitionToPending && !gainedFilesWhilePending) {
         console.log("[webhooks/release-status-change] skip UPDATE (no notify rule)", {
@@ -411,24 +426,28 @@ export async function POST(request: Request): Promise<Response> {
       return NextResponse.json({ ok: true, skipped: true, reason: "unhandled_event_type" });
     }
 
-    const contentReadySync = releaseContentReadySync(row);
-    console.log("releaseContentReadySync:", contentReadySync, {
-      audio_url: row.audio_url,
-      artwork_url: row.artwork_url
-    });
-
-    if (!contentReadySync) {
-      console.log("Skip Telegram: release is not fully filled yet", {
-        reason: "release_content_sync_failed",
+    if (
+      newStatus === "pending" &&
+      !hasReleaseFileLinks(row) &&
+      !(type === "UPDATE" && transitionToPending)
+    ) {
+      console.log("Skip: No audio or artwork yet", {
+        type,
+        transitionToPending,
         audio_url: row.audio_url,
         artwork_url: row.artwork_url
       });
       return NextResponse.json({
         ok: true,
         skipped: true,
-        reason: "release_not_ready"
+        reason: "no_audio_or_artwork"
       });
     }
+
+    console.log("release row file links OK:", releaseContentReadySync(row), {
+      audio_url: row.audio_url,
+      artwork_url: row.artwork_url
+    });
 
     const releaseIdRaw = row.id;
     const releaseId =
