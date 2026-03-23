@@ -70,8 +70,7 @@ async function handleUpdateReleaseStatus(
       .from("releases")
       .update({
         status: "ready",
-        error_message: null,
-        admin_notes: null
+        error_message: null
       })
       .eq("id", releaseId)
       .select("*")
@@ -88,14 +87,12 @@ async function handleUpdateReleaseStatus(
   }
 
   const msg = (comment && comment.trim()) || "Отклонено модератором";
-  const notes = msg;
 
   const { data: updated, error: updErr } = await supabase
     .from("releases")
     .update({
       status: "failed",
-      error_message: msg,
-      admin_notes: notes
+      error_message: msg
     })
     .eq("id", releaseId)
     .select("*")
