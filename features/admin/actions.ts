@@ -1,9 +1,8 @@
+"use client";
+
+import type { ReleaseRecord } from "@/repositories/releases.repo";
+import { getTelegramApiAuthHeaders, getTelegramUserId } from "@/lib/telegram";
 import { getExpectedAdminTelegramId } from "@/lib/admin";
-import { getTelegramUserId } from "@/lib/telegram";
-import {
-  updateReleaseStatus,
-  type ReleaseRecord
-} from "@/repositories/releases.repo";
 
 function assertAdmin(): void {
   if (process.env.NODE_ENV === "development") {
@@ -16,28 +15,57 @@ function assertAdmin(): void {
   }
 }
 
-/**
- * Одобрить релиз: статус `ready`, `error_message` очищается.
- * Запросы идут по `id` релиза; RLS для админа (x-telegram-user-id) в Supabase.
- */
-export async function approveRelease(releaseId: string): Promise<ReleaseRecord> {
-  assertAdmin();
-  return updateReleaseStatus(releaseId, { status: "ready" });
+async function postModeration(
+  body: { releaseId: string; action: "approve" | "reject"; comment?: string }
+): Promise<ReleaseRecord> {
+  const res = await fetch("/api/admin/update-release-status", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      ...getTelegramApiAuthHeaders()
+    },
+    body: JSON.stringify(body),
+    cache: "no-store"
+  });
+
+  let json: unknown;
+  try {
+    json = await res.json();
+  } catch {
+    throw new Error("Не удалось обновить статус релиза.");
+  }
+
+  if (!res.ok) {
+    const err =
+      typeof json === "object" && json !== null && "error" in json && typeof (json as { error: unknown }).error === "string"
+        ? (json as { error: string }).error
+        : "Не удалось обновить статус релиза.";
+    throw new Error(err);
+  }
+
+  const parsed = json as { ok?: boolean; record?: ReleaseRecord };
+  if (parsed.ok !== true || !parsed.record) {
+    throw new Error("Не удалось обновить статус релиза.");
+  }
+
+  return parsed.record;
 }
 
 /**
- * Отклонить релиз: в схеме БД используется статус `failed` (не `error`);
- * причина сохраняется в колонку `error_message`.
+ * Одобрить релиз: статус `ready`, `error_message` очищается.
+ * Обновление через API с service role (обходит RLS Mini App клиента).
  */
-export async function rejectRelease(
-  releaseId: string,
-  comment: string
-): Promise<ReleaseRecord> {
+export async function approveRelease(releaseId: string): Promise<ReleaseRecord> {
   assertAdmin();
-  const msg = comment.trim() || "Отклонено модератором";
-  return updateReleaseStatus(releaseId, {
-    status: "failed",
-    error_message: msg,
-    admin_notes: msg
-  });
+  return postModeration({ releaseId, action: "approve" });
+}
+
+/**
+ * Отклонить релиз: статус `failed`; причина в `error_message` / `admin_notes`.
+ */
+export async function rejectRelease(releaseId: string, comment: string): Promise<ReleaseRecord> {
+  assertAdmin();
+  return postModeration({ releaseId, action: "reject", comment });
 }
