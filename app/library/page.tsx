@@ -162,7 +162,7 @@ function ArtworkThumb({
   );
 }
 
-async function fetchReleasesForUser([, uid]: readonly ["releases", number]): Promise<ReleaseRow[]> {
+async function fetchReleasesForUser([, uid]: readonly ["releases", string]): Promise<ReleaseRow[]> {
   debugInit("library", "loadReleases start", { userId: uid });
   const queryPromise = getMyReleases(uid);
 
@@ -178,7 +178,7 @@ async function fetchReleasesForUser([, uid]: readonly ["releases", number]): Pro
 function LibraryPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [userId, setUserId] = useState<number | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
   const [expandedErrorId, setExpandedErrorId] = useState<string | null>(null);
   const [resumingId, setResumingId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<LibraryStatusFilter>("all");
@@ -190,7 +190,8 @@ function LibraryPageInner() {
   useEffect(() => {
     debugInit("library", "init start");
     initTelegramWebApp();
-    setUserId(getTelegramUserId());
+    const tid = getTelegramUserId();
+    setUserId(tid != null ? String(tid) : null);
     debugInit("library", "init done");
   }, []);
 

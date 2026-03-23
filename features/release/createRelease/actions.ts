@@ -53,10 +53,17 @@ export function getLastSubmitPrecheckHttpStatus(): number | null {
   return lastSubmitPrecheckHttpStatus;
 }
 
+/** Числовой id для API/Storage из строки стора (Telegram id). */
+function parseStoreUserId(raw: string | null): number | null {
+  if (raw == null || raw === "") return null;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? Math.trunc(n) : null;
+}
+
 /** Заголовки Telegram / dev для API мастера создания релиза (user_id должен совпадать с владельцем в БД). */
 function getCreateReleaseApiAuthHeaders(): Record<string, string> {
-  const uid = useCreateReleaseDraftStore.getState().userId;
-  return getTelegramApiAuthHeaders(uid != null ? { userId: uid } : undefined);
+  const n = parseStoreUserId(useCreateReleaseDraftStore.getState().userId);
+  return getTelegramApiAuthHeaders(n != null ? { userId: n } : undefined);
 }
 
 async function saveDraftPatchViaServiceApi(
@@ -260,7 +267,11 @@ export function initUserContextInStore() {
   initTelegramWebApp();
   const devUserId = getDevUserIdOverride() ?? getDevUserIdDefault();
   const tgUser = getTelegramUser();
-  const userId = devUserId ?? getTelegramUserId() ?? null;
+  const numericId = devUserId ?? getTelegramUserId() ?? null;
+  const userId =
+    numericId != null && Number.isFinite(numericId) && numericId > 0
+      ? String(Math.trunc(numericId))
+      : null;
   const telegramName = getTelegramUserDisplayName();
   const telegramUsername = getTelegramUsername();
   const store = useCreateReleaseDraftStore.getState();
@@ -273,7 +284,7 @@ export function initUserContextInStore() {
     store.resetDraft();
   }
   store.setUserContext({ userId, telegramName, telegramUsername });
-  setRlsTelegramUserIdOverride(userId);
+  setRlsTelegramUserIdOverride(numericId != null && numericId > 0 ? Math.trunc(numericId) : null);
 }
 
 /** Паспорт релиза из строки `releases` (общий маппинг для hydrate и резюме черновика). */
@@ -477,7 +488,7 @@ export async function ensureDraftRelease(): Promise<ReleaseRecord | null> {
     }
   }
 
-  const effectiveUserId = store.userId ?? tgUser?.id ?? 0;
+  const effectiveUserId = parseStoreUserId(store.userId) ?? tgUser?.id ?? 0;
   if (!Number.isFinite(effectiveUserId) || effectiveUserId <= 0) {
     store.setSubmitError("Ошибка авторизации Telegram");
     return null;
@@ -533,7 +544,7 @@ export async function uploadArtworkForDraft(file: File): Promise<string | null> 
   try {
     store.setSubmitError(null);
     const artworkUrl = await uploadReleaseArtwork({
-      userId: store.userId,
+      userId: parseStoreUserId(store.userId)!,
       releaseId: store.releaseId,
       file,
       options: {
@@ -664,11 +675,18 @@ export async function saveDraftAction(): Promise<{ ok: true } | { ok: false; mes
 }
 
 /** Последний черновик пользователя (для предложения «Продолжить»). */
-export async function fetchLatestDraftReleaseIdForUser(userId: number): Promise<string | null> {
+export async function fetchLatestDraftReleaseIdForUser(
+  userId: number | string
+): Promise<string | null> {
+  const idStr = String(userId).trim();
+  if (!idStr || idStr === "NaN") return null;
+  const asNum = Number(idStr);
+  if (!Number.isFinite(asNum) || asNum <= 0) return null;
+
   const { data, error } = await supabase
     .from("releases")
     .select("id")
-    .eq("user_id", userId)
+    .or(`user_id.eq.${idStr},telegram_id.eq.${idStr}`)
     .in("status", ["draft", "pending"])
     .order("created_at", { ascending: false })
     .limit(1)
@@ -758,7 +776,11 @@ export async function uploadTracksForDraftStep(options: {
     return false;
   }
   const releaseId = store.releaseId;
-  const userId = store.userId;
+  const userId = parseStoreUserId(store.userId);
+  if (userId == null) {
+    store.setSubmitError("Нет данных пользователя для загрузки треков.");
+    return false;
+  }
 
   useCreateReleaseDraftStore.getState().setTracksUploadInProgress(true);
   try {
@@ -940,7 +962,7 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
           const file = args.files[index];
           uploadPhase = "storage_track_wav";
           const audioUrl = await uploadReleaseTrackAudio({
-            userId: store.userId,
+            userId: parseStoreUserId(store.userId)!,
             releaseId,
             trackIndex: index,
             file,
@@ -955,7 +977,7 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
           await withRequestTimeout(
             addReleaseTrack({
               releaseId,
-              userId: store.userId,
+              userId: parseStoreUserId(store.userId)!,
               index,
               title: track.title,
               explicit: Boolean(track.explicit),
@@ -1009,7 +1031,7 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
         if (!skipWavUpload) {
           await cleanupReleaseTracks(releaseId);
           await deleteReleaseFiles({
-            userId: store.userId,
+            userId: parseStoreUserId(store.userId)!,
             releaseId,
             trackCount: parsedTracks.data.tracks.length
           });

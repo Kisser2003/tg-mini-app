@@ -260,9 +260,14 @@ export default function CreateReviewPage() {
       const st = useCreateReleaseDraftStore.getState();
       const msg = st.submitError;
       const precheckStatus = getLastSubmitPrecheckHttpStatus();
-      const authHeaders = getTelegramApiAuthHeaders({
-        userId: st.userId ?? undefined
-      });
+      const storeUid = st.userId
+        ? Number(st.userId)
+        : undefined;
+      const authHeaders = getTelegramApiAuthHeaders(
+        storeUid != null && Number.isFinite(storeUid) && storeUid > 0
+          ? { userId: storeUid }
+          : undefined
+      );
       const authDebug = {
         note:
           "Authorization не используется; для API нужны X-Telegram-Init-Data и/или (в dev) X-Dev-Telegram-User-Id — см. Network.",

@@ -12,8 +12,8 @@ import { parsePerformanceLanguage } from "@/lib/performance-language";
 import { EMPTY_ARTIST_LINKS, type ArtistLinksState } from "@/lib/artist-links";
 
 export type CreateReleaseDraftState = {
-  // identity / context
-  userId: number | null;
+  // identity / context (Telegram id как строка — совпадает с TEXT в БД и фильтрами)
+  userId: string | null;
   telegramName: string | null;
   /** @username без @ из WebApp (может быть null). */
   telegramUsername: string | null;
@@ -55,7 +55,7 @@ export type CreateReleaseDraftState = {
 
 type CreateReleaseDraftActions = {
   setUserContext: (args: {
-    userId: number | null;
+    userId: string | null;
     telegramName: string | null;
     telegramUsername?: string | null;
   }) => void;

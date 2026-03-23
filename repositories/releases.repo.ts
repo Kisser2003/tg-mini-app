@@ -897,19 +897,25 @@ export async function getReleaseById(id: string): Promise<ReleaseRecord> {
 
 /**
  * Все релизы пользователя для списка (библиотека). Без фильтра по статусу — видны draft, pending, processing и т.д.
+ * В БД `user_id` / `telegram_id` могут быть TEXT — фильтр через строку, иначе PostgREST не совпадает с типом колонки.
  */
-export async function getMyReleases(userId: number): Promise<ReleaseRecord[]> {
-  const uid = Number(userId);
-  if (!Number.isFinite(uid) || uid <= 0) {
+export async function getMyReleases(userId: number | string): Promise<ReleaseRecord[]> {
+  const idStr = String(userId).trim();
+  if (!idStr || idStr === "NaN") {
     return [];
   }
+  const asNum = Number(idStr);
+  if (!Number.isFinite(asNum) || asNum <= 0) {
+    return [];
+  }
+  console.log("Fetching releases for ID:", idStr);
   const { data, error } = await withRetry(async () => {
     return await supabase
       .from("releases")
       .select(
         "id, title, track_name, artwork_url, status, error_message, created_at, admin_notes, draft_upload_started"
       )
-      .or(`user_id.eq.${uid},telegram_id.eq.${uid}`)
+      .or(`user_id.eq.${idStr},telegram_id.eq.${idStr}`)
       .order("created_at", { ascending: false });
   });
 
