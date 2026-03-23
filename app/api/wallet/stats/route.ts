@@ -29,10 +29,20 @@ function toNumber(v: string | number): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+/** Включить обратно баланс/RPC/transactions, когда кошелёк выйдет из «спящего режима». */
+const WALLET_FEATURE_ENABLED = false;
+
 async function handleWalletStats(
   _request: NextRequest,
   ctx: TelegramAuthContext
 ): Promise<Response> {
+  if (!WALLET_FEATURE_ENABLED) {
+    return NextResponse.json(
+      { ok: false, error: "Wallet feature is disabled", frozen: true },
+      { status: 503 }
+    );
+  }
+
   const admin = createSupabaseAdmin();
   if (!admin) {
     console.error("[wallet/stats] missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");

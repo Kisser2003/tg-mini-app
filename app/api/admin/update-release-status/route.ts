@@ -65,6 +65,7 @@ async function handleUpdateReleaseStatus(
     );
   }
 
+  // Одобрение: только смена статуса релиза. Кошелёк/транзакции (ledger) намеренно не трогаем — фича заморожена.
   if (action === "approve") {
     const { data: updated, error: updErr } = await supabase
       .from("releases")

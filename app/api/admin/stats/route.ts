@@ -6,17 +6,6 @@ import { getExpectedAdminTelegramId } from "@/lib/admin";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
 import type { AdminStatsResponse } from "@/types/admin";
 
-/** Когда миграции кошелька (`transactions`) ещё не применены в Supabase. */
-function isMissingTableInSchemaCache(e: { message?: string; code?: string }): boolean {
-  const m = (e.message ?? "").toLowerCase();
-  const c = String(e.code ?? "");
-  return (
-    c === "PGRST205" ||
-    m.includes("schema cache") ||
-    m.includes("could not find the table")
-  );
-}
-
 function startOfUtcDayIso(): string {
   const d = new Date();
   d.setUTCHours(0, 0, 0, 0);
@@ -37,16 +26,14 @@ async function handleAdminStats(_request: NextRequest, ctx: TelegramAuthContext)
 
   const dayStart = startOfUtcDayIso();
 
-  const [{ count: pendingQueue, error: e1 }, { count: readyToday, error: e2 }, { data: pendingRows, error: e3 }] =
-    await Promise.all([
-      supabase.from("releases").select("*", { count: "exact", head: true }).eq("status", "processing"),
-      supabase
-        .from("releases")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "ready")
-        .gte("created_at", dayStart),
-      supabase.from("transactions").select("amount").eq("status", "pending")
-    ]);
+  const [{ count: pendingQueue, error: e1 }, { count: readyToday, error: e2 }] = await Promise.all([
+    supabase.from("releases").select("*", { count: "exact", head: true }).eq("status", "processing"),
+    supabase
+      .from("releases")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "ready")
+      .gte("created_at", dayStart)
+  ]);
 
   if (e1) {
     console.error("[admin/stats] pending_queue:", e1.message);
@@ -56,25 +43,9 @@ async function handleAdminStats(_request: NextRequest, ctx: TelegramAuthContext)
     console.error("[admin/stats] ready_today:", e2.message);
     return NextResponse.json({ ok: false, error: "Failed to count ready today" }, { status: 500 });
   }
-  let txRows: { amount: string | number }[] = [];
-  if (e3) {
-    if (isMissingTableInSchemaCache(e3)) {
-      console.warn(
-        "[admin/stats] таблица transactions отсутствует — pending_hold_sum=0. Примени миграции кошелька (supabase/migrations/*wallet*)."
-      );
-    } else {
-      console.error("[admin/stats] pending transactions:", e3.message);
-      return NextResponse.json({ ok: false, error: "Failed to sum pending" }, { status: 500 });
-    }
-  } else {
-    txRows = (pendingRows ?? []) as { amount: string | number }[];
-  }
 
-  let pendingHoldSum = 0;
-  for (const row of txRows) {
-    const n = Number(row.amount);
-    if (Number.isFinite(n)) pendingHoldSum += n;
-  }
+  // Кошелёк заморожен — не суммируем pending по `transactions` (раньше было через отдельный запрос).
+  const pendingHoldSum = 0;
 
   const body: AdminStatsResponse = {
     ok: true,

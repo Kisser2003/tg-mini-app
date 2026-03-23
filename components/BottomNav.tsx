@@ -4,7 +4,7 @@ import { memo, useMemo } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import type { LucideIcon } from "lucide-react";
-import { Library, Shield, Wallet } from "lucide-react";
+import { Library, Shield } from "lucide-react";
 import { useKeyboardVisible } from "@/hooks/useKeyboardVisible";
 import { useScrollDirection } from "@/hooks/useScrollDirection";
 import { isAdminUi } from "@/lib/admin";
@@ -83,7 +83,8 @@ function BottomNavInner() {
   const items = useMemo<NavItem[]>(
     () => [
       { label: "Мои релизы", href: "/library", icon: Library },
-      { label: "Кошелек", href: "/wallet", icon: Wallet },
+      // Кошелёк заморожен (ранняя стадия) — вкладка скрыта до включения фичи.
+      // { label: "Кошелек", href: "/wallet", icon: Wallet },
       ...(showAdminTab ? [{ label: "Админ", href: "/admin", icon: Shield }] : [])
     ],
     [showAdminTab]
@@ -117,7 +118,11 @@ function BottomNavInner() {
         className="will-change-transform"
         style={{ willChange: "transform" }}
       >
-        <div className="grid w-full grid-cols-3 rounded-[24px] border border-white/[0.06] border-t-white/10 bg-black/60 p-2 backdrop-blur-xl shadow-[0_-8px_32px_rgba(0,0,0,0.45)]">
+        <div
+          className={`grid w-full rounded-[24px] border border-white/[0.06] border-t-white/10 bg-black/60 p-2 backdrop-blur-xl shadow-[0_-8px_32px_rgba(0,0,0,0.45)] ${
+            items.length >= 3 ? "grid-cols-3" : items.length === 2 ? "grid-cols-2" : "grid-cols-1"
+          }`}
+        >
           {items.map((item) => {
             const active =
               item.href === "/library"

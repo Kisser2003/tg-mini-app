@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, type Variants } from "framer-motion";
-import { BarChart3, Info, RefreshCcw, TrendingUp, Wallet } from "lucide-react";
+import { BarChart3, Info, RefreshCcw, TrendingUp } from "lucide-react";
 import useSWR from "swr";
 import { toast } from "sonner";
 import { AdminRejectModal } from "@/components/AdminRejectModal";
@@ -50,13 +50,6 @@ const adminQueueItem: Variants = {
     transition: { type: "spring", stiffness: 280, damping: 24 }
   }
 };
-
-function formatMoneyRub(value: number): string {
-  return `${value.toLocaleString("ru-RU", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  })} ₽`;
-}
 
 export default function AdminPage() {
   const router = useRouter();
@@ -187,8 +180,6 @@ export default function AdminPage() {
   const showQueueSkeleton = isLoading && data === undefined;
   const pendingQueueCount = stats?.pending_queue ?? moderationQueue.length;
   const readyToday = stats?.ready_today ?? 0;
-  const holdSum = stats?.pending_hold_sum ?? 0;
-
   return (
     <div className="flex min-h-[100dvh] flex-col gap-4 pb-10">
       <PullRefreshBrand />
@@ -215,7 +206,7 @@ export default function AdminPage() {
           </motion.button>
         </div>
 
-        <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="rounded-[18px] border border-white/[0.08] bg-black/25 px-4 py-3 backdrop-blur-md">
             <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.16em] text-white/45">
               <BarChart3 className="h-3.5 w-3.5 text-sky-300/80" />
@@ -231,14 +222,7 @@ export default function AdminPage() {
             <p className="mt-2 text-2xl font-semibold tabular-nums text-white">{readyToday}</p>
             <p className="mt-1 text-[10px] text-white/35">Статус «готов», с 00:00 UTC</p>
           </div>
-          <div className="rounded-[18px] border border-white/[0.08] bg-black/25 px-4 py-3 backdrop-blur-md">
-            <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.16em] text-white/45">
-              <Wallet className="h-3.5 w-3.5 text-amber-300/80" />
-              Сумма в холде
-            </div>
-            <p className="mt-2 text-xl font-semibold tabular-nums text-white">{formatMoneyRub(holdSum)}</p>
-            <p className="mt-1 text-[10px] text-white/35">Сумма по операциям «ожидает»</p>
-          </div>
+          {/* Кошелёк заморожен — карточка «Сумма в холде» (pending_hold_sum) скрыта */}
         </div>
         {statsErrorMessage && (
           <p className="mt-3 text-[11px] text-amber-200/90">

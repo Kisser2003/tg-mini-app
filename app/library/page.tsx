@@ -26,9 +26,11 @@ import {
 } from "@/lib/release-status";
 import { getMyReleases, getReleaseDisplayTitle, type ReleaseRecord } from "@/repositories/releases.repo";
 import {
+  getTelegramWebApp,
   getTelegramUserIdForSupabaseRequests,
   initTelegramWebApp,
-  triggerHaptic
+  triggerHaptic,
+  type TelegramUser
 } from "@/lib/telegram";
 import { USER_REQUEST_TIMEOUT_MESSAGE } from "@/lib/errors";
 import { ARTWORK_BLUR_DATA_URL } from "@/lib/image-blur";
@@ -180,6 +182,8 @@ function LibraryPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [userId, setUserId] = useState<string | null>(null);
+  /** Временно: сравнение Telegram UID ПК vs мобилка (склейка auth по telegram_id). */
+  const [user, setUser] = useState<TelegramUser | null>(null);
   const [expandedErrorId, setExpandedErrorId] = useState<string | null>(null);
   const [resumingId, setResumingId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<LibraryStatusFilter>("all");
@@ -190,6 +194,7 @@ function LibraryPageInner() {
 
   useEffect(() => {
     initTelegramWebApp();
+    setUser(getTelegramWebApp()?.initDataUnsafe?.user ?? null);
     const tid = getTelegramUserIdForSupabaseRequests();
     setUserId(tid != null ? String(tid) : null);
   }, []);
@@ -284,9 +289,10 @@ function LibraryPageInner() {
       <div className="mx-auto flex w-full max-w-[440px] flex-col gap-6 font-sans">
         <div className="sticky top-0 z-40 -mx-5 border-b border-white/[0.06] bg-black/40 px-5 py-5 backdrop-blur-xl backdrop-saturate-150">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <h1 className="min-w-0 flex-1 truncate text-[20px] font-semibold tracking-tight">
-              Мои релизы
-            </h1>
+            <div className="min-w-0 flex-1">
+              <h1 className="truncate text-[20px] font-semibold tracking-tight">Мои релизы</h1>
+              <p className="text-[10px] opacity-30">UID: {user?.id}</p>
+            </div>
             <div className="flex flex-wrap items-center gap-2">
               <motion.button
                 type="button"
