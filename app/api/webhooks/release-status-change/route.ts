@@ -193,6 +193,57 @@ function unwrapSupabaseWebhookJson(json: unknown): unknown {
   return json;
 }
 
+/**
+ * Колонки `public.releases`: обложка обязательна для «готового» уведомления.
+ * Аудио чаще в `public.tracks.file_path`; legacy — `releases.audio_url`.
+ */
+const REQUIRED_RELEASE_FIELDS = ["artwork_url"] as const;
+
+function isNonEmptyField(value: unknown): boolean {
+  if (value === null || value === undefined) return false;
+  return String(value).trim().length > 0;
+}
+
+function missingRequiredReleaseFields(record: Record<string, unknown>): string[] {
+  const missing: string[] = [];
+  for (const key of REQUIRED_RELEASE_FIELDS) {
+    if (!isNonEmptyField(record[key])) missing.push(key);
+  }
+  return missing;
+}
+
+/**
+ * Есть ли загруженное аудио: либо строки в `tracks`, либо legacy `audio_url` на релизе.
+ */
+async function assertReleaseAudioReady(
+  admin: NonNullable<ReturnType<typeof createSupabaseAdmin>>,
+  releaseId: string,
+  record: Record<string, unknown>
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const { data: trackRows, error } = await admin
+    .from("tracks")
+    .select("file_path")
+    .eq("release_id", releaseId);
+
+  if (error) {
+    return { ok: false, reason: `tracks_query_failed:${error.message}` };
+  }
+
+  const rows = trackRows ?? [];
+  if (rows.length > 0) {
+    const emptyPaths = rows.filter((t) => !isNonEmptyField(t?.file_path));
+    if (emptyPaths.length > 0) {
+      return { ok: false, reason: "missing_tracks_file_path" };
+    }
+    return { ok: true };
+  }
+
+  if (!isNonEmptyField(record.audio_url)) {
+    return { ok: false, reason: "missing_audio_url_and_no_tracks" };
+  }
+  return { ok: true };
+}
+
 export async function POST(request: Request): Promise<Response> {
   let rawBody: string;
   try {
@@ -317,6 +368,58 @@ export async function POST(request: Request): Promise<Response> {
     } else {
       console.log("[webhooks/release-status-change] skip: event type not handled", { eventType: type });
       return NextResponse.json({ ok: true, skipped: true, reason: "unhandled_event_type" });
+    }
+
+    const missingCols = missingRequiredReleaseFields(row);
+    if (missingCols.length > 0) {
+      console.log("Skip Telegram: release is not fully filled yet", {
+        missingFields: missingCols,
+        reason: "required_release_columns"
+      });
+      return NextResponse.json({
+        ok: true,
+        skipped: true,
+        reason: "release_not_ready",
+        missingFields: missingCols
+      });
+    }
+
+    const releaseIdRaw = row.id;
+    const releaseId =
+      typeof releaseIdRaw === "string" && releaseIdRaw.length > 0 ? releaseIdRaw : null;
+    if (!releaseId) {
+      console.log("Skip Telegram: release is not fully filled yet", {
+        reason: "no_release_id_in_record"
+      });
+      return NextResponse.json({ ok: true, skipped: true, reason: "no_release_id" });
+    }
+
+    const adminForAudio = createSupabaseAdmin();
+    if (adminForAudio) {
+      const audioReady = await assertReleaseAudioReady(adminForAudio, releaseId, row);
+      if (!audioReady.ok) {
+        console.log("Skip Telegram: release is not fully filled yet", {
+          reason: audioReady.reason
+        });
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "release_not_ready_audio",
+          detail: audioReady.reason
+        });
+      }
+    } else {
+      if (!isNonEmptyField(row.audio_url)) {
+        console.log("Skip Telegram: release is not fully filled yet", {
+          reason: "missing_audio_url_no_service_role_for_tracks",
+          hint: "SUPABASE_SERVICE_ROLE_KEY needed to verify tracks.file_path"
+        });
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "release_not_ready_audio_fallback"
+        });
+      }
     }
 
     const chatId = chatIdFromTelegramId(row.telegram_id);
