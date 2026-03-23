@@ -9,14 +9,22 @@ import { escapeHtml } from "@/lib/telegram-bot.server";
 import { sendTelegramNotification } from "@/lib/telegram-notifications";
 import { getReleaseDisplayTitle, type ReleaseRecord } from "@/repositories/releases.repo";
 
-function notifyReleaseSubmittedForModeration(record: ReleaseRecord): void {
-  const uid = String(record.user_id);
+function notifyReleaseSubmittedForModeration(
+  record: ReleaseRecord,
+  telegramUserId: number
+): void {
+  const fromRow =
+    record.telegram_id != null && String(record.telegram_id).trim() !== ""
+      ? String(record.telegram_id)
+      : record.user_id != null && String(record.user_id).trim() !== ""
+        ? String(record.user_id)
+        : String(telegramUserId);
   const rawTitle = getReleaseDisplayTitle(record);
   const title = escapeHtml(rawTitle.length > 0 ? rawTitle : "релиз");
   const text =
     `🚀 <b>Ваш релиз «${title}» отправлен на модерацию!</b>\n\n` +
     `Мы проверим его в течение 24 часов и пришлем уведомление здесь.`;
-  void sendTelegramNotification(uid, text);
+  void sendTelegramNotification(fromRow, text);
 }
 
 const bodySchema = z.object({
@@ -92,7 +100,7 @@ async function handleFinalizeSubmit(
     const rows = Array.isArray(rpcData) ? rpcData : rpcData ? [rpcData] : [];
     if (rows.length > 0) {
       const rec = rows[0] as ReleaseRecord;
-      notifyReleaseSubmittedForModeration(rec);
+      notifyReleaseSubmittedForModeration(rec, telegramUserId);
       return NextResponse.json({ ok: true, record: rec });
     }
   } else {
@@ -146,7 +154,7 @@ async function handleFinalizeSubmit(
     );
   }
 
-  notifyReleaseSubmittedForModeration(rows[0]);
+  notifyReleaseSubmittedForModeration(rows[0], telegramUserId);
   return NextResponse.json({ ok: true, record: rows[0] });
 }
 

@@ -375,12 +375,15 @@ export async function POST(request: Request): Promise<Response> {
       }
     }
 
-    const deepReadyOld =
-      adminDeep &&
-      releaseIdEarly &&
-      oldRow != null &&
-      newStatus === "pending"
-        ? releaseFullyReadyFromRowAndTracks(oldRow, tracksCountForRelease)
+    /**
+     * Для «стал полным сейчас» нельзя подмешивать текущий tracksCount к old_record:
+     * в old_row нет треков, а tracksCount из БД один на релиз — тогда старое состояние
+     * ошибочно считается уже готовым (обложка + треки), и gainedFullWhilePending = false.
+     * Снимок old сравниваем только по колонкам releases (tracksCount = 0 для old).
+     */
+    const deepReadyOldSyncOnly =
+      oldRow != null && newStatus === "pending"
+        ? releaseFullyReadyFromRowAndTracks(oldRow, 0)
         : false;
 
     const gainedFullWhilePending =
@@ -389,7 +392,7 @@ export async function POST(request: Request): Promise<Response> {
       oldStatus === "pending" &&
       newStatus === "pending" &&
       deepReadyNew &&
-      !deepReadyOld;
+      !deepReadyOldSyncOnly;
 
     console.log(
       "REAL_FIELDS_IN_RECORD:",
