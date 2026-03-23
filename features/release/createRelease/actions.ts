@@ -8,8 +8,10 @@ import { getUploadErrorDetails, logClientError } from "@/lib/logger";
 import { getExpectedAdminTelegramId } from "@/lib/admin";
 import {
   getTelegramApiAuthHeaders,
+  getTelegramUser,
   getTelegramUserDisplayName,
   getTelegramUserId,
+  getTelegramUsername,
   getTelegramWebApp,
   initTelegramWebApp,
   setRlsTelegramUserIdOverride
@@ -257,8 +259,10 @@ function getDevUserIdDefault(): number | null {
 export function initUserContextInStore() {
   initTelegramWebApp();
   const devUserId = getDevUserIdOverride() ?? getDevUserIdDefault();
+  const tgUser = getTelegramUser();
   const userId = devUserId ?? getTelegramUserId() ?? null;
   const telegramName = getTelegramUserDisplayName();
+  const telegramUsername = getTelegramUsername();
   const store = useCreateReleaseDraftStore.getState();
   const previousUserId = store.userId;
   if (
@@ -268,7 +272,7 @@ export function initUserContextInStore() {
   ) {
     store.resetDraft();
   }
-  store.setUserContext({ userId, telegramName });
+  store.setUserContext({ userId, telegramName, telegramUsername });
   setRlsTelegramUserIdOverride(userId);
 }
 
@@ -465,11 +469,30 @@ export async function ensureDraftRelease(): Promise<ReleaseRecord | null> {
   }
 
   const mainArtistName = parsed.data.primaryArtist ?? "";
-  const effectiveUserId = store.userId ?? 0;
+  const tgUser = getTelegramUser();
+  if (process.env.NODE_ENV === "production") {
+    if (!tgUser?.id) {
+      store.setSubmitError("Ошибка авторизации Telegram");
+      return null;
+    }
+  }
+
+  const effectiveUserId = store.userId ?? tgUser?.id ?? 0;
+  if (!Number.isFinite(effectiveUserId) || effectiveUserId <= 0) {
+    store.setSubmitError("Ошибка авторизации Telegram");
+    return null;
+  }
+
+  const telegramId = tgUser?.id ?? effectiveUserId;
+  const rawUsername = getTelegramUsername();
+  const telegramUsername = rawUsername && rawUsername.length > 0 ? rawUsername : null;
+
   const clientRequestId = createClientRequestId(store.clientRequestId);
 
   const payload: ReleaseStep1Payload = {
     user_id: effectiveUserId,
+    telegram_id: telegramId,
+    telegram_username: telegramUsername,
     client_request_id: clientRequestId,
     artist_name: mainArtistName,
     track_name: parsed.data.releaseTitle,

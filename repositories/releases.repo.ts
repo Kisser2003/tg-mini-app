@@ -37,6 +37,10 @@ export const ALLOWED_ARTWORK_MIME = new Set(["image/jpeg", "image/png", "image/j
 
 export type ReleaseStep1Payload = {
   user_id: number;
+  /** Дублирует Telegram id (для колонки `telegram_id` и RLS). */
+  telegram_id: number;
+  /** Логин без @; может быть null, если у аккаунта нет username. */
+  telegram_username: string | null;
   client_request_id: string;
   artist_name: string;
   track_name: string;
@@ -82,6 +86,8 @@ export type ReleaseRecord = {
   performance_language?: string | null;
   /** Участники релиза с ролями и ссылками (JSON). */
   collaborators?: unknown;
+  telegram_id?: number | null;
+  telegram_username?: string | null;
 } & ReleaseStep2Payload;
 
 /** Публичное название релиза: `title`, иначе legacy `track_name`. */
@@ -95,6 +101,8 @@ export function getReleaseDisplayTitle(
 
 const releaseStep1Schema = z.object({
   user_id: z.number().int().nonnegative(),
+  telegram_id: z.number().int().positive(),
+  telegram_username: z.union([z.string().max(64).trim(), z.null()]),
   client_request_id: z.string().uuid(),
   artist_name: z.string().min(1).max(256).trim(),
   track_name: z.string().min(1).max(256).trim(),
@@ -311,7 +319,7 @@ export async function createDraftRelease(
     );
   }
 
-  const { track_name, ...rest } = validated;
+  const { track_name, telegram_id, telegram_username, ...rest } = validated;
 
   const { data, error } = await withRetry(async () => {
     const response = await supabase
@@ -319,6 +327,8 @@ export async function createDraftRelease(
       .upsert(
         {
           ...rest,
+          telegram_id,
+          telegram_username,
           title: track_name,
           status: "pending" as ReleaseStatus
         },
@@ -889,13 +899,17 @@ export async function getReleaseById(id: string): Promise<ReleaseRecord> {
  * Все релизы пользователя для списка (библиотека). Без фильтра по статусу — видны draft, pending, processing и т.д.
  */
 export async function getMyReleases(userId: number): Promise<ReleaseRecord[]> {
+  const uid = Number(userId);
+  if (!Number.isFinite(uid) || uid <= 0) {
+    return [];
+  }
   const { data, error } = await withRetry(async () => {
     return await supabase
       .from("releases")
       .select(
         "id, title, track_name, artwork_url, status, error_message, created_at, admin_notes, draft_upload_started"
       )
-      .eq("user_id", userId)
+      .or(`user_id.eq.${uid},telegram_id.eq.${uid}`)
       .order("created_at", { ascending: false });
   });
 

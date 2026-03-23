@@ -15,6 +15,8 @@ export type CreateReleaseDraftState = {
   // identity / context
   userId: number | null;
   telegramName: string | null;
+  /** @username без @ из WebApp (может быть null). */
+  telegramUsername: string | null;
   // edit mode
   releaseId: string | null;
   clientRequestId: string | null;
@@ -52,7 +54,11 @@ export type CreateReleaseDraftState = {
 };
 
 type CreateReleaseDraftActions = {
-  setUserContext: (args: { userId: number | null; telegramName: string | null }) => void;
+  setUserContext: (args: {
+    userId: number | null;
+    telegramName: string | null;
+    telegramUsername?: string | null;
+  }) => void;
   setReleaseId: (releaseId: string | null) => void;
   setClientRequestId: (clientRequestId: string | null) => void;
 
@@ -210,6 +216,7 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
       return {
         userId: null,
         telegramName: null,
+        telegramUsername: null,
         releaseId: null,
         clientRequestId: null,
 
@@ -235,12 +242,17 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
         hasHydrated: false,
         lastModified: null,
 
-        setUserContext: ({ userId, telegramName }) =>
+        setUserContext: ({ userId, telegramName, telegramUsername }) =>
           set((state) => {
-            if (state.userId === userId && state.telegramName === telegramName) {
+            const nextU = telegramUsername ?? null;
+            if (
+              state.userId === userId &&
+              state.telegramName === telegramName &&
+              state.telegramUsername === nextU
+            ) {
               return state;
             }
-            return { userId, telegramName };
+            return { userId, telegramName, telegramUsername: nextU };
           }),
         setReleaseId: (releaseId) =>
           set((state) => (state.releaseId === releaseId ? state : { releaseId })),

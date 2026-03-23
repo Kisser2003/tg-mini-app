@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import type { CreateStep } from "./types";
+import { getTelegramUser } from "@/lib/telegram";
 import {
   useCreateReleaseDraftStore,
   selectIsMetadataComplete,
@@ -40,6 +41,20 @@ export function useStepGuard(step: CreateStep): GuardResult {
       };
     }
     if (step === "metadata") return { allowed: true };
+
+    if (
+      process.env.NODE_ENV === "production" &&
+      !getTelegramUser() &&
+      (step === "assets" || step === "tracks" || step === "review")
+    ) {
+      return {
+        allowed: false,
+        title: "Ошибка авторизации Telegram",
+        description: "Ошибка авторизации Telegram",
+        redirectTo: "metadata",
+        actionLabel: "К паспорту"
+      };
+    }
 
     // Экран «Готово» после сабмита: метаданные в сторе могут быть уже очищены, но summary есть.
     if (step === "success" && successSummary) return { allowed: true };

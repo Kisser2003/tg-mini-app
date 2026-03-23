@@ -248,6 +248,14 @@ export function getTelegramUserId(): number | null {
   return user?.id ?? null;
 }
 
+/** Логин без ведущего @; из `initDataUnsafe.user.username`. */
+export function getTelegramUsername(): string | null {
+  const user = getTelegramUser();
+  const raw = user?.username?.trim();
+  if (!raw) return null;
+  return raw.replace(/^@+/, "");
+}
+
 export function getTelegramUserDisplayName(): string | null {
   const user = getTelegramUser();
   if (!user) return null;
