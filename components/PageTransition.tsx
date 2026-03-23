@@ -5,7 +5,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 
 /**
  * Глобальный fade между разделами (библиотека, релиз, админ…).
- * Маршруты `/create/*` не дублируют fade здесь — анимация шагов в `CreateStepTransition` (slide).
+ * Маршруты `/create/*` без глобального fade — слайд шагов в `CreateShell` / `CreateStepTransition`.
  */
 export function PageTransition({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();

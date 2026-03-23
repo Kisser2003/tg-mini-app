@@ -1,9 +1,11 @@
 "use client";
 
-import { CreateStepTransition } from "@/components/CreateStepTransition";
 import { useCreateReleaseDraftStore } from "@/features/release/createRelease/store";
 
-/** Гидратор persist + `CreateStepTransition` (slide между шагами). */
+/**
+ * Гидратор persist для черновика. Слайд между шагами — в `CreateShell` +
+ * `features/release/createRelease/components/CreateStepTransition` (один слой анимации).
+ */
 export default function CreateLayout({ children }: { children: React.ReactNode }) {
   const hasHydrated = useCreateReleaseDraftStore((s) => s.hasHydrated);
 
@@ -11,7 +13,6 @@ export default function CreateLayout({ children }: { children: React.ReactNode }
     return (
       <div className="flex min-h-[100svh] items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
-          {/* Glassmorphism card spinner */}
           <div className="rounded-[24px] border border-white/[0.08] bg-surface/80 p-8 shadow-[0_18px_40px_rgba(0,0,0,0.7)] backdrop-blur-2xl">
             <div className="flex flex-col items-center gap-3">
               <div
@@ -28,5 +29,5 @@ export default function CreateLayout({ children }: { children: React.ReactNode }
     );
   }
 
-  return <CreateStepTransition>{children}</CreateStepTransition>;
+  return <>{children}</>;
 }

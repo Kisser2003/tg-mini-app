@@ -62,7 +62,7 @@ npm install
 
 **Кошелёк (ledger):** миграция [supabase/migrations/20260323140000_wallet_ledger.sql](supabase/migrations/20260323140000_wallet_ledger.sql) — таблицы `transactions`, `payout_accounts`, RLS (чтение своих строк по `x-telegram-user-id`). RPC `get_user_balance(p_user_id text, p_only_available boolean default false)` ([доп. миграция holding period](supabase/migrations/20260326120000_wallet_holding_period.sql)) — общий баланс или сумма проводок старше 60 дней (`p_only_available = true`); только `service_role`. Запись транзакций — с сервера с приватным ключом, не из клиентского anon SDK.
 
-**Обратная связь:** миграция [supabase/migrations/20260324120000_feedback.sql](supabase/migrations/20260324120000_feedback.sql) — таблица `feedback`; запись через [`POST /api/feedback`](app/api/feedback/route.ts) с `withTelegramAuth` и service role.
+**Обратная связь (опционально):** миграция [supabase/migrations/20260324120000_feedback.sql](supabase/migrations/20260324120000_feedback.sql) — таблица `feedback`; отдельного HTTP-эндпоинта в этом репозитории пока нет.
 
 **Postgres (рекомендуется):** примените миграцию [supabase/migrations/20250320120000_finalize_release_transaction.sql](supabase/migrations/20250320120000_finalize_release_transaction.sql) — функция `finalize_release(p_release_id uuid, p_client_request_id uuid)` атомарно переводит `draft` → `processing` и пишет строку в `release_logs` (идемпотентна при повторном вызове). Старая перегрузка `finalize_release(uuid)` удаляется скриптом. Если RPC недоступна, клиент делает проверку по `client_request_id` и обновляет статус в [repositories/releases.repo.ts](repositories/releases.repo.ts) (`finalizeReleaseFallback`).
 
@@ -72,7 +72,13 @@ npm install
 npm run dev
 ```
 
-Then hook the URL as a Telegram WebApp URL in your bot, so that Telegram passes the user id which is stored with each release (`user_id`).
+5. Перед продакшен-деплоем:
+
+```bash
+npm run lint && npm run typecheck && npm run build
+```
+
+Hook the dev or production URL as a Telegram WebApp URL in your bot, so that Telegram passes the user id which is stored with each release (`user_id`).
 
 ## API routes (Server-Side Validation)
 

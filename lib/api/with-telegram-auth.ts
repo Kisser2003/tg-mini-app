@@ -56,7 +56,7 @@ export function withTelegramAuth(
     const initDataRaw = getTelegramInitDataFromRequest(request);
 
     if (process.env.NODE_ENV === "development") {
-      console.error("DEBUG AUTH:", {
+      console.debug("[withTelegramAuth]", {
         hasToken: !!process.env.TELEGRAM_BOT_TOKEN,
         receivedData: Boolean(initDataRaw)
       });
