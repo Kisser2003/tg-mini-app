@@ -184,12 +184,13 @@ export default function CreateReviewPage() {
 
   const stageLabel = useMemo(() => {
     if (submitStage === "preparing") return "Подготавливаем релиз";
-    if (submitStage === "uploading_tracks") return "Загружаем WAV-файлы";
+    if (submitStage === "uploading_tracks")
+      return `Загрузка WAV ${Math.round(submitProgress)}%`;
     if (submitStage === "finalizing") return "Передаем релиз в модерацию";
     if (submitStage === "done") return "Готово";
     if (submitStage === "error") return "Ошибка отправки";
     return "Ожидание отправки";
-  }, [submitStage]);
+  }, [submitStage, submitProgress]);
 
   const showProgressPanel =
     submitStatus === "submitting" ||

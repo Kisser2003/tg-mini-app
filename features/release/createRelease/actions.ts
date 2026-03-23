@@ -22,6 +22,7 @@ import {
   deleteReleaseFiles,
   ensureReleaseProcessing,
   getReleaseById,
+  getReleaseDisplayTitle,
   getReleaseTracksByReleaseId,
   submitRelease,
   updateRelease,
@@ -37,7 +38,7 @@ import { parseArtistLinksFromJson } from "@/lib/artist-links";
 import { parseCollaboratorsFromDb } from "@/lib/collaborators";
 import { parsePerformanceLanguage } from "@/lib/performance-language";
 
-/** Таймаут одной операции Storage/Supabase при загрузке треков, чтобы UI не зависал бесконечно. */
+/** Таймаут коротких операций Supabase (insert/upsert в БД). Загрузка WAV идёт напрямую в Storage без лимита. */
 const SUPABASE_DB_OP_TIMEOUT_MS = 15000;
 
 /** Защита от двойного сабмита (двойной тап в Telegram). */
@@ -278,7 +279,7 @@ export function createMetadataFromReleaseRecord(existing: ReleaseRecord): Create
     rows[0]?.name?.trim() || String(existing.artist_name ?? "").trim();
   return {
     primaryArtist: primaryName,
-    releaseTitle: existing.track_name,
+    releaseTitle: getReleaseDisplayTitle(existing),
     releaseType: existing.release_type,
     genre: existing.genre,
     subgenre: "",
@@ -297,7 +298,7 @@ function buildTracksForResume(release: ReleaseRecord, rows: ReleaseTrackRow[]): 
     }));
   }
   if (release.release_type === "single") {
-    return [{ title: release.track_name, explicit: Boolean(release.explicit) }];
+    return [{ title: getReleaseDisplayTitle(release), explicit: Boolean(release.explicit) }];
   }
   return [
     { title: "", explicit: false },
@@ -351,10 +352,10 @@ export async function resumeDraftFromRelease(releaseId: string): Promise<string 
     initUserContextInStore();
     const existing = await getReleaseById(releaseId);
 
-    if (existing.status !== "draft") {
+    if (existing.status !== "draft" && existing.status !== "pending") {
       useCreateReleaseDraftStore
         .getState()
-        .setSubmitError("Продолжить можно только черновик.");
+        .setSubmitError("Продолжить можно только черновик или релиз до отправки на модерацию.");
       return null;
     }
 
@@ -577,7 +578,7 @@ export async function saveDraftAction(): Promise<{ ok: true } | { ok: false; mes
      */
     const finalData: Record<string, unknown> = {
       artist_name: mainArtist,
-      track_name: m.releaseTitle,
+      title: m.releaseTitle,
       release_type: m.releaseType,
       genre: m.genre,
       release_date: m.releaseDate,
@@ -749,20 +750,16 @@ export async function uploadTracksForDraftStep(options: {
 
         let audioUrl: string;
         try {
-          audioUrl = await withRequestTimeout(
-            uploadReleaseTrackAudio({
-              userId,
-              releaseId,
-              trackIndex: index,
-              file,
-              options: {
-                markReleaseFailedOnError: { releaseId },
-                onProgress: (pct) => options.onTrackProgress(index, pct)
-              }
-            }),
-            SUPABASE_DB_OP_TIMEOUT_MS,
-            USER_REQUEST_TIMEOUT_MESSAGE
-          );
+          audioUrl = await uploadReleaseTrackAudio({
+            userId,
+            releaseId,
+            trackIndex: index,
+            file,
+            options: {
+              markReleaseFailedOnError: { releaseId },
+              onProgress: (pct) => options.onTrackProgress(index, pct)
+            }
+          });
           console.log("Step 1: Storage Upload Done", { trackIndex: index, releaseId });
         } catch (e: unknown) {
           void postDraftUploadState(releaseId, "failed");
@@ -770,13 +767,13 @@ export async function uploadTracksForDraftStep(options: {
             phase: "storage",
             trackIndex: index,
             releaseId,
-            hint: "Network → POST …/storage/v1/object/audio/…",
+            hint: "Network → POST …/storage/v1/object/releases/…",
             error: e
           });
           useCreateReleaseDraftStore.getState().setSubmitError(
             formatErrorMessage(
               e,
-              "Не удалось загрузить WAV в хранилище. Проверьте политику bucket «audio», размер и формат файла."
+              "Не удалось загрузить WAV в хранилище. Проверьте политику bucket «releases», размер и формат файла."
             )
           );
           return false;
@@ -919,20 +916,16 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
           const track = parsedTracks.data.tracks[index];
           const file = args.files[index];
           uploadPhase = "storage_track_wav";
-          const audioUrl = await withRequestTimeout(
-            uploadReleaseTrackAudio({
-              userId: store.userId,
-              releaseId,
-              trackIndex: index,
-              file,
-              options: {
-                markReleaseFailedOnError: { releaseId },
-                onProgress: (pct) => setTrackUploadProgress(index, pct)
-              }
-            }),
-            SUPABASE_DB_OP_TIMEOUT_MS,
-            USER_REQUEST_TIMEOUT_MESSAGE
-          );
+          const audioUrl = await uploadReleaseTrackAudio({
+            userId: store.userId,
+            releaseId,
+            trackIndex: index,
+            file,
+            options: {
+              markReleaseFailedOnError: { releaseId },
+              onProgress: (pct) => setTrackUploadProgress(index, pct)
+            }
+          });
           console.log("Step 1: Storage Upload Done", { trackIndex: index, releaseId });
           uploadPhase = "db_release_track";
           console.log("Step 2: Starting DB Insert", { trackIndex: index, releaseId });
@@ -980,7 +973,7 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
           phase: "storage",
           trackIndex: uploadTrackIndex,
           releaseId,
-          hint: "Network → POST …/storage/v1/object/audio/…",
+          hint: "Network → POST …/storage/v1/object/releases/…",
           error: e
         });
       }
@@ -1019,7 +1012,7 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
         uploadPhase === "storage_track_wav"
           ? formatErrorMessage(
               e,
-              "Не удалось загрузить WAV в хранилище. Проверьте политику bucket «audio», размер и формат файла."
+              "Не удалось загрузить WAV в хранилище. Проверьте политику bucket «releases», размер и формат файла."
             )
           : uploadPhase === "db_release_track"
             ? formatErrorMessage(
@@ -1102,7 +1095,7 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
       storeOk.setSubmitStatus("success");
       storeOk.setSubmitStage("done");
       storeOk.setSubmitProgress(100);
-      const title = verified.track_name?.trim() || "Релиз";
+      const title = getReleaseDisplayTitle(verified).trim() || "Релиз";
       storeOk.setSuccessSummary({
         artistName: verified.artist_name?.trim() || "Артист",
         trackName: title,

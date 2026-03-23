@@ -62,7 +62,7 @@ async function handleSubmitPrecheck(
   const { data: releaseRow, error: relErr } = await admin
     .from("releases")
     .select(
-      "id, user_id, client_request_id, release_type, artist_name, track_name, collaborators, performance_language, artist_links"
+      "id, user_id, client_request_id, release_type, artist_name, title, track_name, collaborators, performance_language, artist_links"
     )
     .eq("id", releaseId)
     .maybeSingle();
@@ -133,6 +133,7 @@ async function handleSubmitPrecheck(
 
   const row = releaseRow as {
     artist_name?: string | null;
+    title?: string | null;
     track_name?: string | null;
     performance_language?: string | null;
     artist_links?: unknown;
@@ -140,7 +141,7 @@ async function handleSubmitPrecheck(
 
   const meta: ReleaseMetadata = {
     primaryArtist: String(row.artist_name ?? "").trim(),
-    releaseTitle: String(row.track_name ?? "").trim(),
+    releaseTitle: String(row.title ?? row.track_name ?? "").trim(),
     trackTitles: (trackRows ?? []).map((r) => String((r as { title: string }).title ?? "")),
     language: parsePerformanceLanguage(row.performance_language),
     releaseArtistLinks: parseArtistLinksFromJson(row.artist_links)

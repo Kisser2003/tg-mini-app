@@ -7,7 +7,11 @@ import { motion, type Variants } from "framer-motion";
 import { CheckCircle2, ExternalLink, Headphones, XCircle } from "lucide-react";
 import { ArtworkCoverGlow } from "@/components/ArtworkCoverGlow";
 import { AudioPlayerLazy } from "@/components/AudioPlayerLazy";
-import type { ReleaseRecord, ReleaseTrackRow } from "@/repositories/releases.repo";
+import {
+  getReleaseDisplayTitle,
+  type ReleaseRecord,
+  type ReleaseTrackRow
+} from "@/repositories/releases.repo";
 import { getReleaseStatusMeta } from "@/lib/release-status";
 import { Badge } from "@/components/Badge";
 import { ARTWORK_BLUR_DATA_URL } from "@/lib/image-blur";
@@ -33,7 +37,7 @@ function buildAudioItems(release: ReleaseRecord, tracks: ReleaseTrackRow[]) {
     return [
       {
         key: "main",
-        label: release.track_name || "Трек",
+        label: getReleaseDisplayTitle(release) || "Трек",
         src: release.audio_url
       }
     ];
@@ -72,6 +76,7 @@ function AdminReleaseCardInner({
   artworkPriority = false
 }: AdminReleaseCardProps) {
   const statusMeta = getReleaseStatusMeta(release.status);
+  const displayTitle = getReleaseDisplayTitle(release);
   const audioItems = buildAudioItems(release, tracks);
 
   return (
@@ -97,7 +102,7 @@ function AdminReleaseCardInner({
           {release.artwork_url ? (
             <Image
               src={release.artwork_url}
-              alt={release.track_name}
+              alt={displayTitle}
               fill
               sizes={ARTWORK_SIZES}
               className="object-cover"
@@ -113,7 +118,7 @@ function AdminReleaseCardInner({
         </div>
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex items-start justify-between gap-2">
-            <p className="truncate text-[15px] font-semibold leading-tight">{release.track_name}</p>
+            <p className="truncate text-[15px] font-semibold leading-tight">{displayTitle}</p>
             {detailHref && (
               <Link
                 href={detailHref}

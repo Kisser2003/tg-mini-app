@@ -25,25 +25,25 @@ import {
   type CanonicalReleaseStatus,
   type ReleaseStatusMeta
 } from "@/lib/release-status";
-import { getMyReleases } from "@/repositories/releases.repo";
+import { getMyReleases, getReleaseDisplayTitle, type ReleaseRecord } from "@/repositories/releases.repo";
 import { getTelegramUserId, initTelegramWebApp, triggerHaptic } from "@/lib/telegram";
 import { USER_REQUEST_TIMEOUT_MESSAGE } from "@/lib/errors";
 import { ARTWORK_BLUR_DATA_URL } from "@/lib/image-blur";
 import { SWR_LIST_OPTIONS } from "@/lib/swr-config";
 import { withRequestTimeout } from "@/lib/withRequestTimeout";
 import { toast } from "sonner";
-import type { ReleaseStatus } from "@/lib/db-enums";
-
-type ReleaseRow = {
-  id: string;
-  track_name: string;
-  artwork_url: string | null;
-  status: ReleaseStatus;
-  created_at: string;
-  error_message?: string | null;
-  admin_notes?: string | null;
-  draft_upload_started?: boolean | null;
-};
+type ReleaseRow = Pick<
+  ReleaseRecord,
+  | "id"
+  | "title"
+  | "track_name"
+  | "artwork_url"
+  | "status"
+  | "created_at"
+  | "error_message"
+  | "admin_notes"
+  | "draft_upload_started"
+>;
 
 const ARTWORK_SIZES = "(max-width: 768px) 100vw, 33vw";
 /** Список релизов + Supabase; не должен «висеть» бесконечно при сетевых сбоях. */
@@ -420,9 +420,11 @@ function LibraryPageInner() {
               animate="show"
             >
               {filteredReleases.map((release, listIndex) => {
+                  const displayTitle = getReleaseDisplayTitle(release);
                   const statusMeta = getReleaseStatusMeta(release.status);
                   const normalizedStatus = normalizeReleaseStatus(release.status);
-                  const isDraft = normalizedStatus === "draft";
+                  const isDraft =
+                    normalizedStatus === "draft" || normalizedStatus === "pending";
                   const isFailed = normalizedStatus === "failed";
                   const isResumingDraft = isDraft && resumingId === release.id;
                   const hasErrorText =
@@ -453,7 +455,7 @@ function LibraryPageInner() {
                             role="button"
                             tabIndex={0}
                             aria-busy={isResumingDraft}
-                            aria-label={`Продолжить заполнение черновика: ${release.track_name}`}
+                            aria-label={`Продолжить заполнение черновика: ${displayTitle}`}
                             whileHover={isResumingDraft ? undefined : { scale: 1.01, opacity: 0.96 }}
                             whileTap={isResumingDraft ? undefined : { scale: 0.985 }}
                             transition={{ type: "spring", stiffness: 300, damping: 30 }}
@@ -469,11 +471,11 @@ function LibraryPageInner() {
                           >
                             <ArtworkThumb
                               url={release.artwork_url}
-                              title={release.track_name}
+                              title={displayTitle}
                               priority={thumbPriority}
                             />
                             <div className="min-w-0 flex-1">
-                              <p className="truncate text-[15px] font-semibold">{release.track_name}</p>
+                              <p className="truncate text-[15px] font-semibold">{displayTitle}</p>
                               <p className="mt-0.5 text-[11px] text-text-muted">
                                 {new Date(release.created_at).toLocaleString("ru-RU", {
                                   day: "2-digit",
@@ -519,11 +521,11 @@ function LibraryPageInner() {
                         <div className="flex gap-3">
                           <ArtworkThumb
                             url={release.artwork_url}
-                            title={release.track_name}
+                            title={displayTitle}
                             priority={thumbPriority}
                           />
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-[15px] font-semibold">{release.track_name}</p>
+                            <p className="truncate text-[15px] font-semibold">{displayTitle}</p>
                             <p className="mt-0.5 text-[11px] text-text-muted">
                               {new Date(release.created_at).toLocaleString("ru-RU", {
                                 day: "2-digit",
@@ -543,7 +545,7 @@ function LibraryPageInner() {
                                   triggerHaptic("light");
                                   const notes = release.admin_notes?.trim();
                                   setAdminNotesModal({
-                                    title: release.track_name,
+                                    title: displayTitle,
                                     body:
                                       notes && notes.length > 0
                                         ? notes
@@ -630,11 +632,11 @@ function LibraryPageInner() {
                         >
                           <ArtworkThumb
                             url={release.artwork_url}
-                            title={release.track_name}
+                            title={displayTitle}
                             priority={thumbPriority}
                           />
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium">{release.track_name}</p>
+                            <p className="truncate text-sm font-medium">{displayTitle}</p>
                             <p className="text-xs text-white/60">
                               {new Date(release.created_at).toLocaleDateString("ru-RU")}
                             </p>

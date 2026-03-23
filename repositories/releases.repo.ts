@@ -2,6 +2,12 @@ import { z } from "zod";
 import { logSupabaseUpdateError } from "../lib/errors";
 import { supabase } from "../lib/supabase";
 import { uploadToSupabaseStorageObject } from "../lib/storage-upload-client";
+import { uploadReleaseTrackFileClient } from "../lib/storage-track-upload-client";
+import {
+  STORAGE_BUCKET_ARTWORK,
+  STORAGE_BUCKET_AUDIO_LEGACY,
+  STORAGE_BUCKET_RELEASE_TRACKS
+} from "../lib/storage-buckets";
 import {
   RELEASE_STATUS_VALUES,
   RELEASE_TYPE_VALUES,
@@ -51,7 +57,10 @@ export type ReleaseRecord = {
   user_id: number;
   client_request_id: string;
   artist_name: string;
-  track_name: string;
+  /** Название релиза (актуальная колонка в БД). */
+  title?: string | null;
+  /** Legacy; может отсутствовать, если в БД только `title`. */
+  track_name?: string | null;
   release_type: ReleaseType;
   genre: string;
   release_date: string;
@@ -74,6 +83,15 @@ export type ReleaseRecord = {
   /** Участники релиза с ролями и ссылками (JSON). */
   collaborators?: unknown;
 } & ReleaseStep2Payload;
+
+/** Публичное название релиза: `title`, иначе legacy `track_name`. */
+export function getReleaseDisplayTitle(
+  r: Pick<ReleaseRecord, "title" | "track_name">
+): string {
+  const fromTitle = typeof r.title === "string" ? r.title.trim() : "";
+  if (fromTitle.length > 0) return fromTitle;
+  return String(r.track_name ?? "").trim();
+}
 
 const releaseStep1Schema = z.object({
   user_id: z.number().int().nonnegative(),
@@ -293,13 +311,16 @@ export async function createDraftRelease(
     );
   }
 
+  const { track_name, ...rest } = validated;
+
   const { data, error } = await withRetry(async () => {
     const response = await supabase
       .from("releases")
       .upsert(
         {
-          ...validated,
-          status: "draft" as ReleaseStatus
+          ...rest,
+          title: track_name,
+          status: "pending" as ReleaseStatus
         },
         { onConflict: "client_request_id" }
       )
@@ -330,6 +351,7 @@ export async function createDraftRelease(
 export async function updateRelease(
   id: string,
   payload: Partial<ReleaseStep1Payload & ReleaseStep2Payload> & {
+    title?: string;
     audio_url?: string | null;
     artwork_url?: string | null;
     status?: ReleaseStatus;
@@ -632,10 +654,10 @@ export async function uploadReleaseAudio(params: {
   validateAudioFileStrict(params.file, RELEASE_FILE_LIMITS.audioMaxMb);
   const path = getReleaseAudioPath(params.userId, params.releaseId);
 
-  await removeStorageObjectsQuiet("audio", [path]);
+  await removeStorageObjectsQuiet(STORAGE_BUCKET_AUDIO_LEGACY, [path]);
 
   try {
-    await putObjectWithProgress("audio", path, params.file, {
+    await putObjectWithProgress(STORAGE_BUCKET_AUDIO_LEGACY, path, params.file, {
       upsert: true,
       onProgress: params.options?.onProgress
     });
@@ -652,7 +674,7 @@ export async function uploadReleaseAudio(params: {
 
   const {
     data: { publicUrl }
-  } = supabase.storage.from("audio").getPublicUrl(path);
+  } = supabase.storage.from(STORAGE_BUCKET_AUDIO_LEGACY).getPublicUrl(path);
 
   return publicUrl;
 }
@@ -670,10 +692,10 @@ export async function uploadReleaseArtwork(params: {
 
   const otherExt = ext === "png" ? "jpg" : "png";
   const otherPath = getReleaseArtworkPath(params.userId, params.releaseId, otherExt);
-  await removeStorageObjectsQuiet("artwork", [path, otherPath]);
+  await removeStorageObjectsQuiet(STORAGE_BUCKET_ARTWORK, [path, otherPath]);
 
   try {
-    await putObjectWithProgress("artwork", path, params.file, {
+    await putObjectWithProgress(STORAGE_BUCKET_ARTWORK, path, params.file, {
       upsert: true,
       onProgress: params.options?.onProgress
     });
@@ -691,7 +713,7 @@ export async function uploadReleaseArtwork(params: {
 
   const {
     data: { publicUrl }
-  } = supabase.storage.from("artwork").getPublicUrl(path);
+  } = supabase.storage.from(STORAGE_BUCKET_ARTWORK).getPublicUrl(path);
 
   return publicUrl;
 }
@@ -706,11 +728,10 @@ export async function uploadReleaseTrackAudio(params: {
   validateAudioFileStrict(params.file, RELEASE_FILE_LIMITS.audioMaxMb);
   const path = getReleaseTrackAudioPath(params.userId, params.releaseId, params.trackIndex);
 
-  await removeStorageObjectsQuiet("audio", [path]);
+  await removeStorageObjectsQuiet(STORAGE_BUCKET_RELEASE_TRACKS, [path]);
 
   try {
-    await putObjectWithProgress("audio", path, params.file, {
-      upsert: true,
+    await uploadReleaseTrackFileClient(path, params.file, {
       onProgress: params.options?.onProgress
     });
   } catch (err) {
@@ -726,7 +747,7 @@ export async function uploadReleaseTrackAudio(params: {
 
   const {
     data: { publicUrl }
-  } = supabase.storage.from("audio").getPublicUrl(path);
+  } = supabase.storage.from(STORAGE_BUCKET_RELEASE_TRACKS).getPublicUrl(path);
 
   return publicUrl;
 }
@@ -767,22 +788,34 @@ export async function deleteReleaseFiles(params: {
   releaseId: string;
   trackCount?: number;
 }): Promise<void> {
-  const audioBucket = supabase.storage.from("audio");
-  const artworkBucket = supabase.storage.from("artwork");
+  const legacyAudioBucket = supabase.storage.from(STORAGE_BUCKET_AUDIO_LEGACY);
+  const releasesTracksBucket = supabase.storage.from(STORAGE_BUCKET_RELEASE_TRACKS);
+  const artworkBucket = supabase.storage.from(STORAGE_BUCKET_ARTWORK);
 
-  const audioPaths: string[] = [getReleaseAudioPath(params.userId, params.releaseId)];
+  const legacyAudioPath = getReleaseAudioPath(params.userId, params.releaseId);
+  const trackPaths: string[] = [];
   if (params.trackCount && params.trackCount > 0) {
     for (let i = 0; i < params.trackCount; i += 1) {
-      audioPaths.push(getReleaseTrackAudioPath(params.userId, params.releaseId, i));
+      trackPaths.push(getReleaseTrackAudioPath(params.userId, params.releaseId, i));
     }
   }
 
+  /** Старые WAV лежали в `audio`; новые — в `releases`. Чистим оба. */
+  const legacyAudioRemove = [legacyAudioPath, ...trackPaths];
+
   await Promise.all([
     withRetry(async () => {
-      const response = await audioBucket.remove(audioPaths);
+      const response = await legacyAudioBucket.remove(legacyAudioRemove);
       if (response.error) throw response.error;
       return response;
     }),
+    trackPaths.length > 0
+      ? withRetry(async () => {
+          const response = await releasesTracksBucket.remove(trackPaths);
+          if (response.error) throw response.error;
+          return response;
+        })
+      : Promise.resolve(),
     withRetry(async () => {
       const response = await artworkBucket.remove([
         getReleaseArtworkPath(params.userId, params.releaseId, "jpg"),
@@ -860,7 +893,7 @@ export async function getMyReleases(userId: number): Promise<ReleaseRecord[]> {
     return await supabase
       .from("releases")
       .select(
-        "id, track_name, artwork_url, status, error_message, created_at, admin_notes, draft_upload_started"
+        "id, title, track_name, artwork_url, status, error_message, created_at, admin_notes, draft_upload_started"
       )
       .eq("user_id", userId)
       .order("created_at", { ascending: false });

@@ -7,11 +7,11 @@ import { createSupabaseAdmin } from "@/lib/supabase-admin";
 import { formatErrorMessage } from "@/lib/errors";
 import { escapeHtml } from "@/lib/telegram-bot.server";
 import { sendTelegramNotification } from "@/lib/telegram-notifications";
-import type { ReleaseRecord } from "@/repositories/releases.repo";
+import { getReleaseDisplayTitle, type ReleaseRecord } from "@/repositories/releases.repo";
 
 function notifyReleaseSubmittedForModeration(record: ReleaseRecord): void {
   const uid = String(record.user_id);
-  const rawTitle = String(record.track_name ?? "").trim();
+  const rawTitle = getReleaseDisplayTitle(record);
   const title = escapeHtml(rawTitle.length > 0 ? rawTitle : "релиз");
   const text =
     `🚀 <b>Ваш релиз «${title}» отправлен на модерацию!</b>\n\n` +
