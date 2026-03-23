@@ -198,68 +198,20 @@ function isNonEmptyField(value: unknown): boolean {
   return String(value).trim().length > 0;
 }
 
-/** Первое непустое строковое поле из списка ключей (разные схемы / camelCase в JSON). */
-function pickFirstString(record: Record<string, unknown>, keys: string[]): string {
-  for (const k of keys) {
-    const v = record[k];
-    if (typeof v === "string" && v.trim().length > 0) return v.trim();
-  }
-  return "";
-}
-
-/** Ссылка на аудио / «трек URL» в строке releases (имена колонок из БД и возможные алиасы). */
-function audioOrTrackUrlFromRecord(record: Record<string, unknown>): string {
-  return pickFirstString(record, [
-    "track_url",
-    "trackUrl",
-    "audio_url",
-    "audioUrl",
-    "audio_file_url",
-    "audioFileUrl"
-  ]);
-}
-
-function artworkUrlFromRecord(record: Record<string, unknown>): string {
-  return pickFirstString(record, [
-    "artwork_url",
-    "artworkUrl",
-    "cover_url",
-    "coverUrl",
-    "image_url",
-    "imageUrl"
-  ]);
-}
-
-/** В БД нет обязательного `track_url` — совмещаем с audio. */
-function trackUrlField(record: Record<string, unknown>): string {
-  return audioOrTrackUrlFromRecord(record);
-}
-
-function hasTrackTitle(record: Record<string, unknown>): boolean {
-  return (
-    isNonEmptyField(record.track_name) ||
-    isNonEmptyField(record.trackName) ||
-    isNonEmptyField(record.title) ||
-    isNonEmptyField(record.release_title)
-  );
-}
-
 /**
- * «Настоящий» черновик: есть название и хотя бы одна ссылка на файл (аудио или обложка).
- * Вебхук по `releases` не видит строки таблицы `tracks` (там `file_path`) — только колонки релиза.
+ * В строке `releases`: есть `audio_url` и/или `artwork_url` (не null и не "").
+ * `tracks.file_path` в этот объект не входит — см. `assertReleaseAudioReady`.
  */
-function releaseContentReadySync(record: Record<string, unknown>): boolean {
-  if (!hasTrackTitle(record)) return false;
-  return (
-    audioOrTrackUrlFromRecord(record).length > 0 || artworkUrlFromRecord(record).length > 0
-  );
+function hasReleaseFileLinks(record: Record<string, unknown>): boolean {
+  return isNonEmptyField(record.audio_url) || isNonEmptyField(record.artwork_url);
 }
 
-/** Временно: при pending всё равно шлём в Telegram, даже если sync-поля пустые (отладка в Vercel). */
-const TEMP_SEND_PENDING_IGNORE_EMPTY_FIELDS = true;
+function releaseContentReadySync(record: Record<string, unknown>): boolean {
+  return hasReleaseFileLinks(record);
+}
 
 /**
- * Есть ли загруженное аудио: либо строки в `tracks`, либо legacy `audio_url` на релизе.
+ * Есть ли загруженное аудио: либо строки в `tracks`, либо `audio_url`/`artwork_url` на релизе.
  */
 async function assertReleaseAudioReady(
   admin: NonNullable<ReturnType<typeof createSupabaseAdmin>>,
@@ -284,8 +236,8 @@ async function assertReleaseAudioReady(
     return { ok: true };
   }
 
-  if (!isNonEmptyField(audioOrTrackUrlFromRecord(record))) {
-    return { ok: false, reason: "missing_audio_url_and_no_tracks" };
+  if (!hasReleaseFileLinks(record)) {
+    return { ok: false, reason: "missing_audio_url_and_artwork_url_and_no_tracks" };
   }
   return { ok: true };
 }
@@ -390,10 +342,9 @@ export async function POST(request: Request): Promise<Response> {
     );
 
     console.log("Content check:", {
-      hasFiles: Boolean(
-        typeof row.track_url === "string" ? row.track_url.trim().length > 0 : row.track_url
-      ),
-      hasTrackOrArtwork: Boolean(trackUrlField(row) || isNonEmptyField(row.artwork_url)),
+      hasAudioUrl: isNonEmptyField(row.audio_url),
+      hasArtworkUrl: isNonEmptyField(row.artwork_url),
+      hasReleaseFileLinks: hasReleaseFileLinks(row),
       type
     });
 
@@ -402,6 +353,16 @@ export async function POST(request: Request): Promise<Response> {
         console.log("[webhooks/release-status-change] ignore INSERT (not pending yet)", {
           newStatus: newStatus || "(empty)"
         });
+        return NextResponse.json({ message: "Ignore initial draft" }, { status: 200 });
+      }
+      if (!releaseContentReadySync(row)) {
+        console.log(
+          "[webhooks/release-status-change] ignore INSERT (pending but audio_url/artwork_url empty)",
+          {
+            audio_url: row.audio_url,
+            artwork_url: row.artwork_url
+          }
+        );
         return NextResponse.json({ message: "Ignore initial draft" }, { status: 200 });
       }
     } else if (type === "UPDATE") {
@@ -426,20 +387,18 @@ export async function POST(request: Request): Promise<Response> {
 
       const oldRow = oldRecord as Record<string, unknown>;
       const transitionToPending = oldStatus !== "pending" && newStatus === "pending";
-      const oldTrackUrl = trackUrlField(oldRow);
-      const newTrackUrl = trackUrlField(row);
-      const gainedTrackUrlWhilePending =
+      const gainedFilesWhilePending =
         oldStatus === "pending" &&
         newStatus === "pending" &&
-        oldTrackUrl.length === 0 &&
-        newTrackUrl.length > 0;
+        !hasReleaseFileLinks(oldRow) &&
+        hasReleaseFileLinks(row);
 
-      if (!transitionToPending && !gainedTrackUrlWhilePending) {
+      if (!transitionToPending && !gainedFilesWhilePending) {
         console.log("[webhooks/release-status-change] skip UPDATE (no notify rule)", {
           oldStatus,
           newStatus,
           transitionToPending,
-          gainedTrackUrlWhilePending
+          gainedFilesWhilePending
         });
         return NextResponse.json({
           ok: true,
@@ -454,30 +413,21 @@ export async function POST(request: Request): Promise<Response> {
 
     const contentReadySync = releaseContentReadySync(row);
     console.log("releaseContentReadySync:", contentReadySync, {
-      hasTitle: hasTrackTitle(row),
-      audioResolved: audioOrTrackUrlFromRecord(row),
-      artworkResolved: artworkUrlFromRecord(row)
+      audio_url: row.audio_url,
+      artwork_url: row.artwork_url
     });
 
-    if (!TEMP_SEND_PENDING_IGNORE_EMPTY_FIELDS || newStatus !== "pending") {
-      if (!contentReadySync) {
-        console.log("Skip Telegram: release is not fully filled yet", {
-          reason: "release_content_sync_failed",
-          hasTitle: hasTrackTitle(row),
-          hasTrackOrArtwork:
-            audioOrTrackUrlFromRecord(row).length > 0 || artworkUrlFromRecord(row).length > 0
-        });
-        return NextResponse.json({
-          ok: true,
-          skipped: true,
-          reason: "release_not_ready"
-        });
-      }
-    } else {
-      console.log(
-        "[webhooks/release-status-change] TEMP_SEND_PENDING_IGNORE_EMPTY_FIELDS: пропускаем gate releaseContentReadySync",
-        { contentReadySync, newStatus }
-      );
+    if (!contentReadySync) {
+      console.log("Skip Telegram: release is not fully filled yet", {
+        reason: "release_content_sync_failed",
+        audio_url: row.audio_url,
+        artwork_url: row.artwork_url
+      });
+      return NextResponse.json({
+        ok: true,
+        skipped: true,
+        reason: "release_not_ready"
+      });
     }
 
     const releaseIdRaw = row.id;
@@ -490,46 +440,31 @@ export async function POST(request: Request): Promise<Response> {
       return NextResponse.json({ ok: true, skipped: true, reason: "no_release_id" });
     }
 
-    if (!TEMP_SEND_PENDING_IGNORE_EMPTY_FIELDS || newStatus !== "pending") {
-      const adminForAudio = createSupabaseAdmin();
-      if (adminForAudio) {
-        const audioReady = await assertReleaseAudioReady(adminForAudio, releaseId, row);
-        if (!audioReady.ok) {
-          console.log("Skip Telegram: release is not fully filled yet", {
-            reason: audioReady.reason
-          });
-          return NextResponse.json({
-            ok: true,
-            skipped: true,
-            reason: "release_not_ready_audio",
-            detail: audioReady.reason
-          });
-        }
-      } else {
-        if (!isNonEmptyField(audioOrTrackUrlFromRecord(row))) {
-          console.log("Skip Telegram: release is not fully filled yet", {
-            reason: "missing_audio_url_no_service_role_for_tracks",
-            hint: "SUPABASE_SERVICE_ROLE_KEY needed to verify tracks.file_path"
-          });
-          return NextResponse.json({
-            ok: true,
-            skipped: true,
-            reason: "release_not_ready_audio_fallback"
-          });
-        }
+    const adminForAudio = createSupabaseAdmin();
+    if (adminForAudio) {
+      const audioReady = await assertReleaseAudioReady(adminForAudio, releaseId, row);
+      if (!audioReady.ok) {
+        console.log("Skip Telegram: release is not fully filled yet", {
+          reason: audioReady.reason
+        });
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "release_not_ready_audio",
+          detail: audioReady.reason
+        });
       }
     } else {
-      const adminProbe = createSupabaseAdmin();
-      if (adminProbe) {
-        const probe = await assertReleaseAudioReady(adminProbe, releaseId, row);
-        console.log(
-          "[webhooks/release-status-change] TEMP_SEND_PENDING_IGNORE_EMPTY_FIELDS: assertReleaseAudioReady (log only)",
-          probe
-        );
-      } else {
-        console.log(
-          "[webhooks/release-status-change] TEMP_SEND_PENDING_IGNORE_EMPTY_FIELDS: нет admin client — gate assertReleaseAudioReady пропущен"
-        );
+      if (!hasReleaseFileLinks(row)) {
+        console.log("Skip Telegram: release is not fully filled yet", {
+          reason: "missing_audio_artwork_no_service_role_for_tracks",
+          hint: "SUPABASE_SERVICE_ROLE_KEY needed to verify tracks.file_path"
+        });
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "release_not_ready_audio_fallback"
+        });
       }
     }
 
