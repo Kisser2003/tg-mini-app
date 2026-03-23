@@ -149,11 +149,6 @@ function buildPendingMessage(title: string): string {
   return `Бро, релиз <b>${t}</b> получен! Скоро проверим. ⚡️`;
 }
 
-function buildReadyPublishedMessage(title: string): string {
-  const t = escapeHtml(title.length > 0 ? title : "релиз");
-  return `Бро, релиз <b>${t}</b> опубликован! 🚀`;
-}
-
 function buildLegacyReadyMessage(title: string, artistName: string): string {
   const t = escapeHtml(title.trim().length > 0 ? title.trim() : "релиз");
   const a = escapeHtml(artistName.trim().length > 0 ? artistName.trim() : "Артист");
@@ -177,6 +172,25 @@ function chatIdFromTelegramId(raw: unknown): string | null {
   const s = String(raw).trim();
   if (s === "" || s === "0") return null;
   return s;
+}
+
+/** Статус из Supabase record (без падений при отсутствии поля). */
+function statusFromRow(row: Record<string, unknown> | null | undefined): string {
+  if (!row || typeof row !== "object") return "";
+  const s = row.status;
+  if (s === null || s === undefined) return "";
+  return String(s).trim();
+}
+
+/** Иногда тело приходит как `{ payload: { type, record, ... } }`. */
+function unwrapSupabaseWebhookJson(json: unknown): unknown {
+  if (!json || typeof json !== "object") return json;
+  const o = json as Record<string, unknown>;
+  const p = o.payload;
+  if (p != null && typeof p === "object" && "type" in p) {
+    return p;
+  }
+  return json;
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -229,20 +243,81 @@ export async function POST(request: Request): Promise<Response> {
     return NextResponse.json({ ok: false, error: "Invalid JSON" }, { status: 400 });
   }
 
-  const supa = supabaseWebhookSchema.safeParse(json);
+  const unwrapped = unwrapSupabaseWebhookJson(json);
+  const supa = supabaseWebhookSchema.safeParse(unwrapped);
   if (supa.success) {
     const { type, table, record, old_record: oldRecord } = supa.data;
 
+    const newStatus = record != null && typeof record === "object" ? statusFromRow(record) : "";
+    const oldStatus =
+      oldRecord != null && typeof oldRecord === "object"
+        ? statusFromRow(oldRecord as Record<string, unknown>)
+        : "";
+
+    console.log("[webhooks/release-status-change] supabase event", {
+      eventType: type,
+      table: table ?? "(unset)",
+      newStatus: newStatus || "(empty)",
+      oldStatus: oldRecord == null ? "(no old_record)" : oldStatus || "(empty)"
+    });
+
     if (table && table.toLowerCase() !== "releases") {
+      console.log("[webhooks/release-status-change] skip: wrong_table", { table });
       return NextResponse.json({ ok: true, skipped: true, reason: "wrong_table" });
     }
 
-    if (type === "DELETE" || record == null) {
+    if (type === "DELETE") {
+      console.log("[webhooks/release-status-change] skip: DELETE");
+      return NextResponse.json({ ok: true, skipped: true, reason: "delete" });
+    }
+
+    if (record == null || typeof record !== "object") {
+      console.log("[webhooks/release-status-change] skip: no record");
       return NextResponse.json({ ok: true, skipped: true, reason: "no_record" });
     }
 
     const row = record as Record<string, unknown>;
-    const status = String(row.status ?? "").trim();
+
+    if (type === "INSERT") {
+      if (newStatus !== "pending") {
+        console.log("[webhooks/release-status-change] ignore INSERT (not pending yet)", {
+          newStatus: newStatus || "(empty)"
+        });
+        return NextResponse.json({ message: "Ignore initial draft" }, { status: 200 });
+      }
+    } else if (type === "UPDATE") {
+      if (newStatus !== "pending") {
+        console.log("[webhooks/release-status-change] skip UPDATE (new status is not pending)", {
+          newStatus: newStatus || "(empty)"
+        });
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "update_new_not_pending"
+        });
+      }
+      if (oldRecord == null || typeof oldRecord !== "object") {
+        console.log("[webhooks/release-status-change] skip UPDATE (missing old_record, cannot verify transition)");
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "missing_old_record"
+        });
+      }
+      if (oldStatus === "pending") {
+        console.log("[webhooks/release-status-change] skip UPDATE (already was pending, no transition)", {
+          oldStatus
+        });
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "already_pending"
+        });
+      }
+    } else {
+      console.log("[webhooks/release-status-change] skip: event type not handled", { eventType: type });
+      return NextResponse.json({ ok: true, skipped: true, reason: "unhandled_event_type" });
+    }
 
     const chatId = chatIdFromTelegramId(row.telegram_id);
     if (!chatId) {
@@ -251,23 +326,13 @@ export async function POST(request: Request): Promise<Response> {
     }
 
     const title = displayTitleFromRecord(row);
+    const text = buildPendingMessage(title);
 
-    let text: string | null = null;
-
-    if (type === "INSERT" && status === "pending") {
-      text = buildPendingMessage(title);
-    } else if (type === "UPDATE" && status === "ready") {
-      const oldStatus =
-        oldRecord && typeof oldRecord === "object" && "status" in oldRecord
-          ? String((oldRecord as Record<string, unknown>).status ?? "").trim()
-          : "";
-      if (oldStatus === "ready") {
-        return NextResponse.json({ ok: true, skipped: true, reason: "already_ready" });
-      }
-      text = buildReadyPublishedMessage(title);
-    } else {
-      return NextResponse.json({ ok: true, skipped: true, reason: "no_notification_rule" });
-    }
+    console.log("[webhooks/release-status-change] sending Telegram (pending)", {
+      eventType: type,
+      newStatus,
+      oldStatus: oldRecord != null ? oldStatus : "(n/a)"
+    });
 
     const send = await sendTelegramBotMessage({
       chatId,
