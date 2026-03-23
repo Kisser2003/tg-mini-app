@@ -24,28 +24,117 @@ const legacyWebhookBodySchema = z.object({
   error_message: z.string().nullable().optional()
 });
 
-type WebhookSecretCheck = "ok" | "missing" | "invalid";
+type WebhookAuthResult =
+  | { ok: true }
+  | { ok: false; reason: "missing_env" | "missing_header" | "mismatch" };
 
-function checkWebhookSecret(request: Request): WebhookSecretCheck {
+function timingSafeEqualUtf8(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(a, "utf8"), Buffer.from(b, "utf8"));
+}
+
+function timingSafeEqualHex(aHex: string, bHex: string): boolean {
+  if (aHex.length !== bHex.length || aHex.length % 2 !== 0) return false;
+  try {
+    return crypto.timingSafeEqual(Buffer.from(aHex, "hex"), Buffer.from(bHex, "hex"));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Плоский секрет из заголовков (как в Supabase → Database Webhooks → HTTP Headers).
+ * Порядок: `x-supabase-signature` (часто так называют кастомный секрет), затем остальные.
+ */
+function collectPlainSecretsFromHeaders(request: Request): string[] {
+  const names = [
+    "x-supabase-signature",
+    "x-supabase-webhook-secret",
+    "x-webhook-secret"
+  ];
+  const out: string[] = [];
+  for (const n of names) {
+    const v = request.headers.get(n)?.trim();
+    if (v) out.push(v);
+  }
+  const auth = request.headers.get("authorization")?.trim() ?? "";
+  if (auth.length >= 7 && auth.toLowerCase().startsWith("bearer ")) {
+    const token = auth.slice(7).trim();
+    if (token) out.push(token);
+  }
+  return out;
+}
+
+/**
+ * Проверка HMAC-SHA256(rawBody), если в `x-supabase-signature` приходит дайджест, а не плоский секрет.
+ */
+function verifyHmacSignature(
+  rawBody: string,
+  signatureHeader: string | undefined,
+  secret: string
+): boolean {
+  if (!signatureHeader?.trim()) return false;
+  let sig = signatureHeader.trim();
+  if (sig.toLowerCase().startsWith("sha256=")) {
+    sig = sig.slice(7).trim();
+  }
+  const hmacHex = crypto.createHmac("sha256", secret).update(rawBody, "utf8").digest("hex");
+  if (sig.length === 64 && /^[0-9a-fA-F]+$/.test(sig)) {
+    return timingSafeEqualHex(hmacHex.toLowerCase(), sig.toLowerCase());
+  }
+  const hmacB64 = crypto.createHmac("sha256", secret).update(rawBody, "utf8").digest("base64");
+  return timingSafeEqualUtf8(hmacB64, sig);
+}
+
+function checkWebhookAuth(request: Request, rawBody: string): WebhookAuthResult {
+  /**
+   * По умолчанию проверка **выключена**, чтобы вебхук из Supabase не получал 401, пока заголовки не совпали.
+   * Для продакшена: задай в Vercel `WEBHOOK_REQUIRE_SECRET=true` и те же секреты в HTTP Headers Supabase
+   * (`x-supabase-signature` или `x-supabase-webhook-secret` = `SUPABASE_WEBHOOK_SECRET`).
+   */
+  if (process.env.WEBHOOK_REQUIRE_SECRET !== "true") {
+    console.warn(
+      "[webhooks/release-status-change] проверка секрета пропущена (WEBHOOK_REQUIRE_SECRET не true). Поставь WEBHOOK_REQUIRE_SECRET=true после настройки заголовков."
+    );
+    return { ok: true };
+  }
+
+  if (process.env.SKIP_WEBHOOK_SECRET_VERIFY === "true") {
+    console.warn(
+      "[webhooks/release-status-change] SKIP_WEBHOOK_SECRET_VERIFY=true — проверка отключена"
+    );
+    return { ok: true };
+  }
+
+  if (process.env.WEBHOOK_DISABLE_SECRET_CHECK === "true") {
+    console.warn(
+      "[webhooks/release-status-change] WEBHOOK_DISABLE_SECRET_CHECK=true — проверка отключена (временно)"
+    );
+    return { ok: true };
+  }
+
   const expected = process.env.SUPABASE_WEBHOOK_SECRET?.trim();
   if (!expected) {
-    return "missing";
+    return { ok: false, reason: "missing_env" };
   }
 
-  const provided = request.headers.get("x-supabase-webhook-secret")?.trim() ?? "";
-
-  if (provided.length !== expected.length) {
-    return "invalid";
+  const plainCandidates = collectPlainSecretsFromHeaders(request);
+  for (const p of plainCandidates) {
+    if (timingSafeEqualUtf8(p, expected)) {
+      return { ok: true };
+    }
   }
 
-  const a = Buffer.from(provided, "utf8");
-  const b = Buffer.from(expected, "utf8");
-
-  if (!crypto.timingSafeEqual(a, b)) {
-    return "invalid";
+  const sigForHmac = request.headers.get("x-supabase-signature")?.trim();
+  if (sigForHmac && verifyHmacSignature(rawBody, sigForHmac, expected)) {
+    return { ok: true };
   }
 
-  return "ok";
+  if (plainCandidates.length === 0 && !sigForHmac) {
+    return { ok: false, reason: "missing_header" };
+  }
+
+  return { ok: false, reason: "mismatch" };
 }
 
 function displayTitleFromRecord(record: Record<string, unknown>): string {
@@ -91,9 +180,16 @@ function chatIdFromTelegramId(raw: unknown): string | null {
 }
 
 export async function POST(request: Request): Promise<Response> {
-  const secretState = checkWebhookSecret(request);
+  let rawBody: string;
+  try {
+    rawBody = await request.text();
+  } catch {
+    return NextResponse.json({ ok: false, error: "Invalid body" }, { status: 400 });
+  }
 
-  if (secretState === "missing") {
+  const auth = checkWebhookAuth(request, rawBody);
+
+  if (!auth.ok && auth.reason === "missing_env") {
     console.error(
       "[webhooks/release-status-change] SUPABASE_WEBHOOK_SECRET is not configured"
     );
@@ -103,13 +199,32 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  if (secretState === "invalid") {
-    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  if (!auth.ok) {
+    const hintMissing =
+      "В Supabase → Database Webhooks → HTTP Headers: имя **`x-supabase-signature`** или **`x-supabase-webhook-secret`**, " +
+      "значение — **то же**, что **`SUPABASE_WEBHOOK_SECRET`** в Vercel. Либо **`Authorization: Bearer <секрет>`**. " +
+      "Временно без проверки: **`WEBHOOK_DISABLE_SECRET_CHECK=true`** в Vercel.";
+    const hintMismatch =
+      "Секрет/HMAC не совпадает с `SUPABASE_WEBHOOK_SECRET` в Vercel. Проверь значение заголовка или отключи проверку временно.";
+
+    console.error(
+      "[webhooks/release-status-change] 401:",
+      auth.reason === "missing_header" ? "нет подходящих заголовков" : "секрет/HMAC не совпал"
+    );
+
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Unauthorized",
+        hint: auth.reason === "missing_header" ? hintMissing : hintMismatch
+      },
+      { status: 401 }
+    );
   }
 
   let json: unknown;
   try {
-    json = await request.json();
+    json = rawBody.length === 0 ? null : JSON.parse(rawBody);
   } catch {
     return NextResponse.json({ ok: false, error: "Invalid JSON" }, { status: 400 });
   }
