@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "verify:webhook": "node scripts/verify-webhook-secret.mjs",
+    "verify:release-db": "node scripts/verify-release-in-db.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

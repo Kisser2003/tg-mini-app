@@ -96,6 +96,8 @@ Hook the dev or production URL as a Telegram WebApp URL in your bot, so that Tel
 - **Route:** [`app/api/webhooks/release-status-change/route.ts`](app/api/webhooks/release-status-change/route.ts) — `POST`, отвечает **200** (ACK для Supabase / триггеров). **Сообщения в Telegram из этого маршрута не отправляются** — текст «отправлен на модерацию» уходит только из [`finalize-submit`](app/api/releases/finalize-submit/route.ts).
 - Проверка секрета: только если в Vercel **`WEBHOOK_REQUIRE_SECRET=true`**. Заголовки: **`x-supabase-signature`**, **`x-supabase-webhook-secret`**, **`Authorization: Bearer …`** = **`SUPABASE_WEBHOOK_SECRET`**; при необходимости HMAC-SHA256 тела. Отладка: `SKIP_WEBHOOK_SECRET_VERIFY=true` или `WEBHOOK_DISABLE_SECRET_CHECK=true`.
 - **Триггер БД / Database Webhooks:** см. миграции с `pg_net`; URL и секрет должны совпадать с деплоем.
+- **Production:** в проекте Vercel задайте **`WEBHOOK_REQUIRE_SECRET=true`** и тот же **`SUPABASE_WEBHOOK_SECRET`**, что в `notify_release_status_webhook` (заголовок `x-supabase-webhook-secret`). Затем проверьте вызов: `npm run verify:webhook` (нужны `NEXT_PUBLIC_APP_URL` или `WEBHOOK_BASE_URL` и `SUPABASE_WEBHOOK_SECRET` в окружении, например `node --env-file=.env.local`). Ожидается HTTP 200 и `{ "ok": true, ... }`.
+- **Проверка строки релиза в Supabase после E2E:** `RELEASE_ID=<uuid> npm run verify:release-db` (с теми же переменными Supabase, что в `.env.local`).
 - **Кошелёк:** [`GET /api/wallet/stats`](app/api/wallet/stats/route.ts) — `withTelegramAuth`, данные через `SUPABASE_SERVICE_ROLE_KEY` (баланс RPC, список транзакций).
 
 ## Security incident checklist (secrets)
