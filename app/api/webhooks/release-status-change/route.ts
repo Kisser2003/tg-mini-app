@@ -193,11 +193,6 @@ function unwrapSupabaseWebhookJson(json: unknown): unknown {
   return json;
 }
 
-function isNonEmptyField(value: unknown): boolean {
-  if (value === null || value === undefined) return false;
-  return String(value).trim().length > 0;
-}
-
 /** Реальная ссылка на файл: только http(s), не `track_name` / не произвольная строка. */
 function looksLikeHttpOrHttpsUrl(value: unknown): boolean {
   if (value === null || value === undefined) return false;
@@ -206,8 +201,8 @@ function looksLikeHttpOrHttpsUrl(value: unknown): boolean {
 }
 
 /**
- * На строке `releases` оба файла: и `audio_url`, и `artwork_url` (http(s)). Без одного из полей — false.
- * `track_name`, `title` и т.п. не учитываются. Аудио только в `tracks` — см. `assertFullReleaseReady`.
+ * Быстрая проверка по строке `releases`: оба поля `audio_url` и `artwork_url` (http(s)).
+ * Для аудио только в `tracks` см. `isReleaseFullyReady` / `releaseFullyReadyFromRowAndTracks`.
  */
 function hasReleaseFileLinks(record: Record<string, unknown>): boolean {
   return looksLikeHttpOrHttpsUrl(record.audio_url) && looksLikeHttpOrHttpsUrl(record.artwork_url);
@@ -217,44 +212,47 @@ function releaseContentReadySync(record: Record<string, unknown>): boolean {
   return hasReleaseFileLinks(record);
 }
 
+/** Синхронная «глубокая» готовность при уже известном числе треков (один запрос на релиз). */
+function releaseFullyReadyFromRowAndTracks(
+  record: Record<string, unknown>,
+  tracksCount: number
+): boolean {
+  return (
+    looksLikeHttpOrHttpsUrl(record.artwork_url) &&
+    (looksLikeHttpOrHttpsUrl(record.audio_url) || tracksCount > 0)
+  );
+}
+
 /**
- * Полная готовность к уведомлению: обложка на релизе обязательна; аудио — `audio_url` или все треки с `file_path`.
- * При отсутствии service role в вебхуке без обоих URL на строке `releases` уведомление не отправится —
- * при финальном сабмите можно дублировать публичный URL аудио в `releases.audio_url`.
+ * Глубокая готовность: есть `artwork_url` на релизе и (есть `audio_url` ИЛИ хотя бы одна строка в `tracks`).
+ * Запрос к `tracks` через service role (RLS).
  */
-async function assertFullReleaseReady(
+async function isReleaseFullyReady(
   admin: NonNullable<ReturnType<typeof createSupabaseAdmin>>,
   releaseId: string,
   record: Record<string, unknown>
-): Promise<{ ok: true } | { ok: false; reason: string }> {
-  if (!looksLikeHttpOrHttpsUrl(record.artwork_url)) {
-    return { ok: false, reason: "missing_artwork" };
-  }
-
-  if (looksLikeHttpOrHttpsUrl(record.audio_url)) {
-    return { ok: true };
-  }
-
-  const { data: trackRows, error } = await admin
+): Promise<{ ok: boolean; tracksCount: number; error?: string }> {
+  const { count, error } = await admin
     .from("tracks")
-    .select("file_path")
+    .select("id", { count: "exact", head: true })
     .eq("release_id", releaseId);
 
+  const tracksCount = error ? 0 : (count ?? 0);
+
+  console.log("Deep content check:", {
+    hasArt: !!record.artwork_url,
+    hasAudioUrl: !!record.audio_url,
+    hasTracks: tracksCount > 0
+  });
+
   if (error) {
-    return { ok: false, reason: `tracks_query_failed:${error.message}` };
+    return { ok: false, tracksCount: 0, error: error.message };
   }
 
-  const rows = trackRows ?? [];
-  if (rows.length === 0) {
-    return { ok: false, reason: "missing_audio_no_tracks" };
-  }
-
-  const emptyPaths = rows.filter((t) => !isNonEmptyField(t?.file_path));
-  if (emptyPaths.length > 0) {
-    return { ok: false, reason: "missing_tracks_file_path" };
-  }
-
-  return { ok: true };
+  return {
+    ok: releaseFullyReadyFromRowAndTracks(record, tracksCount),
+    tracksCount
+  };
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -361,6 +359,38 @@ export async function POST(request: Request): Promise<Response> {
       !hasReleaseFileLinks(oldRow) &&
       hasReleaseFileLinks(row);
 
+    const releaseIdRawEarly = row.id;
+    const releaseIdEarly =
+      typeof releaseIdRawEarly === "string" && releaseIdRawEarly.length > 0 ? releaseIdRawEarly : null;
+
+    const adminDeep = createSupabaseAdmin();
+    let deepReadyNew = false;
+    let tracksCountForRelease = 0;
+    if (adminDeep && releaseIdEarly && newStatus === "pending") {
+      const deep = await isReleaseFullyReady(adminDeep, releaseIdEarly, row);
+      tracksCountForRelease = deep.tracksCount;
+      deepReadyNew = deep.ok;
+      if (deep.error) {
+        console.error("[webhooks/release-status-change] tracks count query failed:", deep.error);
+      }
+    }
+
+    const deepReadyOld =
+      adminDeep &&
+      releaseIdEarly &&
+      oldRow != null &&
+      newStatus === "pending"
+        ? releaseFullyReadyFromRowAndTracks(oldRow, tracksCountForRelease)
+        : false;
+
+    const gainedFullWhilePending =
+      type === "UPDATE" &&
+      oldRow != null &&
+      oldStatus === "pending" &&
+      newStatus === "pending" &&
+      deepReadyNew &&
+      !deepReadyOld;
+
     console.log(
       "REAL_FIELDS_IN_RECORD:",
       Object.keys(row),
@@ -379,8 +409,10 @@ export async function POST(request: Request): Promise<Response> {
       hasAudioUrl: looksLikeHttpOrHttpsUrl(row.audio_url),
       hasArtworkUrl: looksLikeHttpOrHttpsUrl(row.artwork_url),
       hasReleaseFileLinks: hasReleaseFileLinks(row),
+      deepReadyNew,
       transitionToPending,
       gainedFilesWhilePending,
+      gainedFullWhilePending,
       type
     });
 
@@ -391,7 +423,12 @@ export async function POST(request: Request): Promise<Response> {
         });
         return NextResponse.json({ message: "Ignore initial draft" }, { status: 200 });
       }
-      if (!hasReleaseFileLinks(row)) {
+      if (adminDeep && releaseIdEarly) {
+        if (!deepReadyNew) {
+          console.log("Skip: Missing audio or artwork for full release", { phase: "insert", deep: true });
+          return NextResponse.json({ message: "Ignore initial draft" }, { status: 200 });
+        }
+      } else if (!hasReleaseFileLinks(row)) {
         console.log("Skip: Missing audio or artwork for full release", { phase: "insert" });
         return NextResponse.json({ message: "Ignore initial draft" }, { status: 200 });
       }
@@ -415,12 +452,13 @@ export async function POST(request: Request): Promise<Response> {
         });
       }
 
-      if (!transitionToPending && !gainedFilesWhilePending) {
+      if (!transitionToPending && !gainedFilesWhilePending && !gainedFullWhilePending) {
         console.log("[webhooks/release-status-change] skip UPDATE (no notify rule)", {
           oldStatus,
           newStatus,
           transitionToPending,
-          gainedFilesWhilePending
+          gainedFilesWhilePending,
+          gainedFullWhilePending
         });
         return NextResponse.json({
           ok: true,
@@ -433,22 +471,36 @@ export async function POST(request: Request): Promise<Response> {
       return NextResponse.json({ ok: true, skipped: true, reason: "unhandled_event_type" });
     }
 
-    if (
-      newStatus === "pending" &&
-      !hasReleaseFileLinks(row) &&
-      !(type === "UPDATE" && transitionToPending)
-    ) {
-      console.log("Skip: Missing audio or artwork for full release", {
-        type,
-        transitionToPending,
-        audio_url: row.audio_url,
-        artwork_url: row.artwork_url
-      });
-      return NextResponse.json({
-        ok: true,
-        skipped: true,
-        reason: "no_audio_or_artwork"
-      });
+    if (newStatus === "pending" && !(type === "UPDATE" && transitionToPending)) {
+      if (adminDeep && releaseIdEarly) {
+        if (!deepReadyNew) {
+          console.log("Skip: Missing audio or artwork for full release", {
+            type,
+            transitionToPending,
+            phase: "pending_not_transition",
+            audio_url: row.audio_url,
+            artwork_url: row.artwork_url
+          });
+          return NextResponse.json({
+            ok: true,
+            skipped: true,
+            reason: "no_audio_or_artwork"
+          });
+        }
+      } else if (!hasReleaseFileLinks(row)) {
+        console.log("Skip: Missing audio or artwork for full release", {
+          type,
+          transitionToPending,
+          phase: "no_service_role_sync_only",
+          audio_url: row.audio_url,
+          artwork_url: row.artwork_url
+        });
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "no_audio_or_artwork"
+        });
+      }
     }
 
     console.log("release row file links OK:", releaseContentReadySync(row), {
@@ -456,9 +508,7 @@ export async function POST(request: Request): Promise<Response> {
       artwork_url: row.artwork_url
     });
 
-    const releaseIdRaw = row.id;
-    const releaseId =
-      typeof releaseIdRaw === "string" && releaseIdRaw.length > 0 ? releaseIdRaw : null;
+    const releaseId = releaseIdEarly;
     if (!releaseId) {
       console.log("Skip Telegram: release is not fully filled yet", {
         reason: "no_release_id_in_record"
@@ -466,33 +516,28 @@ export async function POST(request: Request): Promise<Response> {
       return NextResponse.json({ ok: true, skipped: true, reason: "no_release_id" });
     }
 
-    const adminForAudio = createSupabaseAdmin();
-    if (adminForAudio) {
-      const fullReady = await assertFullReleaseReady(adminForAudio, releaseId, row);
-      if (!fullReady.ok) {
+    if (adminDeep && releaseId) {
+      if (!deepReadyNew) {
         console.log("Skip: Missing audio or artwork for full release", {
-          phase: "assert_full_release",
-          reason: fullReady.reason
+          phase: "final_gate",
+          hint: "isReleaseFullyReady: artwork + (audio_url or tracks)"
         });
         return NextResponse.json({
           ok: true,
           skipped: true,
-          reason: "release_not_full",
-          detail: fullReady.reason
+          reason: "release_not_full"
         });
       }
-    } else {
-      if (!hasReleaseFileLinks(row)) {
-        console.log("Skip: Missing audio or artwork for full release", {
-          phase: "no_service_role",
-          hint: "SUPABASE_SERVICE_ROLE_KEY needed to verify tracks when audio_url is empty"
-        });
-        return NextResponse.json({
-          ok: true,
-          skipped: true,
-          reason: "release_not_full_no_service_role"
-        });
-      }
+    } else if (!hasReleaseFileLinks(row)) {
+      console.log("Skip: Missing audio or artwork for full release", {
+        phase: "no_service_role",
+        hint: "SUPABASE_SERVICE_ROLE_KEY needed to verify tracks when audio_url is empty"
+      });
+      return NextResponse.json({
+        ok: true,
+        skipped: true,
+        reason: "release_not_full_no_service_role"
+      });
     }
 
     const chatId = chatIdFromTelegramId(row.telegram_id);
