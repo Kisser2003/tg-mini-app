@@ -80,28 +80,52 @@ export async function uploadReleaseTrackFileClient(
         "Content-Type": "application/json",
         ...getTelegramApiAuthHeaders({ userId: meta.userId })
       };
-      const res = await fetch("/api/releases/stitch-track-parts", {
-        method: "POST",
-        credentials: "include",
-        headers,
-        body: JSON.stringify({
-          releaseId: meta.releaseId,
-          trackIndex: meta.trackIndex,
-          partCount
-        })
+      const bodyJson = JSON.stringify({
+        releaseId: meta.releaseId,
+        trackIndex: meta.trackIndex,
+        partCount
       });
 
-      if (!res.ok) {
-        const raw = await res.text();
-        let message = `HTTP ${res.status}`;
+      const maxStitchAttempts = 3;
+      let res: Response | null = null;
+      for (let attempt = 1; attempt <= maxStitchAttempts; attempt += 1) {
         try {
-          const j = JSON.parse(raw) as { error?: string };
+          res = await fetch("/api/releases/stitch-track-parts", {
+            method: "POST",
+            credentials: "include",
+            headers,
+            body: bodyJson
+          });
+        } catch {
+          res = null;
+        }
+        if (res?.ok) break;
+        const st = res?.status ?? 0;
+        const retryable =
+          res == null ||
+          st === 502 ||
+          st === 503 ||
+          st === 504 ||
+          st === 429 ||
+          (st >= 500 && st < 600);
+        if (attempt < maxStitchAttempts && retryable) {
+          await new Promise((r) => setTimeout(r, 400 * attempt));
+          continue;
+        }
+        break;
+      }
+
+      if (!res?.ok) {
+        const raw = res ? await res.text() : "";
+        let message = res ? `HTTP ${res.status}` : "Сеть: не удалось вызвать сборку трека";
+        try {
+          const j = JSON.parse(raw || "{}") as { error?: string };
           if (typeof j.error === "string" && j.error.length > 0) message = j.error;
         } catch {
           /* ignore */
         }
         const err = new Error(message) as Error & { statusCode: number };
-        err.statusCode = res.status;
+        err.statusCode = res?.status ?? 0;
         throw err;
       }
 

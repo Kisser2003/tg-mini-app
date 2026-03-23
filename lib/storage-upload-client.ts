@@ -32,10 +32,25 @@ function getSupabasePublicConfig(): { url: string; anonKey: string } {
   return { url, anonKey };
 }
 
+function shouldRetryStorageUploadOnce(e: unknown): boolean {
+  if (e && typeof e === "object" && "statusCode" in e) {
+    const sc = Number((e as { statusCode?: unknown }).statusCode);
+    if (Number.isFinite(sc)) {
+      if (sc === 0 || sc === 408 || sc === 429 || (sc >= 500 && sc < 600)) return true;
+    }
+  }
+  if (e instanceof Error) {
+    const m = e.message;
+    if (m.includes("Сетевая ошибка") || m.includes("Таймаут")) return true;
+  }
+  return false;
+}
+
 /**
  * POST /storage/v1/object/{bucket}/{path}
+ * Одна попытка XHR (внутренняя).
  */
-export function uploadToSupabaseStorageObject(
+function uploadToSupabaseStorageObjectOnce(
   options: SupabaseStorageUploadOptions
 ): Promise<void> {
   if (typeof window === "undefined") {
@@ -102,4 +117,28 @@ export function uploadToSupabaseStorageObject(
 
     xhr.send(options.file);
   });
+}
+
+/**
+ * С повтором при обрыве / 5xx (часто в Telegram WebView на первом заходе).
+ */
+export async function uploadToSupabaseStorageObject(
+  options: SupabaseStorageUploadOptions
+): Promise<void> {
+  const maxAttempts = 2;
+  let last: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      await uploadToSupabaseStorageObjectOnce(options);
+      return;
+    } catch (e) {
+      last = e;
+      if (attempt < maxAttempts && shouldRetryStorageUploadOnce(e)) {
+        await new Promise((r) => setTimeout(r, 450));
+        continue;
+      }
+      throw e;
+    }
+  }
+  throw last;
 }

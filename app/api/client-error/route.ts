@@ -38,7 +38,7 @@ export async function POST(req: Request) {
       const admin = createClient(url, serviceKey, {
         auth: { persistSession: false, autoRefreshToken: false }
       });
-      const { error } = await admin.from("error_logs").insert({
+      const fullRow = {
         user_id: userId ?? null,
         route: route ?? null,
         screen_name: resolvedScreenName,
@@ -46,7 +46,26 @@ export async function POST(req: Request) {
         stack_trace: stackTrace ?? null,
         component_stack: componentStack ?? null,
         extra: extra ?? null
-      });
+      };
+      let { error } = await admin.from("error_logs").insert(fullRow);
+      if (error && /component_stack|schema cache|could not find.*column/i.test(error.message)) {
+        ({ error } = await admin.from("error_logs").insert({
+          user_id: userId ?? null,
+          route: route ?? null,
+          error_message: errorMessage,
+          stack_trace: stackTrace ?? null,
+          extra: extra ?? null
+        }));
+      }
+      if (error && /screen_name|schema cache|could not find.*column/i.test(error.message)) {
+        ({ error } = await admin.from("error_logs").insert({
+          user_id: userId ?? null,
+          route: route ?? null,
+          error_message: errorMessage,
+          stack_trace: stackTrace ?? null,
+          extra: extra ?? null
+        }));
+      }
       if (error) {
         console.error("[client-error] Supabase insert failed:", error.message);
       }
