@@ -51,8 +51,6 @@ async function handleFinalizeSubmit(
   const { releaseId, clientRequestId } = parsed.data;
   const telegramUserId = ctx.user.id;
 
-  console.log("Finalize submit by user:", telegramUserId, "release:", releaseId);
-
   const { data: currentRow, error: loadErr } = await admin
     .from("releases")
     .select("*")

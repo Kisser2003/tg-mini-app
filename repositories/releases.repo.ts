@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { logSupabaseUpdateError } from "../lib/errors";
+import { logSupabaseTracksInsertRlsDenied, logSupabaseUpdateError } from "../lib/errors";
 import { supabase } from "../lib/supabase";
 import { uploadToSupabaseStorageObject } from "../lib/storage-upload-client";
 import { uploadReleaseTrackFileClient } from "../lib/storage-track-upload-client";
@@ -136,6 +136,8 @@ const releaseStep2Schema = z.object({
 const trackInsertSchema = z.object({
   releaseId: z.string().min(1),
   userId: z.number().int().nonnegative(),
+  /** Как в `releases.telegram_id` — для RLS (x-telegram-user-id). */
+  telegramId: z.number().int().nonnegative().optional(),
   index: z.number().int().nonnegative(),
   title: z.string().min(1).max(256).trim(),
   explicit: z.boolean(),
@@ -765,18 +767,22 @@ export async function uploadReleaseTrackAudio(params: {
 export async function addReleaseTrack(params: {
   releaseId: string;
   userId: number;
+  /** Совпадает с `user_id` и заголовком RLS; по умолчанию = userId. */
+  telegramId?: number;
   index: number;
   title: string;
   explicit: boolean;
   audioUrl: string;
 }): Promise<void> {
   const validated = trackInsertSchema.parse(params);
+  const telegramId = validated.telegramId ?? validated.userId;
 
   const { error } = await withRetry(async () => {
     const response = await supabase.from("tracks").upsert(
       {
         release_id: validated.releaseId,
         user_id: validated.userId,
+        telegram_id: telegramId,
         index: validated.index,
         title: validated.title,
         explicit: validated.explicit,
@@ -788,6 +794,7 @@ export async function addReleaseTrack(params: {
   });
 
   if (error) {
+    logSupabaseTracksInsertRlsDenied("addReleaseTrack", error);
     logSupabaseUpdateError("addReleaseTrack", error);
     throw error;
   }
@@ -850,6 +857,7 @@ export type ReleaseTrackRow = {
   id?: string;
   release_id: string;
   user_id?: number;
+  telegram_id?: number | null;
   index: number;
   title: string;
   explicit: boolean;
@@ -908,7 +916,6 @@ export async function getMyReleases(userId: number | string): Promise<ReleaseRec
   if (!Number.isFinite(asNum) || asNum <= 0) {
     return [];
   }
-  console.log("Fetching releases for ID:", idStr);
   const { data, error } = await withRetry(async () => {
     /**
      * Только `.select()` без `.single()` — массив строк.

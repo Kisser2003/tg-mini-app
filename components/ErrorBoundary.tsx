@@ -6,8 +6,7 @@ import {
 } from "react-error-boundary";
 import { logClientError } from "@/lib/logger";
 
-function ErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
-  const err = error instanceof Error ? error : new Error(String(error));
+function ErrorFallback({ error: _error, resetErrorBoundary }: FallbackProps) {
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center px-4 py-10">
       <div className="w-full max-w-[360px] rounded-[24px] border border-white/[0.12] bg-surface/85 px-6 py-8 text-center shadow-[0_24px_60px_rgba(0,0,0,0.75)] backdrop-blur-2xl">
@@ -18,11 +17,6 @@ function ErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
         <p className="mt-2 text-[13px] leading-relaxed text-white/55">
           Попробуй обновить экран. Если повторится — напиши нам, мы разберёмся.
         </p>
-        {process.env.NODE_ENV === "development" && (
-          <pre className="mt-4 max-h-28 overflow-auto rounded-xl border border-white/10 bg-black/40 p-3 text-left text-[10px] text-rose-200/90">
-            {err.message}
-          </pre>
-        )}
         <button
           type="button"
           onClick={resetErrorBoundary}

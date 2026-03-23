@@ -7,14 +7,8 @@
 const CACHE_NAME = "audio-v1";
 const AUDIO_PATH_MARKER = "storage/v1/object/public/audio";
 
-const DEBUG =
-  self.location.hostname === "localhost" ||
-  self.location.hostname === "127.0.0.1";
-
-function log(...args) {
-  if (DEBUG) {
-    console.log("[SW-AUDIO]", ...args);
-  }
+function log() {
+  /* отладочные логи отключены */
 }
 
 /**

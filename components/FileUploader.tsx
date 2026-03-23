@@ -198,8 +198,11 @@ export function FileUploader({
 
     setFile(selected);
     onFileChange(selected);
-    scheduleSuccessFlash();
-    confetti({ particleCount: 30, spread: 50, origin: { y: 0.4 } });
+    // WAV: реальная загрузка в Supabase Storage запускается с родителя — без «фейкового» прогресса.
+    if (type !== "wav") {
+      scheduleSuccessFlash();
+      confetti({ particleCount: 30, spread: 50, origin: { y: 0.4 } });
+    }
   };
 
   return (
@@ -291,9 +294,15 @@ export function FileUploader({
                 </span>
               </div>
               <p className="text-[10px] text-white/45">
-                Локальная проверка файла завершена. Фактическая загрузка начнется на шаге отправки релиза.
+                {type === "wav"
+                  ? uploadProgressPercent != null
+                    ? "Загрузка в Supabase Storage…"
+                    : file
+                      ? "Файл принят. При необходимости нажмите «Далее» для перехода."
+                      : "Выберите WAV — сразу начнётся прямая загрузка в хранилище."
+                  : "Локальная проверка файла завершена. Фактическая загрузка начнется на шаге отправки релиза."}
               </p>
-              {isUploading && (
+              {type !== "wav" && isUploading && (
                 <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-black/30">
                   <motion.div
                     initial={{ width: "0%" }}

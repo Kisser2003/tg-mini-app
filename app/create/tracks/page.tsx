@@ -14,6 +14,7 @@ import type { CreateTracks } from "@/features/release/createRelease/types";
 import { useCreateReleaseDraftStore } from "@/features/release/createRelease/store";
 import {
   saveDraftAction,
+  uploadTrackWavAtIndex,
   uploadTracksForDraftStep
 } from "@/features/release/createRelease/actions";
 import { FileUploader } from "@/components/FileUploader";
@@ -36,9 +37,11 @@ export default function CreateTracksPage() {
   const storeTrackFiles = useCreateReleaseDraftStore((s) => s.trackFiles);
   const setTracks = useCreateReleaseDraftStore((s) => s.setTracks);
   const setTrackFile = useCreateReleaseDraftStore((s) => s.setTrackFile);
+  const setTrackAudioUrlAt = useCreateReleaseDraftStore((s) => s.setTrackAudioUrlAt);
   const syncTrackFilesLength = useCreateReleaseDraftStore((s) => s.syncTrackFilesLength);
   const submitError = useCreateReleaseDraftStore((s) => s.submitError);
   const setSubmitError = useCreateReleaseDraftStore((s) => s.setSubmitError);
+  const tracksUploadInProgress = useCreateReleaseDraftStore((s) => s.tracksUploadInProgress);
   const trackAudioUrlsFromDb = useCreateReleaseDraftStore((s) => s.trackAudioUrlsFromDb);
 
   const showResumeAudioBanner = useMemo(
@@ -284,12 +287,44 @@ export default function CreateTracksPage() {
                 maxSizeMb={200}
                 type="wav"
                 initialFile={storeTrackFiles[index] ?? null}
-                onFileChange={(file) => setTrackFile(index, file)}
+                onFileChange={(file) => {
+                  setTrackFile(index, file);
+                  setTrackAudioUrlAt(index, null);
+                  if (!file) {
+                    setTrackUploadProgress((prev) => {
+                      const next = { ...prev };
+                      delete next[index];
+                      return next;
+                    });
+                    return;
+                  }
+                  void (async () => {
+                    setTrackUploadProgress((prev) => ({ ...prev, [index]: 0 }));
+                    const ok = await uploadTrackWavAtIndex({
+                      index,
+                      file,
+                      onProgress: (pct) => {
+                        setTrackUploadProgress((prev) => ({ ...prev, [index]: pct }));
+                      }
+                    });
+                    setTrackUploadProgress((prev) => {
+                      const next = { ...prev };
+                      delete next[index];
+                      return next;
+                    });
+                    if (!ok) {
+                      const msg = useCreateReleaseDraftStore.getState().submitError;
+                      if (msg) toast.error(msg);
+                    }
+                  })();
+                }}
                 invalid={submitAttempted && !storeTrackFiles[index]}
                 uploadProgressPercent={
-                  isUploadingWav && activeUploadIndex === index
-                    ? (trackUploadProgress[index] ?? 0)
-                    : null
+                  typeof trackUploadProgress[index] === "number"
+                    ? trackUploadProgress[index]!
+                    : isUploadingWav && activeUploadIndex === index
+                      ? (trackUploadProgress[index] ?? 0)
+                      : null
                 }
               />
               <FormFieldError
@@ -317,10 +352,10 @@ export default function CreateTracksPage() {
 
           <MagneticButton
             type="submit"
-            disabled={!isValid || isSubmitting || isUploadingWav}
+            disabled={!isValid || isSubmitting || isUploadingWav || tracksUploadInProgress}
             className="inline-flex h-[56px] w-full items-center justify-center rounded-[20px] bg-gradient-to-tr from-[#4F46E5] to-[#7C3AED] text-[16px] font-semibold text-white shadow-[0_14px_40px_rgba(88,80,236,0.6)] disabled:opacity-60 disabled:shadow-none"
           >
-            {isUploadingWav
+            {isUploadingWav || tracksUploadInProgress
               ? "Загружаем WAV…"
               : isSubmitting
                 ? "Сохраняем…"

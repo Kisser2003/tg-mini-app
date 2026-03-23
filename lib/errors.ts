@@ -79,6 +79,30 @@ export function getPostgrestErrorPayload(err: unknown): {
   };
 }
 
+/** PostgREST / Postgres: отказ по RLS (INSERT/UPDATE policy). */
+export function isPostgrestRlsViolation(err: unknown): boolean {
+  const msg = formatErrorMessage(err, "").toLowerCase();
+  const code =
+    typeof err === "object" && err !== null && "code" in err
+      ? String((err as { code: unknown }).code)
+      : "";
+  return (
+    msg.includes("row-level security") ||
+    (msg.includes("policy") && msg.includes("violation")) ||
+    msg.includes("permission denied for") ||
+    code === "42501"
+  );
+}
+
+/** Явный лог при отказе RLS на INSERT в `tracks` (отладка политик Supabase). */
+export function logSupabaseTracksInsertRlsDenied(context: string, err: unknown): void {
+  if (!isPostgrestRlsViolation(err)) return;
+  console.error("Ошибка прав доступа в Supabase (INSERT policy)", {
+    context,
+    ...getPostgrestErrorPayload(err)
+  });
+}
+
 /** Лог в терминал (API routes / server actions): полный объект PostgREST. */
 export function logSupabaseUpdateError(context: string, err: unknown): void {
   const msg = formatErrorMessage(err, "");

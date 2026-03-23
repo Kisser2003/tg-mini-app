@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { useForm, type FieldErrors } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, Calendar, Disc, Languages, Mic2, Music2 } from "lucide-react";
 import { FormFieldError } from "@/components/FormFieldError";
 import { ArtistProfileLinksSection } from "@/features/release/createRelease/components/ArtistProfileLinksSection";
@@ -86,6 +87,8 @@ function CreateMetadataPageInner() {
   const [isHydrating, setIsHydrating] = useState(Boolean(releaseIdParam));
   const [hydrateError, setHydrateError] = useState<string | null>(null);
   const [draftOfferId, setDraftOfferId] = useState<string | null>(null);
+  const [isDraftBannerVisible, setIsDraftBannerVisible] = useState(true);
+  const continueDraftNavIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     initUserContextInStore();
@@ -142,6 +145,10 @@ function CreateMetadataPageInner() {
     };
   }, [releaseIdParam]);
 
+  useEffect(() => {
+    if (draftOfferId) setIsDraftBannerVisible(true);
+  }, [draftOfferId]);
+
   const defaultValues: CreateMetadata = useMemo(() => storeMetadata, [storeMetadata]);
 
   const {
@@ -157,20 +164,26 @@ function CreateMetadataPageInner() {
     defaultValues
   });
 
-  // Post-mount hydration fix: on a hard page-refresh the SSR pass renders with
-  // the empty initial store values.  After mounting on the client the persist
-  // middleware has already rehydrated from localStorage, so we read the store
-  // directly and reset the form once — without marking it dirty.
+  // Post-mount: без `releaseId` в URL — один раз подтянуть метаданные из persist (localStorage).
+  // С `releaseId` ждём `hydrateFromReleaseId` и отдельный reset ниже.
   const didHydrateRef = useRef(false);
   useEffect(() => {
+    if (releaseIdParam) return;
     if (didHydrateRef.current) return;
     didHydrateRef.current = true;
     const fresh = useCreateReleaseDraftStore.getState().metadata;
     reset(fresh, { keepDirty: false });
-  }, [reset]);
+  }, [reset, releaseIdParam]);
 
   const values = watch();
   const lastSyncedValuesRef = useRef<string>("");
+
+  useEffect(() => {
+    if (!releaseIdParam || isHydrating || hydrateError) return;
+    const meta = useCreateReleaseDraftStore.getState().metadata;
+    reset(meta, { keepDirty: false });
+    lastSyncedValuesRef.current = JSON.stringify(meta);
+  }, [releaseIdParam, isHydrating, hydrateError, reset]);
 
   const metaForGuidelines = useMemo<ReleaseMetadata>(() => {
     const rawTitles = storeTracks.map((t) => t.title);
@@ -197,13 +210,6 @@ function CreateMetadataPageInner() {
     }, 200);
     return () => window.clearTimeout(timeoutId);
   }, [values, isDirty, setMetadata]);
-
-  useEffect(() => {
-    const primaryArtist = values.primaryArtist?.trim();
-    if (primaryArtist && !values.label) {
-      setValue("label", primaryArtist, { shouldValidate: false, shouldDirty: true });
-    }
-  }, [setValue, values.primaryArtist, values.label]);
 
   const minReleaseDate = useMemo(() => {
     const today = new Date();
@@ -274,7 +280,32 @@ function CreateMetadataPageInner() {
     <CreateShell title="Релиз · Паспорт">
       <div className="rounded-[24px] border border-white/[0.08] bg-surface/80 px-5 py-5 shadow-[0_18px_40px_rgba(0,0,0,0.7)] backdrop-blur-2xl">
         {isHydrating ? (
-          <p className="text-[13px] text-text-muted">Загружаем данные релиза…</p>
+          <div
+            className="pointer-events-none flex flex-col gap-4"
+            aria-busy
+            aria-label="Загрузка данных релиза"
+          >
+            <div className="h-3 w-40 animate-pulse rounded-md bg-white/10" />
+            <div className="space-y-2">
+              <div className="h-2.5 w-16 animate-pulse rounded bg-white/10" />
+              <div className="h-12 w-full animate-pulse rounded-[14px] bg-white/[0.07]" />
+            </div>
+            <div className="space-y-2">
+              <div className="h-2.5 w-28 animate-pulse rounded bg-white/10" />
+              <div className="h-12 w-full animate-pulse rounded-[14px] bg-white/[0.07]" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="h-14 animate-pulse rounded-[14px] bg-white/[0.06]" />
+              <div className="h-14 animate-pulse rounded-[14px] bg-white/[0.06]" />
+              <div className="h-14 animate-pulse rounded-[14px] bg-white/[0.06]" />
+              <div className="h-14 animate-pulse rounded-[14px] bg-white/[0.06]" />
+            </div>
+            <div className="space-y-2">
+              <div className="h-2.5 w-36 animate-pulse rounded bg-white/10" />
+              <div className="h-12 w-full animate-pulse rounded-[14px] bg-white/[0.07]" />
+            </div>
+            <div className="h-14 animate-pulse rounded-[20px] bg-white/[0.08]" />
+          </div>
         ) : (
           <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="flex flex-col gap-4">
             {hydrateError && (
@@ -282,40 +313,63 @@ function CreateMetadataPageInner() {
                 {hydrateError}
               </p>
             )}
-            {draftOfferId && !isHydrating && (
-              <div className="rounded-[14px] border border-sky-500/35 bg-sky-950/40 px-3 py-3 text-[12px] leading-relaxed text-sky-50/95">
-                <p className="font-medium text-white">Найден незавершённый черновик</p>
-                <p className="mt-1 text-white/70">
-                  Продолжить правки или начать новый релиз — локальный черновик сейчас не открыт.
-                </p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      router.replace(`/create/metadata?releaseId=${draftOfferId}`);
-                      setDraftOfferId(null);
-                    }}
-                    className="rounded-[14px] bg-sky-500/90 px-4 py-2 text-[13px] font-medium text-white shadow-sm hover:bg-sky-500"
-                  >
-                    Продолжить
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      try {
-                        sessionStorage.setItem("omf_skip_draft_prompt", "1");
-                      } catch {
-                        /* ignore */
-                      }
-                      setDraftOfferId(null);
-                    }}
-                    className="rounded-[14px] border border-white/20 bg-white/5 px-4 py-2 text-[13px] font-medium text-white/85 hover:bg-white/10"
-                  >
-                    Начать новый
-                  </button>
-                </div>
-              </div>
-            )}
+            <AnimatePresence
+              mode="popLayout"
+              onExitComplete={() => {
+                const id = continueDraftNavIdRef.current;
+                continueDraftNavIdRef.current = null;
+                if (id) {
+                  router.push(`/create/metadata?releaseId=${id}`);
+                }
+                setDraftOfferId(null);
+                setIsDraftBannerVisible(true);
+              }}
+            >
+              {draftOfferId && isDraftBannerVisible && (
+                <motion.div
+                  key="draft-offer-banner"
+                  layout
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                  className="rounded-[14px] border border-sky-500/35 bg-sky-950/40 px-3 py-3 text-[12px] leading-relaxed text-sky-50/95"
+                >
+                  <p className="font-medium text-white">Найден незавершённый черновик</p>
+                  <p className="mt-1 text-white/70">
+                    Продолжить правки или начать новый релиз — локальный черновик сейчас не открыт.
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!draftOfferId) return;
+                        continueDraftNavIdRef.current = draftOfferId;
+                        setIsDraftBannerVisible(false);
+                      }}
+                      className="rounded-[14px] bg-sky-500/90 px-4 py-2 text-[13px] font-medium text-white shadow-sm hover:bg-sky-500"
+                    >
+                      Продолжить
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        try {
+                          sessionStorage.setItem("omf_skip_draft_prompt", "1");
+                        } catch {
+                          /* ignore */
+                        }
+                        continueDraftNavIdRef.current = null;
+                        setIsDraftBannerVisible(false);
+                      }}
+                      className="rounded-[14px] border border-white/20 bg-white/5 px-4 py-2 text-[13px] font-medium text-white/85 hover:bg-white/10"
+                    >
+                      Начать новый
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
             <div className="min-w-0 space-y-1.5">
               <label className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.18em] text-white/60">
                 <Mic2 className="h-3.5 w-3.5 text-white/45" aria-hidden />

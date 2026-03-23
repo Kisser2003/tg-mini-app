@@ -1,4 +1,7 @@
+"use client";
+
 import type { HTMLAttributes } from "react";
+import { motion } from "framer-motion";
 
 type SkeletonProps = HTMLAttributes<HTMLDivElement>;
 
@@ -65,12 +68,36 @@ export function AdminModerationQueueSkeleton({ rows = 3 }: { rows?: number }) {
   );
 }
 
+const librarySkeletonContainer = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: { staggerChildren: 0.055, delayChildren: 0.05 }
+  }
+};
+
+const librarySkeletonRow = {
+  hidden: { opacity: 0.4, y: 6 },
+  show: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.4, ease: [0.22, 1, 0.36, 1] as const }
+  }
+};
+
 export function LibraryReleaseSkeletonGrid({ count = 6 }: { count?: number }) {
   return (
-    <div className="grid grid-cols-1 gap-3">
+    <motion.div
+      className="grid grid-cols-1 gap-3"
+      variants={librarySkeletonContainer}
+      initial="hidden"
+      animate="show"
+    >
       {Array.from({ length: count }, (_, i) => (
-        <LibraryReleaseRowSkeleton key={i} />
+        <motion.div key={i} variants={librarySkeletonRow}>
+          <LibraryReleaseRowSkeleton />
+        </motion.div>
       ))}
-    </div>
+    </motion.div>
   );
 }

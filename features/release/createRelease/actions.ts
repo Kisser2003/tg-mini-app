@@ -34,7 +34,7 @@ import {
 import type { ReleaseRecord, ReleaseStep1Payload, ReleaseTrackRow } from "@/repositories/releases.repo";
 import type { CreateMetadata, CreateTrack } from "./types";
 import { isAssetsComplete, isMetadataComplete, isTracksComplete, metadataSchema, tracksSchema } from "./schemas";
-import { useCreateReleaseDraftStore } from "./store";
+import { selectTracksWavFullySynced, useCreateReleaseDraftStore } from "./store";
 import { supabase } from "@/lib/supabase";
 import { parseArtistLinksFromJson } from "@/lib/artist-links";
 import { parseCollaboratorsFromDb } from "@/lib/collaborators";
@@ -58,6 +58,11 @@ function parseStoreUserId(raw: string | null): number | null {
   if (raw == null || raw === "") return null;
   const n = Number(raw);
   return Number.isFinite(n) && n > 0 ? Math.trunc(n) : null;
+}
+
+/** Как в `ensureDraftRelease`: telegram_id строки tracks = WebApp user id или стор. */
+function getTrackRowTelegramId(userId: number): number {
+  return getTelegramUser()?.id ?? userId;
 }
 
 /** Заголовки Telegram / dev для API мастера создания релиза (user_id должен совпадать с владельцем в БД). */
@@ -299,7 +304,7 @@ export function createMetadataFromReleaseRecord(existing: ReleaseRecord): Create
     genre: existing.genre,
     subgenre: "",
     language: parsePerformanceLanguage(existing.performance_language),
-    label: existing.artist_name,
+    label: "",
     releaseDate: existing.release_date,
     explicit: Boolean(existing.explicit)
   };
@@ -624,15 +629,6 @@ export async function saveDraftAction(): Promise<{ ok: true } | { ok: false; mes
       // artist_links: artistLinksToJson(latest.releaseArtistLinks) ?? {},
     };
 
-    console.log("SENDING TO DB:", finalData);
-    if (process.env.NODE_ENV === "development") {
-      void fetch("/api/dev/log-db-error", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tag: "SENDING_TO_DB", releaseId: rid, finalData })
-      }).catch(() => {});
-    }
-
     try {
       const viaService = await saveDraftPatchViaServiceApi(rid, finalData);
       if (viaService) {
@@ -753,7 +749,120 @@ async function postDraftUploadState(
 }
 
 /**
- * Загрузка WAV на шаге «Треки» с прогрессом; после успеха `tracksWavSyncedToDb = true`.
+ * Сразу после выбора WAV: Storage + строка в `tracks` (один трек).
+ * При отсутствии `releaseId` вызывает `saveDraftAction()` (нужен валидный паспорт).
+ */
+export async function uploadTrackWavAtIndex(options: {
+  index: number;
+  file: File;
+  onProgress?: (percent: number) => void;
+}): Promise<boolean> {
+  initUserContextInStore();
+  let store = useCreateReleaseDraftStore.getState();
+  if (!store.userId) {
+    store.setSubmitError("Откройте приложение из Telegram.");
+    return false;
+  }
+  const userId = parseStoreUserId(store.userId);
+  if (userId == null) {
+    store.setSubmitError("Нет данных пользователя для загрузки треков.");
+    return false;
+  }
+  const parsedTracks = tracksSchema.safeParse({ tracks: store.tracks });
+  if (!parsedTracks.success) {
+    store.setSubmitError(parsedTracks.error.issues[0]?.message ?? "Проверьте данные треков.");
+    return false;
+  }
+  const track = parsedTracks.data.tracks[options.index];
+  if (!track) {
+    store.setSubmitError("Нет данных трека.");
+    return false;
+  }
+  if (!store.releaseId) {
+    const saved = await saveDraftAction();
+    if (!saved.ok) {
+      useCreateReleaseDraftStore.getState().setSubmitError(saved.message);
+      return false;
+    }
+  }
+  store = useCreateReleaseDraftStore.getState();
+  const releaseId = store.releaseId;
+  if (!releaseId) {
+    store.setSubmitError("Нет идентификатора релиза.");
+    return false;
+  }
+
+  const telegramId = getTrackRowTelegramId(userId);
+  useCreateReleaseDraftStore.getState().setTracksUploadInProgress(true);
+  try {
+    store.setSubmitError(null);
+    options.onProgress?.(0);
+
+    let audioUrl: string;
+    try {
+      audioUrl = await uploadReleaseTrackAudio({
+        userId,
+        releaseId,
+        trackIndex: options.index,
+        file: options.file,
+        options: {
+          markReleaseFailedOnError: { releaseId },
+          onProgress: options.onProgress
+        }
+      });
+    } catch (e: unknown) {
+      console.error("[uploadTrackWavAtIndex] Storage (WAV) upload failed", { error: e });
+      useCreateReleaseDraftStore.getState().setSubmitError(
+        formatErrorMessage(
+          e,
+          "Не удалось загрузить WAV в хранилище. Проверьте политику bucket, размер и формат файла."
+        )
+      );
+      return false;
+    }
+
+    try {
+      await withRequestTimeout(
+        addReleaseTrack({
+          releaseId,
+          userId,
+          telegramId,
+          index: options.index,
+          title: track.title,
+          explicit: Boolean(track.explicit),
+          audioUrl
+        }),
+        SUPABASE_DB_OP_TIMEOUT_MS,
+        USER_REQUEST_TIMEOUT_MESSAGE
+      );
+    } catch (e: unknown) {
+      console.error("[uploadTrackWavAtIndex] DB tracks upsert failed", {
+        postgrest: getPostgrestErrorPayload(e),
+        error: e
+      });
+      useCreateReleaseDraftStore.getState().setSubmitError(
+        formatErrorMessage(
+          e,
+          "Файл в хранилище загружен, но не удалось сохранить строку в таблице tracks. Проверьте схему БД и RLS."
+        )
+      );
+      return false;
+    }
+
+    useCreateReleaseDraftStore.getState().setTrackAudioUrlAt(options.index, audioUrl);
+    try {
+      hapticMap.notificationSuccess();
+    } catch {
+      /* ignore */
+    }
+    return true;
+  } finally {
+    useCreateReleaseDraftStore.getState().setTracksUploadInProgress(false);
+  }
+}
+
+/**
+ * Загрузка WAV на шаге «Треки» с прогрессом; URL в сторе → `selectTracksWavFullySynced`.
  */
 export async function uploadTracksForDraftStep(options: {
   onTrackProgress: (index: number, percent: number) => void;
@@ -781,6 +890,7 @@ export async function uploadTracksForDraftStep(options: {
     store.setSubmitError("Нет данных пользователя для загрузки треков.");
     return false;
   }
+  const telegramId = getTrackRowTelegramId(userId);
 
   useCreateReleaseDraftStore.getState().setTracksUploadInProgress(true);
   try {
@@ -791,6 +901,13 @@ export async function uploadTracksForDraftStep(options: {
       for (let index = 0; index < tracks.length; index += 1) {
         const file = trackFiles[index]!;
         const track = tracks[index];
+        const existingUrl =
+          useCreateReleaseDraftStore.getState().trackAudioUrlsFromDb[index] ?? "";
+        if (existingUrl.trim().length > 0) {
+          options.onTrackProgress(index, 100);
+          continue;
+        }
+
         options.onTrackProgress(index, 0);
 
         let audioUrl: string;
@@ -805,7 +922,6 @@ export async function uploadTracksForDraftStep(options: {
               onProgress: (pct) => options.onTrackProgress(index, pct)
             }
           });
-          console.log("Step 1: Storage Upload Done", { trackIndex: index, releaseId });
         } catch (e: unknown) {
           void postDraftUploadState(releaseId, "failed");
           console.error("[uploadTracksForDraftStep] Storage (WAV) upload failed", {
@@ -825,11 +941,11 @@ export async function uploadTracksForDraftStep(options: {
         }
 
         try {
-          console.log("Step 2: Starting DB Insert", { trackIndex: index, releaseId });
           await withRequestTimeout(
             addReleaseTrack({
               releaseId,
               userId,
+              telegramId,
               index,
               title: track.title,
               explicit: Boolean(track.explicit),
@@ -869,7 +985,6 @@ export async function uploadTracksForDraftStep(options: {
     }
 
     await postDraftUploadState(releaseId, "complete");
-    useCreateReleaseDraftStore.getState().setTracksWavSyncedToDb(true);
     return true;
   } finally {
     useCreateReleaseDraftStore.getState().setTracksUploadInProgress(false);
@@ -905,7 +1020,7 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
     return false;
   }
 
-  const skipWavUpload = useCreateReleaseDraftStore.getState().tracksWavSyncedToDb;
+  const skipWavUpload = selectTracksWavFullySynced(useCreateReleaseDraftStore.getState());
 
   if (!skipWavUpload) {
     if (args.files.length !== parsedTracks.data.tracks.length) {
@@ -923,6 +1038,8 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
   const totalTracks = parsedTracks.data.tracks.length;
   const releaseId = store.releaseId;
   const clientRequestId = store.clientRequestId;
+  const submitUserId = parseStoreUserId(store.userId)!;
+  const submitTelegramId = getTrackRowTelegramId(submitUserId);
 
   const setTrackUploadProgress = (trackIndex: number, filePercent: number) => {
     const segment = (trackIndex + filePercent / 100) / Math.max(totalTracks, 1);
@@ -962,7 +1079,7 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
           const file = args.files[index];
           uploadPhase = "storage_track_wav";
           const audioUrl = await uploadReleaseTrackAudio({
-            userId: parseStoreUserId(store.userId)!,
+            userId: submitUserId,
             releaseId,
             trackIndex: index,
             file,
@@ -971,13 +1088,12 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
               onProgress: (pct) => setTrackUploadProgress(index, pct)
             }
           });
-          console.log("Step 1: Storage Upload Done", { trackIndex: index, releaseId });
           uploadPhase = "db_release_track";
-          console.log("Step 2: Starting DB Insert", { trackIndex: index, releaseId });
           await withRequestTimeout(
             addReleaseTrack({
               releaseId,
-              userId: parseStoreUserId(store.userId)!,
+              userId: submitUserId,
+              telegramId: submitTelegramId,
               index,
               title: track.title,
               explicit: Boolean(track.explicit),

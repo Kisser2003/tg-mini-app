@@ -30,11 +30,6 @@ export type CreateReleaseDraftState = {
   trackFiles: (File | null)[];
   /** URL аудио из БД после резюме черновика (подсказки UX; не заменяют File при отправке). */
   trackAudioUrlsFromDb: (string | null)[];
-  /**
-   * WAV уже загружены в Storage и записаны в таблицу `tracks` на шаге «Треки»
-   * (чтобы не дублировать upload на «Проверке»).
-   */
-  tracksWavSyncedToDb: boolean;
   /** Идёт загрузка WAV в Storage (блокирует «Отправить» на проверке). */
   tracksUploadInProgress: boolean;
 
@@ -69,7 +64,6 @@ type CreateReleaseDraftActions = {
   setTrackFile: (index: number, file: File | null) => void;
   syncTrackFilesLength: (len: number) => void;
   setTrackAudioUrlAt: (index: number, url: string | null) => void;
-  setTracksWavSyncedToDb: (value: boolean) => void;
   setTracksUploadInProgress: (value: boolean) => void;
 
   setReleaseArtistLinks: (patch: Partial<ArtistLinksState>) => void;
@@ -111,6 +105,20 @@ export const selectPerformanceLanguage = (s: CreateReleaseDraftStore) => s.metad
 export const selectIsExplicit = (s: CreateReleaseDraftStore) => s.metadata.explicit;
 /** Плановая дата релиза (`metadata.releaseDate`). */
 export const selectPlannedReleaseDate = (s: CreateReleaseDraftStore) => s.metadata.releaseDate;
+
+/**
+ * Производное: все слоты треков имеют URL из БД/Storage — не дублируем отдельным флагом в стейте.
+ */
+export const selectTracksWavFullySynced = (s: CreateReleaseDraftStore): boolean => {
+  const n = s.tracks.length;
+  if (n === 0) return false;
+  const urls = s.trackAudioUrlsFromDb;
+  for (let i = 0; i < n; i += 1) {
+    const u = urls[i];
+    if (typeof u !== "string" || u.trim().length === 0) return false;
+  }
+  return true;
+};
 
 /** Данные для восстановления черновика из БД (Dashboard и др.). */
 export type ResumeDraftPayload = {
@@ -226,7 +234,6 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
         tracks: [{ title: "", explicit: false }],
         trackFiles: [null],
         trackAudioUrlsFromDb: [],
-        tracksWavSyncedToDb: false,
         tracksUploadInProgress: false,
 
         releaseArtistLinks: { ...EMPTY_ARTIST_LINKS },
@@ -291,14 +298,11 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
               return state;
             }
 
-            const tracksOrFilesChanged = !tracksSame || !filesSame || !urlsSame;
-
             return {
               metadata: nextMetadata,
               tracks: nextTracks,
               trackFiles: nextTrackFiles,
               trackAudioUrlsFromDb: nextUrls,
-              tracksWavSyncedToDb: tracksOrFilesChanged ? false : state.tracksWavSyncedToDb,
               ...stamp()
             };
           }),
@@ -329,8 +333,7 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
             while (next.length < trackCount) next.push(null);
             next[index] = file;
             return {
-              trackFiles: next,
-              tracksWavSyncedToDb: false
+              trackFiles: next
             };
           }),
         setTrackAudioUrlAt: (index, url) =>
@@ -341,10 +344,6 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
             next[index] = url;
             return { trackAudioUrlsFromDb: next, ...stamp() };
           }),
-        setTracksWavSyncedToDb: (value) =>
-          set((state) =>
-            state.tracksWavSyncedToDb === value ? state : { tracksWavSyncedToDb: value }
-          ),
         setTracksUploadInProgress: (value) =>
           set((state) =>
             state.tracksUploadInProgress === value ? state : { tracksUploadInProgress: value }
@@ -383,7 +382,6 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
             tracks: [{ title: "", explicit: false }],
             trackFiles: [null],
             trackAudioUrlsFromDb: [],
-            tracksWavSyncedToDb: false,
             tracksUploadInProgress: false,
             releaseArtistLinks: { ...EMPTY_ARTIST_LINKS },
             submitError: null,
@@ -404,7 +402,6 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
             tracks: [{ title: "", explicit: false }],
             trackFiles: [null],
             trackAudioUrlsFromDb: [],
-            tracksWavSyncedToDb: false,
             tracksUploadInProgress: false,
             releaseArtistLinks: { ...EMPTY_ARTIST_LINKS },
             submitError: null,
@@ -424,7 +421,6 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
             tracks: [{ title: "", explicit: false }],
             trackFiles: [null],
             trackAudioUrlsFromDb: [],
-            tracksWavSyncedToDb: false,
             tracksUploadInProgress: false,
             releaseArtistLinks: { ...EMPTY_ARTIST_LINKS },
             submitError: null,
@@ -480,7 +476,6 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
               artworkFile: null,
               trackFiles,
               trackAudioUrlsFromDb,
-              tracksWavSyncedToDb: false,
               tracksUploadInProgress: false,
               releaseArtistLinks: { ...payload.releaseArtistLinks },
               submitError: null,
@@ -509,7 +504,10 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
         state?.setHasHydrated(true);
       },
       merge: (persistedState, currentState) => {
-        const p = (persistedState ?? {}) as Partial<CreateReleaseDraftState>;
+        const p = { ...(persistedState ?? {}) } as Partial<CreateReleaseDraftState> & {
+          tracksWavSyncedToDb?: boolean;
+        };
+        delete p.tracksWavSyncedToDb;
         const rawMeta = p.metadata as unknown as Record<string, unknown> | undefined;
         let mergedMeta =
           p.metadata != null
@@ -552,7 +550,6 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
         artworkUrl: state.artworkUrl,
         tracks: state.tracks,
         trackAudioUrlsFromDb: state.trackAudioUrlsFromDb,
-        tracksWavSyncedToDb: state.tracksWavSyncedToDb,
         releaseArtistLinks: state.releaseArtistLinks,
         lastModified: state.lastModified,
         successSummary: state.successSummary

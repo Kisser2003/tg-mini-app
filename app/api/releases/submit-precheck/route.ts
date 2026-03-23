@@ -57,8 +57,6 @@ async function handleSubmitPrecheck(
   const { releaseId, clientRequestId, declaredTrackCount } = parsed.data;
   const telegramUserId = ctx.user.id;
 
-  console.log("Submit attempt by user:", telegramUserId, "for release:", releaseId);
-
   const { data: releaseRow, error: relErr } = await admin
     .from("releases")
     .select(

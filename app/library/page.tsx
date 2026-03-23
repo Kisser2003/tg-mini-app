@@ -16,7 +16,6 @@ import useSWR from "swr";
 import { ArtworkCoverGlow } from "@/components/ArtworkCoverGlow";
 import { PullRefreshBrand } from "@/components/PullRefreshBrand";
 import { LibraryReleaseSkeletonGrid } from "@/components/ui/Skeleton";
-import { debugInit } from "@/lib/debug";
 import { resumeDraftFromRelease } from "@/features/release/createRelease/actions";
 import { useCreateReleaseDraftStore } from "@/features/release/createRelease/store";
 import {
@@ -27,7 +26,7 @@ import {
 } from "@/lib/release-status";
 import { getMyReleases, getReleaseDisplayTitle, type ReleaseRecord } from "@/repositories/releases.repo";
 import { getTelegramUserId, initTelegramWebApp, triggerHaptic } from "@/lib/telegram";
-import { stringifyErrorForDebug, USER_REQUEST_TIMEOUT_MESSAGE } from "@/lib/errors";
+import { USER_REQUEST_TIMEOUT_MESSAGE } from "@/lib/errors";
 import { ARTWORK_BLUR_DATA_URL } from "@/lib/image-blur";
 import { SWR_LIST_OPTIONS } from "@/lib/swr-config";
 import { withRequestTimeout } from "@/lib/withRequestTimeout";
@@ -163,7 +162,6 @@ function ArtworkThumb({
 }
 
 async function fetchReleasesForUser([, uid]: readonly ["releases", string]): Promise<ReleaseRow[]> {
-  debugInit("library", "loadReleases start", { userId: uid });
   const queryPromise = getMyReleases(uid);
 
   const rows = await withRequestTimeout(
@@ -171,7 +169,6 @@ async function fetchReleasesForUser([, uid]: readonly ["releases", string]): Pro
     RELEASES_LIST_TIMEOUT_MS,
     USER_REQUEST_TIMEOUT_MESSAGE
   );
-  debugInit("library", "loadReleases success", { count: rows.length });
   return rows as ReleaseRow[];
 }
 
@@ -188,11 +185,9 @@ function LibraryPageInner() {
   } | null>(null);
 
   useEffect(() => {
-    debugInit("library", "init start");
     initTelegramWebApp();
     const tid = getTelegramUserId();
     setUserId(tid != null ? String(tid) : null);
-    debugInit("library", "init done");
   }, []);
 
   const swrKey = userId != null ? (["releases", userId] as const) : null;
@@ -286,19 +281,9 @@ function LibraryPageInner() {
       <div className="mx-auto flex w-full max-w-[440px] flex-col gap-6 font-sans">
         <div className="sticky top-0 z-40 -mx-5 border-b border-white/[0.06] bg-black/40 px-5 py-5 backdrop-blur-xl backdrop-saturate-150">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0 flex-1">
-              <h1 className="truncate text-[20px] font-semibold tracking-tight">Мои релизы</h1>
-              <pre className="mt-2 max-h-[120px] overflow-auto rounded-lg border border-white/10 bg-black/50 px-2 py-1.5 font-mono text-[10px] leading-snug text-amber-100/90">
-                {JSON.stringify(data ?? null)}
-                {"\n"}
-                {JSON.stringify({
-                  error: stringifyErrorForDebug(error),
-                  isLoading,
-                  isValidating,
-                  userId
-                })}
-              </pre>
-            </div>
+            <h1 className="min-w-0 flex-1 truncate text-[20px] font-semibold tracking-tight">
+              Мои релизы
+            </h1>
             <div className="flex flex-wrap items-center gap-2">
               <motion.button
                 type="button"
@@ -371,9 +356,10 @@ function LibraryPageInner() {
               <motion.div
                 key="library-loading"
                 className="space-y-4"
-                initial={{ opacity: 1 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                transition={{ duration: 0.2 }}
+                transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
               >
                 <p className="text-[13px] text-text-muted">
                   {showTelegramWait ? "Подключаем Telegram…" : "Загружаем твои релизы из OMF…"}
@@ -724,13 +710,19 @@ export default function LibraryPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-[100dvh] items-center justify-center bg-background px-5 py-6 text-text">
-          <div className="flex flex-col items-center gap-4">
-            <div
-              className="h-9 w-9 animate-spin rounded-full border-2 border-white/10 border-t-[#7C3AED]"
-              aria-hidden="true"
-            />
-            <p className="text-[13px] text-text-muted">Загрузка…</p>
+        <div className="min-h-[100dvh] bg-background px-5 py-6 pb-10 text-text">
+          <div className="mx-auto flex w-full max-w-[440px] flex-col gap-6">
+            <div className="h-8 w-48 animate-pulse rounded-lg bg-white/[0.06]" aria-hidden />
+            <div className="grid grid-cols-3 gap-2">
+              {[0, 1, 2].map((i) => (
+                <div
+                  key={i}
+                  className="h-[72px] animate-pulse rounded-[16px] bg-white/[0.05]"
+                  aria-hidden
+                />
+              ))}
+            </div>
+            <LibraryReleaseSkeletonGrid count={5} />
           </div>
         </div>
       }

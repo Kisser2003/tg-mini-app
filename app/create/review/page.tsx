@@ -13,7 +13,10 @@ import { CreateShell } from "@/features/release/createRelease/components/CreateS
 import { hapticMap } from "@/lib/haptic-map";
 import { StepGate } from "@/features/release/createRelease/components/StepGate";
 import { useStepGuard } from "@/features/release/createRelease/guards";
-import { useCreateReleaseDraftStore } from "@/features/release/createRelease/store";
+import {
+  selectTracksWavFullySynced,
+  useCreateReleaseDraftStore
+} from "@/features/release/createRelease/store";
 import {
   getLastSubmitPrecheckHttpStatus,
   submitTracksAndFinalize
@@ -162,7 +165,7 @@ export default function CreateReviewPage() {
   const submitStatus = useCreateReleaseDraftStore((s) => s.submitStatus);
   const submitStage = useCreateReleaseDraftStore((s) => s.submitStage);
   const submitProgress = useCreateReleaseDraftStore((s) => s.submitProgress);
-  const tracksWavSyncedToDb = useCreateReleaseDraftStore((s) => s.tracksWavSyncedToDb);
+  const tracksWavSyncedToDb = useCreateReleaseDraftStore(selectTracksWavFullySynced);
   const tracksUploadInProgress = useCreateReleaseDraftStore((s) => s.tracksUploadInProgress);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
