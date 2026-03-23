@@ -9,10 +9,10 @@ import { escapeHtml } from "@/lib/telegram-bot.server";
 import { sendTelegramNotification } from "@/lib/telegram-notifications";
 import { getReleaseDisplayTitle, type ReleaseRecord } from "@/repositories/releases.repo";
 
-function notifyReleaseSubmittedForModeration(
+async function notifyReleaseSubmittedForModeration(
   record: ReleaseRecord,
   telegramUserId: number
-): void {
+): Promise<void> {
   const fromRow =
     record.telegram_id != null && String(record.telegram_id).trim() !== ""
       ? String(record.telegram_id)
@@ -24,7 +24,8 @@ function notifyReleaseSubmittedForModeration(
   const text =
     `🚀 <b>Ваш релиз «${title}» отправлен на модерацию!</b>\n\n` +
     `Мы проверим его в течение 24 часов и пришлем уведомление здесь.`;
-  void sendTelegramNotification(fromRow, text);
+  /** Обязательно await — иначе на Vercel serverless ответ уходит до fetch в Telegram API. */
+  await sendTelegramNotification(fromRow, text);
 }
 
 const bodySchema = z.object({
@@ -100,7 +101,7 @@ async function handleFinalizeSubmit(
     const rows = Array.isArray(rpcData) ? rpcData : rpcData ? [rpcData] : [];
     if (rows.length > 0) {
       const rec = rows[0] as ReleaseRecord;
-      notifyReleaseSubmittedForModeration(rec, telegramUserId);
+      await notifyReleaseSubmittedForModeration(rec, telegramUserId);
       return NextResponse.json({ ok: true, record: rec });
     }
   } else {
@@ -154,7 +155,7 @@ async function handleFinalizeSubmit(
     );
   }
 
-  notifyReleaseSubmittedForModeration(rows[0], telegramUserId);
+  await notifyReleaseSubmittedForModeration(rows[0], telegramUserId);
   return NextResponse.json({ ok: true, record: rows[0] });
 }
 

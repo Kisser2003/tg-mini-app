@@ -93,6 +93,8 @@ export type ReleaseRecord = {
   collaborators?: unknown;
   telegram_id?: number | null;
   telegram_username?: string | null;
+  /** Вебхук: короткое «релиз получен» уже отправлено (дедуп при pending + tracks). */
+  telegram_pending_ack_sent_at?: string | null;
 } & ReleaseStep2Payload;
 
 /** Публичное название релиза: `title`, иначе legacy `track_name`. */

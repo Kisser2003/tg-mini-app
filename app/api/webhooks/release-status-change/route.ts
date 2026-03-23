@@ -6,6 +6,32 @@ import { createSupabaseAdmin } from "@/lib/supabase-admin";
 
 export const runtime = "nodejs";
 
+const WEBHOOK_VERBOSE =
+  process.env.WEBHOOK_VERBOSE_LOGS === "true" || process.env.NODE_ENV !== "production";
+
+type SupabaseAdmin = NonNullable<ReturnType<typeof createSupabaseAdmin>>;
+
+/**
+ * Атомарно помечаем «короткое» уведомление pending+tracks как отправленное (без дублей при PATCH).
+ * Нужна колонка `telegram_pending_ack_sent_at` (миграция 20260331220000).
+ */
+async function claimPendingWebhookAck(admin: SupabaseAdmin, releaseId: string): Promise<boolean> {
+  const { data, error } = await admin
+    .from("releases")
+    .update({ telegram_pending_ack_sent_at: new Date().toISOString() })
+    .eq("id", releaseId)
+    .is("telegram_pending_ack_sent_at", null)
+    .select("id");
+  if (error) {
+    console.error(
+      "[webhooks/release-status-change] claim telegram_pending_ack_sent_at:",
+      error.message
+    );
+    return false;
+  }
+  return Array.isArray(data) && data.length > 0;
+}
+
 /** Supabase Database Webhooks (INSERT / UPDATE на `releases`). */
 const supabaseWebhookSchema = z.object({
   type: z.enum(["INSERT", "UPDATE", "DELETE"]),
@@ -93,9 +119,13 @@ function checkWebhookAuth(request: Request, rawBody: string): WebhookAuthResult 
    * (`x-supabase-signature` или `x-supabase-webhook-secret` = `SUPABASE_WEBHOOK_SECRET`).
    */
   if (process.env.WEBHOOK_REQUIRE_SECRET !== "true") {
-    console.warn(
-      "[webhooks/release-status-change] проверка секрета пропущена (WEBHOOK_REQUIRE_SECRET не true). Поставь WEBHOOK_REQUIRE_SECRET=true после настройки заголовков."
-    );
+    const g = globalThis as typeof globalThis & { __tgWebhookSecretWarned?: boolean };
+    if (!g.__tgWebhookSecretWarned) {
+      g.__tgWebhookSecretWarned = true;
+      console.warn(
+        "[webhooks/release-status-change] проверка секрета пропущена (WEBHOOK_REQUIRE_SECRET не true). Поставь WEBHOOK_REQUIRE_SECRET=true после настройки заголовков."
+      );
+    }
     return { ok: true };
   }
 
@@ -394,21 +424,23 @@ export async function POST(request: Request): Promise<Response> {
       deepReadyNew &&
       !deepReadyOldSyncOnly;
 
-    console.log(
-      "REAL_FIELDS_IN_RECORD:",
-      Object.keys(row),
-      "VALUES:",
-      {
-        audio: row.audio_url,
-        art: row.artwork_url,
-        track: row.track_url
-      }
-    );
-    console.log(
-      "[webhooks/release-status-change] note: WAV/треки в таблице `tracks` (file_path) не приходят в record вебхука по `releases` — только колонки этой строки"
-    );
+    if (WEBHOOK_VERBOSE) {
+      console.log(
+        "REAL_FIELDS_IN_RECORD:",
+        Object.keys(row),
+        "VALUES:",
+        {
+          audio: row.audio_url,
+          art: row.artwork_url,
+          track: row.track_url
+        }
+      );
+      console.log(
+        "[webhooks/release-status-change] note: WAV/треки в таблице `tracks` (file_path) не приходят в record вебхука по `releases` — только колонки этой строки"
+      );
+    }
 
-    console.log("Content check:", {
+    if (WEBHOOK_VERBOSE) console.log("Content check:", {
       hasAudioUrl: looksLikeHttpOrHttpsUrl(row.audio_url),
       hasArtworkUrl: looksLikeHttpOrHttpsUrl(row.artwork_url),
       hasReleaseFileLinks: hasReleaseFileLinks(row),
@@ -456,12 +488,10 @@ export async function POST(request: Request): Promise<Response> {
       }
 
       /**
-       * Не используем `gainedFullWhilePending` для Telegram: при pending + треках только в `tracks`
-       * (без audio_url в строке releases) это условие истинно на **каждом** UPDATE (save-draft-patch,
-       * правки метаданных и т.д.) — вебхук дублировал «Бро, релиз получен» много раз.
-       * Достаточно: переход в pending и появление ссылок на файлы в колонках releases.
+       * `gainedFullWhilePending`: треки в `tracks`, без audio_url в строке releases — шлём Telegram
+       * только один раз через атомарный `claimPendingWebhookAck` (колонка `telegram_pending_ack_sent_at`).
        */
-      if (!transitionToPending && !gainedFilesWhilePending) {
+      if (!transitionToPending && !gainedFilesWhilePending && !gainedFullWhilePending) {
         console.log("[webhooks/release-status-change] skip UPDATE (no notify rule)", {
           oldStatus,
           newStatus,
@@ -555,14 +585,33 @@ export async function POST(request: Request): Promise<Response> {
       return NextResponse.json({ ok: true, skipped: true, reason: "no_telegram_id" });
     }
 
+    const onlyFullPendingAck =
+      type === "UPDATE" &&
+      gainedFullWhilePending &&
+      !transitionToPending &&
+      !gainedFilesWhilePending;
+
+    if (onlyFullPendingAck && adminDeep) {
+      const claimed = await claimPendingWebhookAck(adminDeep, releaseId);
+      if (!claimed) {
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "pending_ack_already_sent"
+        });
+      }
+    }
+
     const title = displayTitleFromRecord(row);
     const text = buildPendingMessage(title);
 
-    console.log("[webhooks/release-status-change] sending Telegram (pending)", {
-      eventType: type,
-      newStatus,
-      oldStatus: oldRecord != null ? oldStatus : "(n/a)"
-    });
+    if (WEBHOOK_VERBOSE) {
+      console.log("[webhooks/release-status-change] sending Telegram (pending)", {
+        eventType: type,
+        newStatus,
+        oldStatus: oldRecord != null ? oldStatus : "(n/a)"
+      });
+    }
 
     const send = await sendTelegramBotMessage({
       chatId,

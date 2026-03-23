@@ -11,13 +11,14 @@ export async function sendTelegramNotification(chatId: string, message: string):
       console.warn("[sendTelegramNotification] TELEGRAM_BOT_TOKEN is not set, skip");
       return;
     }
-    const id = Number(String(chatId).trim());
-    if (!Number.isFinite(id) || id <= 0) {
+    const trimmed = String(chatId).trim();
+    /** Не приводим к Number — большие Telegram id и строковый chat_id должны уходить в API как есть. */
+    if (!/^\d+$/.test(trimmed) || trimmed === "0") {
       console.error("[sendTelegramNotification] invalid chatId:", chatId);
       return;
     }
     const result = await sendTelegramBotMessage({
-      chatId: id,
+      chatId: trimmed,
       text: message,
       parseMode: "HTML"
     });
