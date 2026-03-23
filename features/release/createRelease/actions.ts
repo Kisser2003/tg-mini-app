@@ -67,6 +67,32 @@ function parseStoreUserId(raw: string | null): number | null {
   return Number.isFinite(n) && n > 0 ? Math.trunc(n) : null;
 }
 
+function isPostgrestNoSuchRowError(e: unknown): boolean {
+  const code =
+    typeof e === "object" && e !== null && "code" in e
+      ? String((e as { code: unknown }).code)
+      : "";
+  return code === "PGRST116";
+}
+
+/**
+ * Если в persist лежит `releaseId`, которого уже нет в БД, service routes (`save-draft-patch`,
+ * `draft-upload-state`) отвечают 404 «Релиз не найден.» — сбрасываем id, дальше `ensureDraftRelease`
+ * подтянет строку по `client_request_id` (upsert).
+ * Сбрасываем только при PGRST116 (0 строк), не при обрыве сети.
+ */
+async function verifyStoredReleaseExistsOrClearReleaseId(): Promise<void> {
+  const rid = useCreateReleaseDraftStore.getState().releaseId;
+  if (!rid) return;
+  try {
+    await getReleaseById(rid);
+  } catch (e: unknown) {
+    if (isPostgrestNoSuchRowError(e)) {
+      useCreateReleaseDraftStore.getState().setReleaseId(null);
+    }
+  }
+}
+
 /** Как в `ensureDraftRelease`: telegram_id строки tracks = WebApp user id или стор. */
 function getTrackRowTelegramId(userId: number): number {
   return getTelegramUser()?.id ?? userId;
@@ -105,12 +131,6 @@ async function saveDraftPatchViaServiceApi(
 
   if (res.status === 503) {
     return false;
-  }
-
-  if (res.status === 404 && typeof console !== "undefined") {
-    console.warn(
-      "[saveDraftPatchViaServiceApi] /api/releases/save-draft-patch вернул 404 — на сервере нет этого роута (редеплой или старая сборка). Используем клиентский update."
-    );
   }
 
   return res.ok;
@@ -531,8 +551,10 @@ export async function ensureDraftRelease(): Promise<ReleaseRecord | null> {
         store.setSubmitError("Этот релиз уже отправлен на проверку.");
         return null;
       }
-    } catch {
-      // ignore — продолжаем создание черновика при ошибке загрузки
+    } catch (e: unknown) {
+      if (isPostgrestNoSuchRowError(e)) {
+        useCreateReleaseDraftStore.getState().setReleaseId(null);
+      }
     }
   }
 
@@ -592,20 +614,29 @@ export async function ensureDraftRelease(): Promise<ReleaseRecord | null> {
 }
 
 export async function uploadArtworkForDraft(file: File): Promise<string | null> {
-  const store = useCreateReleaseDraftStore.getState();
+  let store = useCreateReleaseDraftStore.getState();
   initUserContextInStore();
-  if (!store.userId || !store.releaseId) {
-    store.setSubmitError("Нет данных релиза для загрузки обложки.");
+  if (!store.userId) {
+    store.setSubmitError("Откройте приложение из Telegram.");
     return null;
+  }
+  await verifyStoredReleaseExistsOrClearReleaseId();
+  store = useCreateReleaseDraftStore.getState();
+  if (!store.releaseId) {
+    const draft = await ensureDraftRelease();
+    if (!draft) {
+      return null;
+    }
+    store = useCreateReleaseDraftStore.getState();
   }
   try {
     store.setSubmitError(null);
     const artworkUrl = await uploadReleaseArtwork({
       userId: parseStoreUserId(store.userId)!,
-      releaseId: store.releaseId,
+      releaseId: store.releaseId!,
       file,
       options: {
-        markReleaseFailedOnError: { releaseId: store.releaseId }
+        markReleaseFailedOnError: { releaseId: store.releaseId! }
       }
     });
     store.setArtworkUrl(artworkUrl);
@@ -646,7 +677,8 @@ export async function saveDraftAction(): Promise<{ ok: true } | { ok: false; mes
   }
   try {
     store.setSubmitError(null);
-    if (!store.releaseId) {
+    await verifyStoredReleaseExistsOrClearReleaseId();
+    if (!useCreateReleaseDraftStore.getState().releaseId) {
       const draft = await ensureDraftRelease();
       if (!draft) {
         return {
@@ -830,6 +862,8 @@ export async function uploadTrackWavAtIndex(options: {
     store.setSubmitError("Нет данных трека.");
     return false;
   }
+  await verifyStoredReleaseExistsOrClearReleaseId();
+  store = useCreateReleaseDraftStore.getState();
   if (!store.releaseId) {
     const saved = await saveDraftAction();
     if (!saved.ok) {
@@ -930,10 +964,20 @@ export async function uploadTracksForDraftStep(options: {
   onTrackProgress: (index: number, percent: number) => void;
 }): Promise<boolean> {
   initUserContextInStore();
-  const store = useCreateReleaseDraftStore.getState();
-  if (!store.userId || !store.releaseId) {
-    store.setSubmitError("Нет данных релиза для загрузки треков.");
+  let store = useCreateReleaseDraftStore.getState();
+  if (!store.userId) {
+    store.setSubmitError("Откройте приложение из Telegram.");
     return false;
+  }
+  await verifyStoredReleaseExistsOrClearReleaseId();
+  store = useCreateReleaseDraftStore.getState();
+  if (!store.releaseId) {
+    const draft = await ensureDraftRelease();
+    if (!draft) {
+      store.setSubmitError("Нет данных релиза для загрузки треков.");
+      return false;
+    }
+    store = useCreateReleaseDraftStore.getState();
   }
   const parsedTracks = tracksSchema.safeParse({ tracks: store.tracks });
   if (!parsedTracks.success) {
@@ -946,7 +990,12 @@ export async function uploadTracksForDraftStep(options: {
     store.setSubmitError("Загрузите WAV для каждого трека.");
     return false;
   }
-  const releaseId = store.releaseId;
+  const releaseIdMaybe = store.releaseId;
+  if (!releaseIdMaybe) {
+    store.setSubmitError("Нет идентификатора релиза.");
+    return false;
+  }
+  const releaseId = releaseIdMaybe;
   const userId = parseStoreUserId(store.userId);
   if (userId == null) {
     store.setSubmitError("Нет данных пользователя для загрузки треков.");
