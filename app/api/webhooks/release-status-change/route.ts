@@ -193,23 +193,33 @@ function unwrapSupabaseWebhookJson(json: unknown): unknown {
   return json;
 }
 
-/**
- * Колонки `public.releases`: обложка обязательна для «готового» уведомления.
- * Аудио чаще в `public.tracks.file_path`; legacy — `releases.audio_url`.
- */
-const REQUIRED_RELEASE_FIELDS = ["artwork_url"] as const;
-
 function isNonEmptyField(value: unknown): boolean {
   if (value === null || value === undefined) return false;
   return String(value).trim().length > 0;
 }
 
-function missingRequiredReleaseFields(record: Record<string, unknown>): string[] {
-  const missing: string[] = [];
-  for (const key of REQUIRED_RELEASE_FIELDS) {
-    if (!isNonEmptyField(record[key])) missing.push(key);
-  }
-  return missing;
+/** В БД нет `track_url` — используем `audio_url` (legacy) или кастомную колонку, если появится. */
+function trackUrlField(record: Record<string, unknown>): string {
+  const v = record.track_url ?? record.audio_url;
+  if (typeof v !== "string") return "";
+  return v.trim();
+}
+
+function hasTrackTitle(record: Record<string, unknown>): boolean {
+  return isNonEmptyField(record.track_name) || isNonEmptyField(record.title);
+}
+
+/**
+ * «Настоящий» черновик: есть название и хотя бы одна ссылка на файл (аудио или обложка).
+ * Уточнение по `tracks` — в `assertReleaseAudioReady`.
+ */
+function releaseContentReadySync(record: Record<string, unknown>): boolean {
+  if (!hasTrackTitle(record)) return false;
+  return (
+    isNonEmptyField(record.track_url) ||
+    isNonEmptyField(record.audio_url) ||
+    isNonEmptyField(record.artwork_url)
+  );
 }
 
 /**
@@ -329,6 +339,14 @@ export async function POST(request: Request): Promise<Response> {
 
     const row = record as Record<string, unknown>;
 
+    console.log("Content check:", {
+      hasFiles: Boolean(
+        typeof row.track_url === "string" ? row.track_url.trim().length > 0 : row.track_url
+      ),
+      hasTrackOrArtwork: Boolean(trackUrlField(row) || isNonEmptyField(row.artwork_url)),
+      type
+    });
+
     if (type === "INSERT") {
       if (newStatus !== "pending") {
         console.log("[webhooks/release-status-change] ignore INSERT (not pending yet)", {
@@ -355,14 +373,28 @@ export async function POST(request: Request): Promise<Response> {
           reason: "missing_old_record"
         });
       }
-      if (oldStatus === "pending") {
-        console.log("[webhooks/release-status-change] skip UPDATE (already was pending, no transition)", {
-          oldStatus
+
+      const oldRow = oldRecord as Record<string, unknown>;
+      const transitionToPending = oldStatus !== "pending" && newStatus === "pending";
+      const oldTrackUrl = trackUrlField(oldRow);
+      const newTrackUrl = trackUrlField(row);
+      const gainedTrackUrlWhilePending =
+        oldStatus === "pending" &&
+        newStatus === "pending" &&
+        oldTrackUrl.length === 0 &&
+        newTrackUrl.length > 0;
+
+      if (!transitionToPending && !gainedTrackUrlWhilePending) {
+        console.log("[webhooks/release-status-change] skip UPDATE (no notify rule)", {
+          oldStatus,
+          newStatus,
+          transitionToPending,
+          gainedTrackUrlWhilePending
         });
         return NextResponse.json({
           ok: true,
           skipped: true,
-          reason: "already_pending"
+          reason: "update_no_notify_rule"
         });
       }
     } else {
@@ -370,17 +402,19 @@ export async function POST(request: Request): Promise<Response> {
       return NextResponse.json({ ok: true, skipped: true, reason: "unhandled_event_type" });
     }
 
-    const missingCols = missingRequiredReleaseFields(row);
-    if (missingCols.length > 0) {
+    if (!releaseContentReadySync(row)) {
       console.log("Skip Telegram: release is not fully filled yet", {
-        missingFields: missingCols,
-        reason: "required_release_columns"
+        reason: "release_content_sync_failed",
+        hasTitle: hasTrackTitle(row),
+        hasTrackOrArtwork:
+          isNonEmptyField(row.track_url) ||
+          isNonEmptyField(row.audio_url) ||
+          isNonEmptyField(row.artwork_url)
       });
       return NextResponse.json({
         ok: true,
         skipped: true,
-        reason: "release_not_ready",
-        missingFields: missingCols
+        reason: "release_not_ready"
       });
     }
 
