@@ -25,7 +25,7 @@ import {
   type CanonicalReleaseStatus,
   type ReleaseStatusMeta
 } from "@/lib/release-status";
-import { supabase } from "@/lib/supabase";
+import { getMyReleases } from "@/repositories/releases.repo";
 import { getTelegramUserId, initTelegramWebApp, triggerHaptic } from "@/lib/telegram";
 import { USER_REQUEST_TIMEOUT_MESSAGE } from "@/lib/errors";
 import { ARTWORK_BLUR_DATA_URL } from "@/lib/image-blur";
@@ -46,7 +46,8 @@ type ReleaseRow = {
 };
 
 const ARTWORK_SIZES = "(max-width: 768px) 100vw, 33vw";
-const RELEASES_LIST_TIMEOUT_MS = 12000;
+/** Список релизов + Supabase; не должен «висеть» бесконечно при сетевых сбоях. */
+const RELEASES_LIST_TIMEOUT_MS = 15000;
 
 type LibraryStatusFilter = "all" | "processing" | "ready" | "failed";
 
@@ -163,17 +164,7 @@ function ArtworkThumb({
 
 async function fetchReleasesForUser([, uid]: readonly ["releases", number]): Promise<ReleaseRow[]> {
   debugInit("library", "loadReleases start", { userId: uid });
-  const queryPromise = (async () => {
-    const { data, error: dbError } = await supabase
-      .from("releases")
-      .select(
-        "id, track_name, artwork_url, status, error_message, created_at, admin_notes, draft_upload_started"
-      )
-      .eq("user_id", uid)
-      .order("created_at", { ascending: false });
-    if (dbError) throw dbError;
-    return (data ?? []) as ReleaseRow[];
-  })();
+  const queryPromise = getMyReleases(uid);
 
   const rows = await withRequestTimeout(
     queryPromise,
@@ -181,7 +172,7 @@ async function fetchReleasesForUser([, uid]: readonly ["releases", number]): Pro
     USER_REQUEST_TIMEOUT_MESSAGE
   );
   debugInit("library", "loadReleases success", { count: rows.length });
-  return rows;
+  return rows as ReleaseRow[];
 }
 
 function LibraryPageInner() {

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { logSupabaseUpdateError } from "../lib/errors";
 import { supabase } from "../lib/supabase";
 import { uploadToSupabaseStorageObject } from "../lib/storage-upload-client";
 import {
@@ -126,6 +127,13 @@ export type UploadAssetOptions = {
     releaseId: string;
   };
 };
+
+/** PostgREST не должен получать ключи со значением `undefined` — ломает сериализацию/INSERT. */
+function omitUndefinedFromRecord<T extends Record<string, unknown>>(obj: T): Partial<T> {
+  return Object.fromEntries(
+    Object.entries(obj).filter(([, v]) => v !== undefined)
+  ) as Partial<T>;
+}
 
 async function withRetry<T>(fn: () => Promise<T>, retries = 2, baseDelayMs = 200): Promise<T> {
   let attempt = 0;
@@ -274,6 +282,7 @@ export async function createDraftRelease(
   });
 
   if (loadError) {
+    logSupabaseUpdateError("createDraftRelease.load", loadError);
     throw loadError;
   }
 
@@ -299,6 +308,7 @@ export async function createDraftRelease(
   });
 
   if (error) {
+    logSupabaseUpdateError("createDraftRelease.upsert", error);
     throw error;
   }
 
@@ -355,16 +365,19 @@ export async function updateRelease(
     releaseStep2Schema.partial().parse(base);
   }
 
+  const sanitized = omitUndefinedFromRecord(payload as Record<string, unknown>) as typeof payload;
+
   const { data, error } = await withRetry(async () => {
     const response = await supabase
       .from("releases")
-      .update(payload)
+      .update(sanitized)
       .eq("id", id)
       .select("*");
     return response;
   });
 
   if (error) {
+    logSupabaseUpdateError("updateRelease", error);
     throw error;
   }
 
@@ -744,6 +757,7 @@ export async function addReleaseTrack(params: {
   });
 
   if (error) {
+    logSupabaseUpdateError("addReleaseTrack", error);
     throw error;
   }
 }
@@ -839,7 +853,29 @@ export async function getReleaseById(id: string): Promise<ReleaseRecord> {
 }
 
 /**
- * Очередь модерации: релизы, отправленные на проверку (`processing`).
+ * Все релизы пользователя для списка (библиотека). Без фильтра по статусу — видны draft, pending, processing и т.д.
+ */
+export async function getMyReleases(userId: number): Promise<ReleaseRecord[]> {
+  const { data, error } = await withRetry(async () => {
+    return await supabase
+      .from("releases")
+      .select(
+        "id, track_name, artwork_url, status, error_message, created_at, admin_notes, draft_upload_started"
+      )
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
+  });
+
+  if (error) {
+    logSupabaseUpdateError("getMyReleases", error);
+    throw error;
+  }
+
+  return (data ?? []) as ReleaseRecord[];
+}
+
+/**
+ * Очередь модерации: релизы на проверке (`processing` или `pending`, если статус не обновился до конца пайплайна).
  * Сортировка: сначала более ранние по дате создания.
  */
 export async function getPendingReleases(): Promise<ReleaseRecord[]> {
@@ -847,17 +883,21 @@ export async function getPendingReleases(): Promise<ReleaseRecord[]> {
     const response = await supabase
       .from("releases")
       .select("*")
-      .eq("status", "processing")
+      .in("status", ["processing", "pending"])
       .order("created_at", { ascending: true });
     return response;
   });
 
   if (error) {
+    logSupabaseUpdateError("getPendingReleases", error);
     throw error;
   }
 
   return (data ?? []) as ReleaseRecord[];
 }
+
+/** @alias getPendingReleases — очередь модерации для админки. */
+export const getAdminReleases = getPendingReleases;
 
 /**
  * Обновление статуса релиза (модерация: одобрение / отклонение).

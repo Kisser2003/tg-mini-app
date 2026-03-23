@@ -32,7 +32,7 @@ type ModerationQueueRow = {
   tracks: ReleaseTrackRow[];
 };
 
-const ADMIN_QUEUE_TIMEOUT_MS = 12000;
+const ADMIN_QUEUE_TIMEOUT_MS = 15000;
 
 const adminQueueContainer: Variants = {
   hidden: { opacity: 0 },

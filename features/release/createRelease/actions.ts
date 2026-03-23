@@ -1,4 +1,9 @@
-import { formatErrorMessage, getPostgrestErrorPayload } from "@/lib/errors";
+import {
+  formatErrorMessage,
+  getPostgrestErrorPayload,
+  USER_REQUEST_TIMEOUT_MESSAGE
+} from "@/lib/errors";
+import { withRequestTimeout } from "@/lib/withRequestTimeout";
 import { getUploadErrorDetails, logClientError } from "@/lib/logger";
 import { getExpectedAdminTelegramId } from "@/lib/admin";
 import {
@@ -31,6 +36,9 @@ import { supabase } from "@/lib/supabase";
 import { parseArtistLinksFromJson } from "@/lib/artist-links";
 import { parseCollaboratorsFromDb } from "@/lib/collaborators";
 import { parsePerformanceLanguage } from "@/lib/performance-language";
+
+/** Таймаут одной операции Storage/Supabase при загрузке треков, чтобы UI не зависал бесконечно. */
+const SUPABASE_DB_OP_TIMEOUT_MS = 15000;
 
 /** Защита от двойного сабмита (двойной тап в Telegram). */
 let submitTracksInFlight = false;
@@ -741,16 +749,21 @@ export async function uploadTracksForDraftStep(options: {
 
         let audioUrl: string;
         try {
-          audioUrl = await uploadReleaseTrackAudio({
-            userId,
-            releaseId,
-            trackIndex: index,
-            file,
-            options: {
-              markReleaseFailedOnError: { releaseId },
-              onProgress: (pct) => options.onTrackProgress(index, pct)
-            }
-          });
+          audioUrl = await withRequestTimeout(
+            uploadReleaseTrackAudio({
+              userId,
+              releaseId,
+              trackIndex: index,
+              file,
+              options: {
+                markReleaseFailedOnError: { releaseId },
+                onProgress: (pct) => options.onTrackProgress(index, pct)
+              }
+            }),
+            SUPABASE_DB_OP_TIMEOUT_MS,
+            USER_REQUEST_TIMEOUT_MESSAGE
+          );
+          console.log("Step 1: Storage Upload Done", { trackIndex: index, releaseId });
         } catch (e: unknown) {
           void postDraftUploadState(releaseId, "failed");
           console.error("[uploadTracksForDraftStep] Storage (WAV) upload failed", {
@@ -770,14 +783,19 @@ export async function uploadTracksForDraftStep(options: {
         }
 
         try {
-          await addReleaseTrack({
-            releaseId,
-            userId,
-            index,
-            title: track.title,
-            explicit: Boolean(track.explicit),
-            audioUrl
-          });
+          console.log("Step 2: Starting DB Insert", { trackIndex: index, releaseId });
+          await withRequestTimeout(
+            addReleaseTrack({
+              releaseId,
+              userId,
+              index,
+              title: track.title,
+              explicit: Boolean(track.explicit),
+              audioUrl
+            }),
+            SUPABASE_DB_OP_TIMEOUT_MS,
+            USER_REQUEST_TIMEOUT_MESSAGE
+          );
         } catch (e: unknown) {
           void postDraftUploadState(releaseId, "failed");
           console.error("[uploadTracksForDraftStep] DB tracks upsert failed", {
@@ -901,25 +919,35 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
           const track = parsedTracks.data.tracks[index];
           const file = args.files[index];
           uploadPhase = "storage_track_wav";
-          const audioUrl = await uploadReleaseTrackAudio({
-            userId: store.userId,
-            releaseId,
-            trackIndex: index,
-            file,
-            options: {
-              markReleaseFailedOnError: { releaseId },
-              onProgress: (pct) => setTrackUploadProgress(index, pct)
-            }
-          });
+          const audioUrl = await withRequestTimeout(
+            uploadReleaseTrackAudio({
+              userId: store.userId,
+              releaseId,
+              trackIndex: index,
+              file,
+              options: {
+                markReleaseFailedOnError: { releaseId },
+                onProgress: (pct) => setTrackUploadProgress(index, pct)
+              }
+            }),
+            SUPABASE_DB_OP_TIMEOUT_MS,
+            USER_REQUEST_TIMEOUT_MESSAGE
+          );
+          console.log("Step 1: Storage Upload Done", { trackIndex: index, releaseId });
           uploadPhase = "db_release_track";
-          await addReleaseTrack({
-            releaseId,
-            userId: store.userId,
-            index,
-            title: track.title,
-            explicit: Boolean(track.explicit),
-            audioUrl
-          });
+          console.log("Step 2: Starting DB Insert", { trackIndex: index, releaseId });
+          await withRequestTimeout(
+            addReleaseTrack({
+              releaseId,
+              userId: store.userId,
+              index,
+              title: track.title,
+              explicit: Boolean(track.explicit),
+              audioUrl
+            }),
+            SUPABASE_DB_OP_TIMEOUT_MS,
+            USER_REQUEST_TIMEOUT_MESSAGE
+          );
           setTrackUploadProgress(index + 1, 0);
         }
       }
