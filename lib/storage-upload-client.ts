@@ -68,12 +68,14 @@ export function uploadToSupabaseStorageObject(
     xhr.upload.onprogress = (ev) => {
       if (ev.lengthComputable && options.onProgress && ev.total > 0) {
         const pct = Math.round((ev.loaded / ev.total) * 100);
-        options.onProgress(Math.max(0, Math.min(100, pct)));
+        /** До ответа сервера не показываем 100% — иначе на мобильных кажется, что всё ок, а потом 403/413/5xx. */
+        options.onProgress(Math.max(0, Math.min(99, pct)));
       }
     };
 
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) {
+        options.onProgress?.(100);
         resolve();
         return;
       }

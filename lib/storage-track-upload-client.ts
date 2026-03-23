@@ -9,9 +9,12 @@ import { getReleaseTrackAudioPartPath } from "@/lib/storagePaths";
 import { uploadToSupabaseStorageObject } from "@/lib/storage-upload-client";
 import { getTelegramApiAuthHeaders } from "@/lib/telegram";
 
-const CHUNK_BYTES = 4 * 1024 * 1024;
+/** 8 MiB — меньше частей при WAV до 200 МБ (мобильный WebView часто рвёт один длинный POST). */
+const CHUNK_BYTES = 8 * 1024 * 1024;
 const MIN_CHUNKED_FILE = 8 * 1024 * 1024;
-const MAX_CHUNKED_FILE = 32 * 1024 * 1024;
+/** Совпадает с RELEASE_FILE_LIMITS.audioMaxMb — один большой XHR без чанков на телефоне часто падает по таймауту/обрыву. */
+const MAX_CHUNKED_FILE = 200 * 1024 * 1024;
+const MAX_CHUNK_PARTS = 32;
 
 export type TrackChunkedUploadMeta = {
   userId: number;
@@ -43,7 +46,8 @@ export async function uploadReleaseTrackFileClient(
 
   if (canChunk && meta) {
     const partCount = Math.ceil(file.size / CHUNK_BYTES);
-    if (partCount <= 16) {
+    if (partCount <= MAX_CHUNK_PARTS) {
+      const chunkProgressCap = 82;
       for (let i = 0; i < partCount; i++) {
         const start = i * CHUNK_BYTES;
         const end = Math.min(start + CHUNK_BYTES, file.size);
@@ -63,12 +67,14 @@ export async function uploadReleaseTrackFileClient(
           file: chunkFile,
           upsert: true,
           onProgress: (p) => {
-            const base = (i / partCount) * 85;
-            const slice = (p / 100) * (85 / partCount);
+            const base = (i / partCount) * chunkProgressCap;
+            const slice = (p / 100) * (chunkProgressCap / partCount);
             options.onProgress?.(Math.round(base + slice));
           }
         });
       }
+
+      options.onProgress?.(88);
 
       const headers: Record<string, string> = {
         "Content-Type": "application/json",

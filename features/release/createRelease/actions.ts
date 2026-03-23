@@ -107,6 +107,12 @@ async function saveDraftPatchViaServiceApi(
     return false;
   }
 
+  if (res.status === 404 && typeof console !== "undefined") {
+    console.warn(
+      "[saveDraftPatchViaServiceApi] /api/releases/save-draft-patch вернул 404 — на сервере нет этого роута (редеплой или старая сборка). Используем клиентский update."
+    );
+  }
+
   return res.ok;
 }
 

@@ -10,10 +10,11 @@ import { getReleaseTrackAudioPartPath, getReleaseTrackAudioPath } from "@/lib/st
 const bodySchema = z.object({
   releaseId: z.string().uuid(),
   trackIndex: z.number().int().min(0),
-  partCount: z.number().int().min(1).max(16)
+  partCount: z.number().int().min(1).max(32)
 });
 
-const MAX_STITCH_BYTES = 36 * 1024 * 1024;
+/** ~200 MiB WAV (8 MiB × 25 частей + запас). Vercel: держим в пределах лимита памяти функции. */
+const MAX_STITCH_BYTES = 210 * 1024 * 1024;
 
 async function handleStitch(
   request: NextRequest,
