@@ -10,6 +10,34 @@ import {
 import { getTelegramInitDataFromRequest } from "@/lib/api/get-telegram-init-data-from-request";
 
 const DEV_USER_ID_HEADER = "x-dev-telegram-user-id";
+const RLS_TELEGRAM_USER_ID_HEADER = "x-telegram-user-id";
+
+function logAdminAuthDiagnostics(
+  request: NextRequest,
+  source: string,
+  telegramUserId: number
+): void {
+  const headerRaw = request.headers.get(RLS_TELEGRAM_USER_ID_HEADER)?.trim() ?? "";
+  const envAdminRaw =
+    process.env.ADMIN_TELEGRAM_ID?.trim() ||
+    process.env.NEXT_PUBLIC_ADMIN_TELEGRAM_ID?.trim() ||
+    "";
+  console.log("[withTelegramAuth] admin-auth diagnostic", {
+    source,
+    verifiedTelegramUserId: telegramUserId,
+    verifiedAsString: String(telegramUserId),
+    headerXTelegramUserId: headerRaw.length > 0 ? headerRaw : null,
+    headerAsString: headerRaw.length > 0 ? String(headerRaw) : null,
+    envAdminTelegramId: envAdminRaw.length > 0 ? envAdminRaw : null,
+    envAdminAsString: envAdminRaw.length > 0 ? String(envAdminRaw) : null,
+    headerMatchesEnvAdmin:
+      envAdminRaw.length > 0 &&
+      headerRaw.length > 0 &&
+      String(headerRaw) === String(envAdminRaw),
+    verifiedMatchesEnvAdmin:
+      envAdminRaw.length > 0 && String(telegramUserId) === String(envAdminRaw)
+  });
+}
 
 function tryDevTelegramUserIdBypass(request: NextRequest): TelegramAuthContext | null {
   if (process.env.NODE_ENV !== "development") return null;
@@ -62,6 +90,7 @@ export function withTelegramAuth(
     if (!initDataRaw) {
       const devCtx = tryDevTelegramUserIdBypass(request);
       if (devCtx) {
+        logAdminAuthDiagnostics(request, "dev-bypass-no-initData", devCtx.user.id);
         return handler(request, devCtx);
       }
       console.warn("[withTelegramAuth] missing initData (header/cookie)");
@@ -94,6 +123,7 @@ export function withTelegramAuth(
         console.warn(
           "[withTelegramAuth] DEV bypass: initData verify failed; user id matches X-Dev-Telegram-User-Id"
         );
+        logAdminAuthDiagnostics(request, "dev-bypass-initData-verify-failed", looseOnFail.user.id);
         return handler(request, {
           user: looseOnFail.user,
           authDate: looseOnFail.authDate
@@ -103,6 +133,7 @@ export function withTelegramAuth(
       return unauthorized();
     }
 
+    logAdminAuthDiagnostics(request, "initData-verified", verified.user.id);
     return handler(request, {
       user: verified.user,
       authDate: verified.authDate

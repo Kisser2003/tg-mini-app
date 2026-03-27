@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import type { TelegramAuthContext } from "@/lib/api/with-telegram-auth";
 import { withTelegramAuth } from "@/lib/api/with-telegram-auth";
-import { getExpectedAdminTelegramId } from "@/lib/admin";
+import { getExpectedAdminTelegramId, telegramIdsEqual } from "@/lib/admin";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
 import type { AdminStatsResponse } from "@/types/admin";
 
@@ -14,7 +14,7 @@ function startOfUtcDayIso(): string {
 
 async function handleAdminStats(_request: NextRequest, ctx: TelegramAuthContext): Promise<Response> {
   const adminId = getExpectedAdminTelegramId();
-  if (ctx.user.id !== adminId) {
+  if (!telegramIdsEqual(ctx.user.id, adminId)) {
     return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
 

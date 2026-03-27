@@ -6,7 +6,7 @@ import {
 import { withRequestTimeout } from "@/lib/withRequestTimeout";
 import { getUploadErrorDetails, logClientError } from "@/lib/logger";
 import { requestScreenWakeLock, releaseWakeLock } from "@/lib/wake-lock";
-import { getExpectedAdminTelegramId } from "@/lib/admin";
+import { getAdminTelegramIdForUi, telegramIdsEqual } from "@/lib/admin";
 import {
   getTelegramApiAuthHeaders,
   getTelegramUser,
@@ -470,7 +470,9 @@ export async function resumeDraftFromRelease(releaseId: string): Promise<string 
         Number.isFinite(ownerId) &&
         Number.isFinite(sessionId) &&
         ownerId === sessionId;
-      const isAdminUser = sessionId === getExpectedAdminTelegramId();
+      const adminId = getAdminTelegramIdForUi();
+      const isAdminUser =
+        adminId !== null && Number.isFinite(sessionId) && telegramIdsEqual(sessionId, adminId);
       if (!isOwner && !isAdminUser) {
         useCreateReleaseDraftStore.getState().setSubmitError("Это не ваш релиз.");
         return null;
@@ -520,7 +522,9 @@ export async function hydrateFromReleaseId(releaseId: string): Promise<void> {
         Number.isFinite(ownerId) &&
         Number.isFinite(sessionId) &&
         ownerId === sessionId;
-      const isAdminUser = sessionId === getExpectedAdminTelegramId();
+      const adminId = getAdminTelegramIdForUi();
+      const isAdminUser =
+        adminId !== null && Number.isFinite(sessionId) && telegramIdsEqual(sessionId, adminId);
       if (!isOwner && !isAdminUser) {
         useCreateReleaseDraftStore.getState().setSubmitError("Это не ваш релиз.");
         return;

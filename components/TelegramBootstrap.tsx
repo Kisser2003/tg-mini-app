@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { getExpectedAdminTelegramId } from "@/lib/admin";
+import { getAdminTelegramIdForUi, telegramIdsEqual } from "@/lib/admin";
 import {
   acquireTelegramClosingConfirmation,
   getTelegramStartParam,
@@ -33,13 +33,14 @@ export function TelegramBootstrap() {
 
     const startParam = getTelegramStartParam();
     const userId = getTelegramUserId();
-    let adminId: number | null = null;
-    try {
-      adminId = getExpectedAdminTelegramId();
-    } catch {
-      // ADMIN_TELEGRAM_ID env var not set; deep-link redirect disabled
-    }
-    if (startParam === "admin" && adminId !== null && userId === adminId && pathname !== "/admin") {
+    const adminId = getAdminTelegramIdForUi();
+    if (
+      startParam === "admin" &&
+      adminId !== null &&
+      userId !== null &&
+      telegramIdsEqual(userId, adminId) &&
+      pathname !== "/admin"
+    ) {
       router.replace("/admin");
     }
   }, [pathname, router]);

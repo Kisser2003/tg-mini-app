@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 import { z } from "zod";
 import type { TelegramAuthContext } from "@/lib/api/with-telegram-auth";
 import { withTelegramAuth } from "@/lib/api/with-telegram-auth";
-import { getExpectedAdminTelegramId } from "@/lib/admin";
+import { getExpectedAdminTelegramId, telegramIdsEqual } from "@/lib/admin";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
 import type { ReleaseRecord } from "@/repositories/releases.repo";
 
@@ -18,7 +18,7 @@ async function handleUpdateReleaseStatus(
   ctx: TelegramAuthContext
 ): Promise<Response> {
   const adminId = getExpectedAdminTelegramId();
-  if (ctx.user.id !== adminId) {
+  if (!telegramIdsEqual(ctx.user.id, adminId)) {
     return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
 

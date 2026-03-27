@@ -2,15 +2,15 @@
 
 import type { ReleaseRecord } from "@/repositories/releases.repo";
 import { getTelegramApiAuthHeaders, getTelegramUserId } from "@/lib/telegram";
-import { getExpectedAdminTelegramId } from "@/lib/admin";
+import { getAdminTelegramIdForUi, telegramIdsEqual } from "@/lib/admin";
 
 function assertAdmin(): void {
   if (process.env.NODE_ENV === "development") {
     return;
   }
   const uid = getTelegramUserId();
-  const adminId = getExpectedAdminTelegramId();
-  if (uid == null || uid !== adminId) {
+  const adminId = getAdminTelegramIdForUi();
+  if (uid == null || adminId === null || !telegramIdsEqual(uid, adminId)) {
     throw new Error("Доступ только для администратора.");
   }
 }

@@ -1,32 +1,72 @@
 import { getTelegramUserId } from "./telegram";
 
+function parsePositiveTelegramId(raw: string): number | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const n = Number(trimmed);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return Math.trunc(n);
+}
+
 /**
- * Числовой Telegram ID администратора из переменной окружения ADMIN_TELEGRAM_ID.
- * Источник истины в production — таблица `admin_users` в Supabase (RBAC).
- * Эта функция используется только для клиентских проверок (isAdminUi) и
- * серверного скипа проверки подписи initData был удалён — admins now authenticate like regular users.
+ * Сравнение Telegram ID без сюрпризов от типов (number vs string из заголовков / env).
+ */
+export function telegramIdsEqual(a: number, b: number): boolean {
+  return String(a) === String(b);
+}
+
+/**
+ * Сырой ID админа из env. На сервере доступны обе переменные; в браузерном бандле Next
+ * подставляется только `NEXT_PUBLIC_*`, поэтому для UI в production нужен
+ * `NEXT_PUBLIC_ADMIN_TELEGRAM_ID` (тот же числовой ID, что и `ADMIN_TELEGRAM_ID`).
+ */
+function readAdminTelegramIdRawForServer(): string {
+  return (
+    process.env.ADMIN_TELEGRAM_ID?.trim() ||
+    process.env.NEXT_PUBLIC_ADMIN_TELEGRAM_ID?.trim() ||
+    ""
+  );
+}
+
+/**
+ * ID админа для клиентского UI (вкладка «Админ», редирект startapp=admin).
+ * В браузере сначала `NEXT_PUBLIC_ADMIN_TELEGRAM_ID`, иначе сравнение с env невозможно.
+ */
+export function getAdminTelegramIdForUi(): number | null {
+  if (typeof window === "undefined") {
+    return parsePositiveTelegramId(readAdminTelegramIdRawForServer());
+  }
+  const raw =
+    process.env.NEXT_PUBLIC_ADMIN_TELEGRAM_ID?.trim() ||
+    process.env.ADMIN_TELEGRAM_ID?.trim() ||
+    "";
+  return parsePositiveTelegramId(raw);
+}
+
+/**
+ * Числовой Telegram ID администратора для серверных API (строго: должно быть задано в env).
+ * Принимает `ADMIN_TELEGRAM_ID` или, как запасной вариант, `NEXT_PUBLIC_ADMIN_TELEGRAM_ID`
+ * (одинаковое значение на Vercel).
  */
 export function getExpectedAdminTelegramId(): number {
-  const raw = process.env.ADMIN_TELEGRAM_ID;
+  const raw = readAdminTelegramIdRawForServer();
   if (!raw) {
     throw new Error(
-      "[admin] ADMIN_TELEGRAM_ID env var is not set. " +
-        "Set it to the admin Telegram numeric ID (e.g. ADMIN_TELEGRAM_ID=123456789)."
+      "[admin] Set ADMIN_TELEGRAM_ID (and for client Admin UI also NEXT_PUBLIC_ADMIN_TELEGRAM_ID) " +
+        "to the admin Telegram numeric ID."
     );
   }
-  const parsed = Number(raw);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    throw new Error(
-      `[admin] ADMIN_TELEGRAM_ID="${raw}" is not a valid positive integer.`
-    );
+  const parsed = parsePositiveTelegramId(raw);
+  if (parsed === null) {
+    throw new Error(`[admin] Admin Telegram ID "${raw}" is not a valid positive integer.`);
   }
-  return Math.trunc(parsed);
+  return parsed;
 }
 
 /**
  * Показ вкладки «Админ» и клиентских проверок доступа.
- * В `development` на localhost без Telegram — считаем сессию «как админ» для удобства разработки.
- * В production — только реальный Telegram ID из ADMIN_TELEGRAM_ID env var.
+ * В `development` на localhost — всегда true для удобства.
+ * В production — сравнение ID через строки; env для браузера: `NEXT_PUBLIC_ADMIN_TELEGRAM_ID`.
  */
 export function isAdminUi(): boolean {
   if (process.env.NODE_ENV === "development") {
@@ -34,9 +74,7 @@ export function isAdminUi(): boolean {
   }
   const uid = getTelegramUserId();
   if (uid === null) return false;
-  try {
-    return uid === getExpectedAdminTelegramId();
-  } catch {
-    return false;
-  }
+  const adminId = getAdminTelegramIdForUi();
+  if (adminId === null) return false;
+  return telegramIdsEqual(uid, adminId);
 }
