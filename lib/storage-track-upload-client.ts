@@ -76,10 +76,6 @@ export async function uploadReleaseTrackFileClient(
 
       options.onProgress?.(88);
 
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-        ...getTelegramApiAuthHeaders({ userId: meta.userId })
-      };
       const bodyJson = JSON.stringify({
         releaseId: meta.releaseId,
         trackIndex: meta.trackIndex,
@@ -89,6 +85,10 @@ export async function uploadReleaseTrackFileClient(
       const maxStitchAttempts = 3;
       let res: Response | null = null;
       for (let attempt = 1; attempt <= maxStitchAttempts; attempt += 1) {
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+          ...getTelegramApiAuthHeaders({ userId: meta.userId })
+        };
         try {
           res = await fetch("/api/releases/stitch-track-parts", {
             method: "POST",
@@ -100,6 +100,12 @@ export async function uploadReleaseTrackFileClient(
           res = null;
         }
         if (res?.ok) break;
+        if (res?.status === 401 && attempt < maxStitchAttempts) {
+          const { initTelegramWebApp } = await import("@/lib/telegram");
+          initTelegramWebApp();
+          await new Promise((r) => setTimeout(r, 200));
+          continue;
+        }
         const st = res?.status ?? 0;
         const retryable =
           res == null ||

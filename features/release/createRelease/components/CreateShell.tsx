@@ -3,14 +3,14 @@
 import { useMemo } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
+import { ArrowLeft } from "lucide-react";
 import {
   CREATE_FLOW_STEPS,
   getCreateBackPath,
   getCreateStepIndexFromPath
 } from "@/lib/create-steps";
 import { CreateStepTransition } from "@/features/release/createRelease/components/CreateStepTransition";
-import { hapticMap } from "@/lib/haptic-map";
-import { SPRING_PROGRESS } from "@/lib/motion-spring";
+import { useHaptics } from "@/lib/hooks/useHaptics";
 import { useTelegramBackButton } from "@/lib/hooks/useTelegramBackButton";
 
 export function CreateShell({
@@ -22,84 +22,74 @@ export function CreateShell({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  const haptics = useHaptics();
 
   const activeIndex = useMemo(() => getCreateStepIndexFromPath(pathname), [pathname]);
-  const progress = useMemo(() => {
-    const denom = Math.max(1, CREATE_FLOW_STEPS.length - 1);
-    return (activeIndex / denom) * 100;
-  }, [activeIndex]);
 
-  // Show Telegram native BackButton on all steps except the first.
-  // Falls back gracefully when running outside the Telegram Mini App.
   useTelegramBackButton(
     () => {
-      hapticMap.impactLight();
+      haptics.impactLight();
       router.push(getCreateBackPath(pathname));
     },
     activeIndex > 0
   );
 
-  return (
-    <div className="bg-background px-5 py-6 pb-10 text-text">
-      <div className="mx-auto flex w-full max-w-[440px] flex-col gap-5 font-sans">
+  const goBack = () => {
+    haptics.impactLight();
+    router.push(getCreateBackPath(pathname));
+  };
 
-        {/* Static shell header — does not re-animate on step changes */}
-        <header className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            {/* Fallback back button for non-Telegram environments (browser dev/testing) */}
-            <button
+  return (
+    <div className="min-h-[100dvh] px-5 pb-10 pt-14 text-foreground">
+      <div className="mx-auto flex w-full max-w-[440px] flex-col gap-5 font-sans">
+        <header className="space-y-8">
+          <div className="flex items-center gap-3">
+            <motion.button
               type="button"
-              onClick={() => {
-                hapticMap.impactLight();
-                router.push(getCreateBackPath(pathname));
-              }}
-              className="text-[12px] text-text-muted hover:text-white transition-colors lg:hidden"
+              onClick={goBack}
+              whileTap={{ scale: 0.88 }}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/[0.06] bg-white/[0.04] text-white/60"
               aria-label="Назад"
             >
-              ← Назад
-            </button>
-            <span
-              className="bg-gradient-to-r from-white via-zinc-200 to-zinc-400 bg-clip-text text-[15px] font-semibold tracking-[0.28em] text-transparent"
-              style={{ letterSpacing: "0.28em" }}
-            >
-              OMF 2026
-            </span>
-            <div className="w-[44px]" />
+              <ArrowLeft size={17} strokeWidth={2} />
+            </motion.button>
+            <h1 className="font-display text-xl font-bold tracking-tight text-white/90">
+              Новый релиз
+            </h1>
           </div>
 
-          <div className="space-y-2">
-            <div className="relative h-2 w-full overflow-hidden rounded-full bg-gradient-to-r from-white/[0.06] via-white/10 to-white/[0.06]">
-              <motion.div
-                key={activeIndex}
-                className="relative z-[1] h-full origin-left rounded-full bg-gradient-to-r from-[color:var(--tg-theme-button-color,#4F46E5)] via-indigo-400/90 to-[#7C3AED]"
-                style={{
-                  boxShadow:
-                    "2px 0 14px color-mix(in srgb, var(--tg-theme-button-color, #a5b4fc) 38%, transparent)"
-                }}
-                initial={{ width: `${progress}%`, scaleX: 0.94, opacity: 0.92 }}
-                animate={{ width: `${progress}%`, scaleX: 1, opacity: 1 }}
-                transition={SPRING_PROGRESS}
-              />
-            </div>
-            <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.16em] text-white/35">
-              <span>{CREATE_FLOW_STEPS[activeIndex]?.label ?? "Шаг"}</span>
-              <span>
-                {Math.min(activeIndex + 1, CREATE_FLOW_STEPS.length)}/{CREATE_FLOW_STEPS.length}
-              </span>
-            </div>
+          <div className="flex gap-2">
+            {CREATE_FLOW_STEPS.map((s, i) => (
+              <div key={s.key} className="min-w-0 flex-1">
+                <div className="h-[2px] overflow-hidden rounded-full bg-white/[0.04]">
+                  <motion.div
+                    className="h-full rounded-full"
+                    style={{ background: "linear-gradient(90deg, #818cf8, #c084fc)" }}
+                    initial={{ width: "0%" }}
+                    animate={{ width: i <= activeIndex ? "100%" : "0%" }}
+                    transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+                  />
+                </div>
+                <p
+                  className={`mt-2.5 text-[8px] font-semibold uppercase leading-tight tracking-[0.12em] sm:text-[9px] sm:tracking-[0.15em] ${
+                    i <= activeIndex ? "text-[#818cf8]" : "text-white/15"
+                  }`}
+                >
+                  {s.label}
+                </p>
+              </div>
+            ))}
           </div>
         </header>
 
-        {/* Шаги мастера: направление анимации зависит от вперёд/назад */}
         <CreateStepTransition>
           <div className="flex flex-col gap-4">
-            {title && (
-              <h1 className="text-[20px] font-semibold tracking-tight">{title}</h1>
-            )}
+            {title ? (
+              <h2 className="text-[17px] font-semibold tracking-tight text-white/90">{title}</h2>
+            ) : null}
             {children}
           </div>
         </CreateStepTransition>
-
       </div>
     </div>
   );

@@ -156,8 +156,26 @@ export async function runAiMetadataPrecheck(
 
     return { allow: true, skippedAi: false };
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Gemini moderation failed";
+    const msg = e instanceof Error ? e.message : String(e);
     console.error("[release-ai-moderation] Gemini error:", msg);
+    /**
+     * Не блокируем отправку релиза (ручная модерация), если:
+     * - модель недоступна / переименована (404);
+     * - квота или лимит free tier (429 RESOURCE_EXHAUSTED).
+     */
+    const skipPrecheck =
+      /is not found for API version|models\/[\w.-]+ is not found|NOT_FOUND|"status":"NOT_FOUND"/i.test(
+        msg
+      ) ||
+      /"code":429|"status":"RESOURCE_EXHAUSTED"|RESOURCE_EXHAUSTED|quota exceeded|exceeded your current quota|free_tier/i.test(
+        msg
+      );
+    if (skipPrecheck) {
+      console.warn(
+        "[release-ai-moderation] AI precheck skipped (model/quota). Проверьте GEMINI_METADATA_MODEL и квоты: https://ai.google.dev/gemini-api/docs/rate-limits — релиз уходит без автопроверки."
+      );
+      return { allow: true, skippedAi: true };
+    }
     return {
       allow: false,
       status: 503,

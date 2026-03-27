@@ -217,8 +217,9 @@ function getDevUserIdForApiHeaders(): number | null {
 /**
  * Заголовки для `fetch` к API с `withTelegramAuth`.
  * - Сначала подписанный `X-Telegram-Init-Data` (если есть).
- * - В development при `NEXT_PUBLIC_ALLOW_DEV_API_AUTH=true` дополнительно `X-Dev-Telegram-User-Id`
- *   (совпадает с `user_id` в сторе — важно для localhost без Telegram).
+ * - В `next dev` без initData всегда шлём `X-Dev-Telegram-User-Id` (совпадает с `user_id` / Storage),
+ *   чтобы сборка чанков WAV (`stitch-track-parts`) и прочие API не отдавали 401 в обычном браузере.
+ * - Опционально `NEXT_PUBLIC_ALLOW_DEV_API_AUTH=false` отключает этот заголовок (строгий локальный режим).
  * - При несовпадении токена бота в dev сервер может принять запрос, если id из initData совпадает с заголовком.
  */
 export function getTelegramApiAuthHeaders(options?: { userId?: number | null }): Record<string, string> {
@@ -234,12 +235,14 @@ export function getTelegramApiAuthHeaders(options?: { userId?: number | null }):
       ? options.userId
       : getTelegramUserId() ?? getDevUserIdForApiHeaders();
 
-  if (
-    process.env.NODE_ENV !== "production" &&
-    process.env.NEXT_PUBLIC_ALLOW_DEV_API_AUTH === "true" &&
-    devUid != null &&
-    devUid > 0
-  ) {
+  const strictDev =
+    typeof process.env.NEXT_PUBLIC_ALLOW_DEV_API_AUTH === "string" &&
+    process.env.NEXT_PUBLIC_ALLOW_DEV_API_AUTH === "false";
+
+  const allowDevHeader =
+    process.env.NODE_ENV === "development" && !strictDev && initData.length === 0;
+
+  if (allowDevHeader && devUid != null && devUid > 0) {
     headers[TELEGRAM_DEV_USER_ID_HEADER] = String(devUid);
   }
 

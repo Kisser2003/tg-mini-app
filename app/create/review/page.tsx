@@ -7,7 +7,6 @@ import Image from "next/image";
 import { toast } from "sonner";
 import { AnimatePresence, motion } from "framer-motion";
 import { Music } from "lucide-react";
-import { GlassCard } from "@/components/GlassCard";
 import { CreateShell } from "@/features/release/createRelease/components/CreateShell";
 import { hapticMap } from "@/lib/haptic-map";
 import { StepGate } from "@/features/release/createRelease/components/StepGate";
@@ -382,7 +381,7 @@ export default function CreateReviewPage() {
                 </div>
               </div>
 
-              <GlassCard className="border-white/[0.12] p-5 backdrop-blur-xl sm:p-6" shimmer={false}>
+              <div className="glass-glow glass-glow-charged p-5 sm:p-6">
                 <p className="text-[13px] leading-relaxed text-text-muted">
                   Проверьте данные перед отправкой.
                   {tracksWavSyncedToDb
@@ -472,7 +471,7 @@ export default function CreateReviewPage() {
                     })}
                   </ul>
                 </section>
-              </GlassCard>
+              </div>
 
               {missingFiles && (
                 <motion.div

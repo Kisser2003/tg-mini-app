@@ -3,13 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, type Variants } from "framer-motion";
-import { BarChart3, Info, RefreshCcw, TrendingUp } from "lucide-react";
+import { BarChart3, DollarSign, RefreshCcw, TrendingUp } from "lucide-react";
 import useSWR from "swr";
 import { toast } from "sonner";
 import { AdminRejectModal } from "@/components/AdminRejectModal";
 import { AdminReleaseCard } from "@/components/AdminReleaseCard";
-import { GlassCard } from "@/components/GlassCard";
 import { PullRefreshBrand } from "@/components/PullRefreshBrand";
+import { StatsTile } from "@/components/StatsTile";
+import { AdminModerationQueueSkeleton } from "@/components/ui/LibrarySkeleton";
 import { approveRelease, rejectRelease } from "@/features/admin/actions";
 import { isAdminUi } from "@/lib/admin";
 import { debugInit } from "@/lib/debug";
@@ -22,7 +23,6 @@ import {
 } from "@/repositories/releases.repo";
 import { hapticMap } from "@/lib/haptic-map";
 import { getTelegramUserId, initTelegramWebApp, triggerHaptic } from "@/lib/telegram";
-import { AdminModerationQueueSkeleton } from "@/components/ui/Skeleton";
 import { errorToUserString, USER_REQUEST_TIMEOUT_MESSAGE } from "@/lib/errors";
 import { SWR_LIST_OPTIONS } from "@/lib/swr-config";
 import { withRequestTimeout } from "@/lib/withRequestTimeout";
@@ -43,13 +43,21 @@ const adminQueueContainer: Variants = {
 };
 
 const adminQueueItem: Variants = {
-  hidden: { opacity: 0, y: 8 },
+  hidden: { opacity: 0, y: 14 },
   show: {
     opacity: 1,
     y: 0,
     transition: { type: "spring", stiffness: 280, damping: 24 }
   }
 };
+
+function formatHoldRub(n: number): string {
+  return new Intl.NumberFormat("ru-RU", {
+    style: "currency",
+    currency: "RUB",
+    maximumFractionDigits: 0
+  }).format(n);
+}
 
 export default function AdminPage() {
   const router = useRouter();
@@ -168,68 +176,72 @@ export default function AdminPage() {
 
   if (userId == null && process.env.NODE_ENV === "production") {
     return (
-      <GlassCard className="p-5">
-        <h1 className="text-xl font-semibold tracking-tight">Панель модерации</h1>
-        <p className="mt-2 text-sm text-white/65">
-          Открой приложение из Telegram для доступа к админке.
-        </p>
-      </GlassCard>
+      <div className="glass-glow glass-glow-charged mx-5 mt-14 p-6">
+        <h1 className="font-display text-xl font-bold text-white/85">Панель модерации</h1>
+        <p className="mt-2 text-sm text-white/50">Открой приложение из Telegram для доступа к админке.</p>
+      </div>
     );
   }
 
   const showQueueSkeleton = isLoading && data === undefined;
   const pendingQueueCount = stats?.pending_queue ?? moderationQueue.length;
   const readyToday = stats?.ready_today ?? 0;
-  return (
-    <div className="flex min-h-[100dvh] flex-col gap-4 pb-10">
-      <PullRefreshBrand />
-      <GlassCard className="p-5">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-white/55">Админ</p>
-            <h1 className="mt-2 text-2xl font-semibold tracking-tight">Очередь модерации</h1>
-            <p className="mt-1 text-[12px] text-white/45">
-              Релизы со статусом «На проверке» (processing)
-            </p>
-          </div>
-          <motion.button
-            type="button"
-            whileHover={{ scale: 0.99 }}
-            whileTap={{ scale: 0.98 }}
-            transition={{ type: "spring", stiffness: 320, damping: 22 }}
-            onClick={() => void refreshAll()}
-            disabled={isValidating}
-            className="inline-flex shrink-0 items-center gap-1 self-start rounded-full border border-white/20 bg-white/5 px-3 py-1.5 text-xs text-white/80 disabled:opacity-60"
-          >
-            <RefreshCcw className={`h-3.5 w-3.5 ${isValidating ? "animate-spin" : ""}`} />
-            {isValidating ? "Обновляем..." : "Обновить"}
-          </motion.button>
-        </div>
+  const holdSum = stats?.pending_hold_sum ?? 0;
 
-        <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div className="rounded-[18px] border border-white/[0.08] bg-black/25 px-4 py-3 backdrop-blur-md">
-            <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.16em] text-white/45">
-              <BarChart3 className="h-3.5 w-3.5 text-sky-300/80" />
-              В очереди
-            </div>
-            <p className="mt-2 text-2xl font-semibold tabular-nums text-white">{pendingQueueCount}</p>
-          </div>
-          <div className="rounded-[18px] border border-white/[0.08] bg-black/25 px-4 py-3 backdrop-blur-md">
-            <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.16em] text-white/45">
-              <TrendingUp className="h-3.5 w-3.5 text-emerald-300/80" />
-              Одобрено сегодня
-            </div>
-            <p className="mt-2 text-2xl font-semibold tabular-nums text-white">{readyToday}</p>
-            <p className="mt-1 text-[10px] text-white/35">Статус «готов», с 00:00 UTC</p>
-          </div>
-          {/* Кошелёк заморожен — карточка «Сумма в холде» (pending_hold_sum) скрыта */}
+  return (
+    <div className="min-h-[100dvh] px-5 pb-44 pt-14">
+      <PullRefreshBrand />
+
+      <div className="mb-4 flex justify-end">
+        <motion.button
+          type="button"
+          whileTap={{ scale: 0.94 }}
+          onClick={() => void refreshAll()}
+          disabled={isValidating}
+          aria-label="Обновить"
+          className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04] text-white/70 backdrop-blur-md disabled:opacity-50"
+        >
+          <RefreshCcw className={`h-[18px] w-[18px] ${isValidating ? "animate-spin" : ""}`} />
+        </motion.button>
+      </div>
+
+      <motion.h1
+        className="mb-10 font-display text-2xl font-bold tracking-tight text-white/80"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+      >
+        Админ
+      </motion.h1>
+
+      <div className="mb-12 flex flex-col gap-3 sm:flex-row">
+        <StatsTile
+          icon={BarChart3}
+          label="В очереди"
+          value={pendingQueueCount}
+          delay={0.1}
+          accentClass="gradient-text-blue"
+        />
+        <StatsTile
+          icon={TrendingUp}
+          label="Одобрено сегодня"
+          value={readyToday}
+          delay={0.2}
+          accentClass="gradient-text-teal"
+        />
+        <StatsTile
+          icon={DollarSign}
+          label="В холде"
+          value={formatHoldRub(holdSum)}
+          delay={0.3}
+          accentClass="gradient-text-gold"
+        />
+      </div>
+
+      {statsErrorMessage && (
+        <div className="glass-glow glass-glow-charged mb-4 p-4 text-sm text-amber-100/90">
+          Счётчики: {statsErrorMessage}
         </div>
-        {statsErrorMessage && (
-          <p className="mt-3 text-[11px] text-amber-200/90">
-            Счётчики: {statsErrorMessage} (очередь по списку ниже)
-          </p>
-        )}
-      </GlassCard>
+      )}
 
       <AdminRejectModal
         releaseId={rejectModalReleaseId}
@@ -238,39 +250,48 @@ export default function AdminPage() {
         onSelectReason={(id, reason) => void handleRejectWithReason(id, reason)}
       />
 
+      <h2 className="mb-6 font-display text-sm font-bold tracking-tight text-white/50">Очередь модерации</h2>
+
       {showQueueSkeleton && <AdminModerationQueueSkeleton rows={3} />}
-      {errorMessage && <GlassCard className="p-4 text-sm text-rose-200">{errorMessage}</GlassCard>}
-      {actionError && <GlassCard className="p-4 text-sm text-rose-200">{actionError}</GlassCard>}
+      {errorMessage && (
+        <div className="glass-glow glass-glow-charged mb-4 p-4 text-sm text-rose-200">{errorMessage}</div>
+      )}
+      {actionError && (
+        <div className="glass-glow glass-glow-charged mb-4 p-4 text-sm text-rose-200">{actionError}</div>
+      )}
 
       {!showQueueSkeleton && !errorMessage && moderationQueue.length === 0 && (
-        <GlassCard className="p-4">
-          <div className="flex items-center gap-2 text-white/60">
-            <Info className="h-4 w-4 shrink-0" />
-            <p className="text-sm">На данный момент новых релизов на проверку нет.</p>
-          </div>
-        </GlassCard>
+        <div className="glass-glow glass-glow-charged p-5 text-sm text-white/50">
+          На данный момент новых релизов на проверку нет.
+        </div>
       )}
 
       {moderationQueue.length > 0 && (
         <motion.div
-          className="grid grid-cols-1 gap-3"
+          className="flex flex-col gap-3"
           variants={adminQueueContainer}
           initial="hidden"
           animate="show"
         >
           {moderationQueue.map((row, index) => (
-            <AdminReleaseCard
+            <motion.div
               key={row.release.id}
-              release={row.release}
-              tracks={row.tracks}
-              index={index}
-              listVariants={adminQueueItem}
-              busy={busyId === row.release.id}
-              onApprove={() => void handleApprove(row.release)}
-              onOpenReject={() => setRejectModalReleaseId(row.release.id)}
-              detailHref={`/admin/release/${row.release.id}`}
-              artworkPriority={index < 3}
-            />
+              variants={adminQueueItem}
+              initial="hidden"
+              animate="show"
+            >
+              <AdminReleaseCard
+                release={row.release}
+                tracks={row.tracks}
+                index={index}
+                listVariants={undefined}
+                busy={busyId === row.release.id}
+                onApprove={() => void handleApprove(row.release)}
+                onOpenReject={() => setRejectModalReleaseId(row.release.id)}
+                detailHref={`/admin/release/${row.release.id}`}
+                artworkPriority={index < 3}
+              />
+            </motion.div>
           ))}
         </motion.div>
       )}

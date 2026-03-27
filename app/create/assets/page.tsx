@@ -140,12 +140,12 @@ export default function CreateAssetsPage() {
           onAction={() => router.push(`/create/${guard.redirectTo}`)}
         />
       ) : (
-        <div className="space-y-4">
-          <div className="rounded-[24px] border border-white/[0.08] bg-surface/80 px-5 py-5 shadow-[0_18px_40px_rgba(0,0,0,0.7)] backdrop-blur-2xl">
-            <p className="text-[13px] text-text-muted leading-relaxed">
+        <div className="space-y-6">
+          <div className="glass-glow glass-glow-charged flex flex-col gap-6 px-5 py-6">
+            <p className="text-[13px] leading-relaxed text-muted-foreground">
               Загрузите обложку релиза. Минимальное разрешение: 3000×3000.
             </p>
-            <div className="mt-4">
+            <div>
               <FileUploader
                 label="Artwork (JPG/PNG)"
                 accept=".jpg,.jpeg,.png"
@@ -168,7 +168,7 @@ export default function CreateAssetsPage() {
             type="button"
             disabled={!canGoNext || isUploading}
             onClick={handleNext}
-            className="inline-flex h-[56px] w-full items-center justify-center rounded-[20px] bg-gradient-to-tr from-[#4F46E5] to-[#7C3AED] text-[16px] font-semibold text-white shadow-[0_14px_40px_rgba(88,80,236,0.6)] disabled:opacity-60 disabled:shadow-none"
+            className="pulse-glow inline-flex h-14 w-full items-center justify-center rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-[16px] font-bold text-white drop-shadow-[0_0_20px_rgba(168,85,247,0.45)] disabled:opacity-60 disabled:shadow-none"
           >
             {isUploading ? "Загружаем..." : "Далее"}
           </MagneticButton>

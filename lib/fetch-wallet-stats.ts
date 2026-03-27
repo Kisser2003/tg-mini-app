@@ -2,11 +2,14 @@ import { TELEGRAM_INIT_DATA_HEADER } from "@/lib/api/get-telegram-init-data-from
 import { getTelegramWebApp } from "@/lib/telegram";
 import type { WalletStatsResponse } from "@/types/wallet";
 
-export async function fetchWalletStats(): Promise<WalletStatsResponse> {
-  const initData = getTelegramWebApp()?.initData;
+/** @param preferredInitData — from `TelegramInitDataProvider` when set; otherwise falls back to WebApp. */
+export async function fetchWalletStats(preferredInitData?: string | null): Promise<WalletStatsResponse> {
+  const trimmed = preferredInitData?.trim() ?? "";
+  const initData =
+    trimmed.length > 0 ? trimmed : getTelegramWebApp()?.initData?.trim() ?? "";
   const headers = new Headers();
   headers.set("Accept", "application/json");
-  if (initData) {
+  if (initData.length > 0) {
     headers.set(TELEGRAM_INIT_DATA_HEADER, initData);
   }
 

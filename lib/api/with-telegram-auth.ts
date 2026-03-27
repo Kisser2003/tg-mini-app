@@ -12,11 +12,23 @@ import { getTelegramInitDataFromRequest } from "@/lib/api/get-telegram-init-data
 const DEV_USER_ID_HEADER = "x-dev-telegram-user-id";
 const RLS_TELEGRAM_USER_ID_HEADER = "x-telegram-user-id";
 
+/**
+ * Dev API bypass (X-Dev-Telegram-User-Id без initData): в `next dev` включён по умолчанию.
+ * `ALLOW_DEV_API_AUTH=false` или `NEXT_PUBLIC_ALLOW_DEV_API_AUTH=false` — отключить (строгий режим).
+ */
+function isDevApiAuthEnabled(): boolean {
+  if (process.env.NODE_ENV !== "development") return false;
+  if (process.env.ALLOW_DEV_API_AUTH === "false") return false;
+  if (process.env.NEXT_PUBLIC_ALLOW_DEV_API_AUTH === "false") return false;
+  return true;
+}
+
 function logAdminAuthDiagnostics(
   request: NextRequest,
   source: string,
   telegramUserId: number
 ): void {
+  if (process.env.NODE_ENV === "production") return;
   const headerRaw = request.headers.get(RLS_TELEGRAM_USER_ID_HEADER)?.trim() ?? "";
   const envAdminRaw =
     process.env.ADMIN_TELEGRAM_ID?.trim() ||
@@ -40,8 +52,7 @@ function logAdminAuthDiagnostics(
 }
 
 function tryDevTelegramUserIdBypass(request: NextRequest): TelegramAuthContext | null {
-  if (process.env.NODE_ENV !== "development") return null;
-  if (process.env.ALLOW_DEV_API_AUTH !== "true") return null;
+  if (!isDevApiAuthEnabled()) return null;
   const raw = request.headers.get(DEV_USER_ID_HEADER)?.trim();
   if (!raw) return null;
   const id = Number(raw);
@@ -115,7 +126,7 @@ export function withTelegramAuth(
       const devIdRaw = request.headers.get(DEV_USER_ID_HEADER)?.trim();
       if (
         process.env.NODE_ENV === "development" &&
-        process.env.ALLOW_DEV_API_AUTH === "true" &&
+        isDevApiAuthEnabled() &&
         looseOnFail &&
         devIdRaw &&
         Number(devIdRaw) === looseOnFail.user.id

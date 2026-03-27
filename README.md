@@ -87,7 +87,7 @@ Hook the dev or production URL as a Telegram WebApp URL in your bot, so that Tel
 - **Источник initData на сервере:** заголовок `X-Telegram-Init-Data` (сырой query-string, как в `Telegram.WebApp.initData`) или cookie `tg_init_data` (задаётся в [`lib/telegram.ts`](lib/telegram.ts) после `initTelegramWebApp()`).
 - **Вызов из браузера:** при `fetch("/api/...")` укажите `credentials: "same-origin"` (или `"include"`), чтобы cookie дошла до API.
 - Без валидного `initData` и токена бота ответ: **401** `{ "ok": false, "error": "Unauthorized" }`.
-- **Локальная разработка без Telegram:** в `.env.local` задайте `ALLOW_DEV_API_AUTH=true` и `NEXT_PUBLIC_ALLOW_DEV_API_AUTH=true`, перезапустите `npm run dev`. Клиент шлёт заголовок `X-Dev-Telegram-User-Id` (совпадает с `user_id` в сторе мастера). В production эти переменные не включайте.
+- **Локальная разработка без Telegram:** в `next dev` по умолчанию клиент шлёт `X-Dev-Telegram-User-Id`, а API принимает его без `initData` (в т.ч. для `stitch-track-parts` после chunked upload). Чтобы отключить и требовать WebApp: `NEXT_PUBLIC_ALLOW_DEV_API_AUTH=false` и `ALLOW_DEV_API_AUTH=false` в `.env.local`. В production (`next start` / Vercel) обход неактивен.
 
 Пример: [`app/api/notify-admin/route.ts`](app/api/notify-admin/route.ts) — `POST` защищён через `withTelegramAuth`.
 

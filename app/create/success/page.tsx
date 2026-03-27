@@ -41,7 +41,7 @@ export default function CreateSuccessPage() {
             className="h-9 w-9 animate-spin rounded-full border-2 border-white/10 border-t-[#7C3AED]"
             aria-hidden="true"
           />
-          <p className="text-center text-[13px] text-text-muted">
+          <p className="text-center text-[13px] text-muted-foreground">
             {leaving === "home" ? "Переход на главную…" : "Открываем новый релиз…"}
           </p>
         </div>

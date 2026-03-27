@@ -24,6 +24,17 @@ type Props = {
   uploadProgressPercent?: number | null;
 };
 
+function revokeIfBlobUrl(url: string | null): void {
+  if (!url) return;
+  if (url.startsWith("blob:")) {
+    try {
+      URL.revokeObjectURL(url);
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
 export function FileUploader({
   label,
   accept,
@@ -41,25 +52,46 @@ export function FileUploader({
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const successFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Blob URL created by this component for `initialFile` (cover); revoked on replace/unmount. */
+  const ownedBlobUrlRef = useRef<string | null>(null);
 
-  const initialFileRef = useRef(initialFile);
-  const initialPreviewUrlRef = useRef(initialPreviewUrl);
+  const revokeOwnedBlob = () => {
+    if (ownedBlobUrlRef.current) {
+      URL.revokeObjectURL(ownedBlobUrlRef.current);
+      ownedBlobUrlRef.current = null;
+    }
+  };
+
+  // Sync from props when Zustand rehydrates after mount or parent updates initialFile / artwork URL.
   useEffect(() => {
-    const init = initialFileRef.current;
-    if (init) {
-      setFile(init);
+    revokeOwnedBlob();
+    setError(null);
+
+    if (initialFile) {
+      setFile(initialFile);
       if (type === "cover") {
-        const url = URL.createObjectURL(init);
+        const url = URL.createObjectURL(initialFile);
+        ownedBlobUrlRef.current = url;
         setPreviewUrl(url);
-        return () => URL.revokeObjectURL(url);
+      } else {
+        setPreviewUrl(null);
       }
       return;
     }
-    if (type === "cover" && initialPreviewUrlRef.current) {
-      setPreviewUrl(initialPreviewUrlRef.current);
+
+    setFile(null);
+    if (type === "cover" && initialPreviewUrl?.trim()) {
+      setPreviewUrl(initialPreviewUrl.trim());
+    } else {
+      setPreviewUrl(null);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // intentionally only on mount
+  }, [initialFile, initialPreviewUrl, type]);
+
+  useEffect(() => {
+    return () => {
+      revokeOwnedBlob();
+    };
+  }, []);
 
   const cursorX = useMotionValue(0);
   const cursorY = useMotionValue(0);
@@ -86,12 +118,6 @@ export function FileUploader({
     cursorX.set(0);
     cursorY.set(0);
   };
-
-  useEffect(() => {
-    return () => {
-      if (previewUrl) URL.revokeObjectURL(previewUrl);
-    };
-  }, [previewUrl]);
 
   useEffect(() => {
     return () => {
@@ -133,7 +159,7 @@ export function FileUploader({
       setFile(null);
       onFileChange(null);
       if (previewUrl) {
-        URL.revokeObjectURL(previewUrl);
+        revokeIfBlobUrl(previewUrl);
         setPreviewUrl(null);
       }
       setIsUploading(false);
@@ -146,7 +172,7 @@ export function FileUploader({
         setFile(null);
         onFileChange(null);
         if (previewUrl) {
-          URL.revokeObjectURL(previewUrl);
+          revokeIfBlobUrl(previewUrl);
           setPreviewUrl(null);
         }
         setIsUploading(false);
@@ -163,7 +189,7 @@ export function FileUploader({
         setFile(null);
         onFileChange(null);
         if (previewUrl) {
-          URL.revokeObjectURL(previewUrl);
+          revokeIfBlobUrl(previewUrl);
           setPreviewUrl(null);
         }
         setIsUploading(false);
@@ -181,16 +207,11 @@ export function FileUploader({
         setFile(null);
         onFileChange(null);
         if (previewUrl) {
-          URL.revokeObjectURL(previewUrl);
+          revokeIfBlobUrl(previewUrl);
           setPreviewUrl(null);
         }
         setIsUploading(false);
         return;
-      }
-
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl);
-        setPreviewUrl(null);
       }
 
       const objectUrl = URL.createObjectURL(selected);
@@ -200,8 +221,8 @@ export function FileUploader({
           setError("Минимальное разрешение обложки 3000x3000");
           URL.revokeObjectURL(objectUrl);
         } else {
-          setPreviewUrl(objectUrl);
-          setFile(selected);
+          URL.revokeObjectURL(objectUrl);
+          // Parent updates `initialFile` → sync effect sets file + owned blob preview.
           onFileChange(selected);
           scheduleSuccessFlash();
           confetti({ particleCount: 30, spread: 50, origin: { y: 0.4 } });
@@ -225,9 +246,11 @@ export function FileUploader({
     }
   };
 
+  const showSelectedState = Boolean(file) || (type === "cover" && Boolean(previewUrl));
+
   return (
     <div className="space-y-2">
-      <label className="text-xs font-medium text-text-muted uppercase tracking-[0.16em]">
+      <label className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
         {label}
       </label>
       <motion.label
@@ -249,12 +272,26 @@ export function FileUploader({
           x: magneticX,
           y: magneticY
         }}
-        className={`relative flex min-h-[140px] cursor-pointer flex-col items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed px-4 py-5 text-center text-xs text-text-muted transition-[border-color,background-color,box-shadow] duration-200 focus-within:ring-2 focus-within:ring-violet-500/20 focus-within:ring-offset-0 ${
+        className={`relative flex min-h-[140px] cursor-pointer flex-col items-center justify-center overflow-hidden rounded-[1.25rem] border-2 border-dashed px-4 py-5 text-center text-xs text-muted-foreground transition-[border-color,background-color,box-shadow] duration-200 focus-within:ring-1 focus-within:ring-[#818cf8]/40 focus-within:ring-offset-0 ${
           invalid || error
             ? "border-red-500/55 bg-red-950/20 ring-2 ring-red-500/25 hover:border-red-400/60"
-            : "border-border bg-surface/70 ring-2 ring-transparent hover:border-primary hover:bg-surface"
+            : "border-white/[0.08] bg-white/[0.03] ring-2 ring-transparent hover:border-[#818cf8]/35 hover:bg-white/[0.05]"
         }`}
       >
+        {type === "cover" && !previewUrl && (
+          <div
+            className="pointer-events-none absolute inset-4 overflow-hidden rounded-xl border border-dashed border-white/[0.06]"
+            aria-hidden
+          >
+            <div
+              className="scanner-line absolute left-0 right-0 h-[2px]"
+              style={{
+                background: "linear-gradient(90deg, transparent, #818cf8, #c084fc, transparent)",
+                boxShadow: "0 0 24px rgba(129,140,248,0.4)"
+              }}
+            />
+          </div>
+        )}
         <input
           type="file"
           accept={accept}
@@ -285,7 +322,7 @@ export function FileUploader({
             </div>
           )}
         <div className="flex h-full flex-col items-center justify-center gap-2">
-          <span className="flex items-center gap-2 text-sm font-medium text-text">
+          <span className="flex items-center gap-2 text-sm font-medium text-foreground">
             {type === "wav" ? (
               <Music2 className="h-4 w-4 text-primary" />
             ) : (
@@ -294,25 +331,29 @@ export function FileUploader({
             {type === "wav" ? "WAV файл" : "Обложка релиза"}
           </span>
           {type === "wav" ? (
-            <span className="text-[11px] text-text-muted leading-snug">
+            <span className="text-[11px] leading-snug text-muted-foreground">
               Нажмите, чтобы выбрать WAV (до {maxSizeMb}
               MB)
             </span>
           ) : (
-            <span className="text-[11px] text-text-muted leading-snug text-center">
+            <span className="text-center text-[11px] leading-snug text-muted-foreground">
               Квадратная, минимум 3000×3000 px,
               <br />
               без лишних надписей и логотипов
             </span>
           )}
-          {file && (
-            <div className="mt-1 w-full max-w-full space-y-1 text-[11px] text-text">
-              <div className="flex max-w-full items-center justify-center gap-1 text-emerald-400">
-                <span className="shrink-0 text-base leading-none">✓</span>
-                <span className="min-w-0 truncate text-left" title={file.name}>
-                  {file.name}
-                </span>
-              </div>
+          {showSelectedState && (
+            <div className="mt-1 w-full max-w-full space-y-1 text-[11px] text-foreground">
+              {file ? (
+                <div className="flex max-w-full items-center justify-center gap-1 text-emerald-400">
+                  <span className="shrink-0 text-base leading-none">✓</span>
+                  <span className="min-w-0 truncate text-left" title={file.name}>
+                    {file.name}
+                  </span>
+                </div>
+              ) : type === "cover" && previewUrl ? (
+                <p className="text-center text-[10px] text-white/50">Обложка из черновика</p>
+              ) : null}
               <p className="text-[10px] text-white/45">
                 {type === "wav"
                   ? uploadProgressPercent != null
@@ -320,7 +361,9 @@ export function FileUploader({
                     : file
                       ? "Файл принят. При необходимости нажмите «Далее» для перехода."
                       : "Выберите WAV — сразу начнётся прямая загрузка в хранилище."
-                  : "Локальная проверка файла завершена. Фактическая загрузка начнется на шаге отправки релиза."}
+                  : file
+                    ? "Локальная проверка файла завершена. Фактическая загрузка начнется на шаге отправки релиза."
+                    : "Обложка сохранена в черновике. Можно заменить файлом выше."}
               </p>
               {type !== "wav" && isUploading && (
                 <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-black/30">

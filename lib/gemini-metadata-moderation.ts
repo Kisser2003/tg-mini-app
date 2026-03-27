@@ -12,9 +12,13 @@ export function isGeminiModerationConfigured(): boolean {
   return Boolean(key && key.length > 0);
 }
 
-/** Default matches task spec; override with GEMINI_METADATA_MODEL. */
+/**
+ * Default for Google AI Studio + @google/genai (v1beta).
+ * `gemini-1.5-flash` often returns 404 on current API — use 2.x flash.
+ * Override with GEMINI_METADATA_MODEL (e.g. gemini-2.5-flash).
+ */
 export function getGeminiMetadataModel(): string {
-  return process.env.GEMINI_METADATA_MODEL?.trim() || "gemini-1.5-flash";
+  return process.env.GEMINI_METADATA_MODEL?.trim() || "gemini-2.0-flash";
 }
 
 function buildUserText(input: AiModerationInput): string {

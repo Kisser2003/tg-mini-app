@@ -11,9 +11,9 @@ export default function CreateLayout({ children }: { children: React.ReactNode }
 
   if (!hasHydrated) {
     return (
-      <div className="flex min-h-[100svh] items-center justify-center bg-background">
+      <div className="flex min-h-[100svh] items-center justify-center bg-transparent">
         <div className="flex flex-col items-center gap-4">
-          <div className="rounded-[24px] border border-white/[0.08] bg-surface/80 p-8 shadow-[0_18px_40px_rgba(0,0,0,0.7)] backdrop-blur-2xl">
+          <div className="glass-glow glass-glow-charged p-8">
             <div className="flex flex-col items-center gap-3">
               <div
                 className="h-9 w-9 animate-spin rounded-full border-2 border-white/10 border-t-[#7C3AED]"

@@ -19,7 +19,11 @@ import {
 } from "@/features/release/createRelease/actions";
 import { FileUploader } from "@/components/FileUploader";
 import { FormFieldError } from "@/components/FormFieldError";
-import { GLASS_FIELD_BASE, GLASS_FIELD_ERROR_STRONG } from "@/lib/glass-form-classes";
+import {
+  GLASS_FIELD_ERROR_STRONG,
+  WIZARD_FIELD_LABEL_CLASS,
+  WIZARD_INPUT_CLASS
+} from "@/lib/glass-form-classes";
 import {
   acquireTelegramClosingConfirmation,
   releaseTelegramClosingConfirmation,
@@ -239,7 +243,7 @@ export default function CreateTracksPage() {
           onAction={() => router.push(`/create/${guard.redirectTo}`)}
         />
       ) : (
-        <form onSubmit={handleSubmit(handleNext)} className="space-y-4">
+        <form onSubmit={handleSubmit(handleNext)} className="space-y-6">
           {showResumeAudioBanner && (
             <div className="rounded-[18px] border border-sky-500/30 bg-sky-950/35 px-4 py-3 text-[12px] leading-relaxed text-sky-100/95">
               В базе уже есть привязанные WAV для этого черновика, но после возврата из списка
@@ -253,7 +257,7 @@ export default function CreateTracksPage() {
               key={field.id}
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
-              className="rounded-[24px] border border-white/[0.08] bg-surface/80 px-5 py-5 shadow-[0_18px_40px_rgba(0,0,0,0.7)] backdrop-blur-2xl space-y-3"
+              className="glass-glow glass-glow-charged space-y-6 px-5 py-5"
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="min-w-0 truncate text-[11px] font-medium uppercase tracking-[0.18em] text-white/60">
@@ -263,6 +267,7 @@ export default function CreateTracksPage() {
                   <button
                     type="button"
                     onClick={() => {
+                      triggerHaptic("light");
                       remove(index);
                       syncTrackFilesLength(fields.length - 1);
                     }}
@@ -290,13 +295,13 @@ export default function CreateTracksPage() {
                 </div>
               ) : (
                 <div className="space-y-1.5">
-                  <label className="block text-[11px] font-medium uppercase tracking-[0.18em] text-white/60">
+                  <label className={`mb-2.5 block ${WIZARD_FIELD_LABEL_CLASS}`}>
                     Название трека
                   </label>
                   <input
                     {...register(`tracks.${index}.title` as const)}
                     placeholder="Например, Track 1"
-                    className={`${GLASS_FIELD_BASE} rounded-[16px] ${
+                    className={`${WIZARD_INPUT_CLASS} ${
                       errors.tracks?.[index]?.title && dirtyFields.tracks?.[index]?.title
                         ? GLASS_FIELD_ERROR_STRONG
                         : ""
@@ -377,10 +382,11 @@ export default function CreateTracksPage() {
             <button
               type="button"
               onClick={() => {
+                triggerHaptic("light");
                 append({ title: "", explicit: false });
                 syncTrackFilesLength(fields.length + 1);
               }}
-              className="inline-flex h-[44px] w-full items-center justify-center rounded-[18px] bg-white/5 text-[13px] font-medium text-white/70 hover:bg-white/8 hover:text-white transition-colors"
+              className="inline-flex h-[44px] w-full items-center justify-center rounded-xl border border-white/[0.06] bg-white/[0.03] text-[13px] font-medium text-white/70 transition-colors hover:bg-white/[0.06] hover:text-white"
             >
               + Добавить трек
             </button>
@@ -389,7 +395,7 @@ export default function CreateTracksPage() {
           <MagneticButton
             type="submit"
             disabled={!isValid || isSubmitting || isUploadingWav || isWavTransferActive}
-            className="inline-flex h-[56px] w-full items-center justify-center rounded-[20px] bg-gradient-to-tr from-[#4F46E5] to-[#7C3AED] text-[16px] font-semibold text-white shadow-[0_14px_40px_rgba(88,80,236,0.6)] disabled:opacity-60 disabled:shadow-none"
+            className="pulse-glow inline-flex h-14 w-full items-center justify-center rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-[16px] font-bold text-white drop-shadow-[0_0_20px_rgba(168,85,247,0.45)] disabled:opacity-60 disabled:shadow-none"
           >
             {isUploadingWav || isWavTransferActive
               ? "Загружаем WAV…"

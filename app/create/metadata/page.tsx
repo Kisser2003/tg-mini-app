@@ -40,13 +40,18 @@ import {
   GLASS_DATE_WRAP_BASE,
   GLASS_DATE_WRAP_ERROR_SOFT,
   GLASS_DATE_WRAP_ERROR_STRONG,
-  GLASS_FIELD_BASE,
   GLASS_FIELD_ERROR_SOFT,
-  GLASS_FIELD_ERROR_STRONG
+  GLASS_FIELD_ERROR_STRONG,
+  WIZARD_FIELD_LABEL_CLASS,
+  WIZARD_INPUT_CLASS
 } from "@/lib/glass-form-classes";
+import type { ReleaseType } from "@/lib/db-enums";
 
-const artistInputBase =
-  "min-h-[48px] min-w-0 w-full flex-1 rounded-[14px] border border-white/[0.08] bg-black/30 px-4 py-3 text-[16px] leading-normal text-white outline-none transition-[background-color,box-shadow,border-color] duration-200 focus:bg-black/45 focus:ring-2 focus:ring-violet-500/25 focus:ring-offset-0 placeholder:text-white/45";
+const RELEASE_TYPE_SEGMENTS: { value: ReleaseType; label: string }[] = [
+  { value: "single", label: "Single" },
+  { value: "ep", label: "EP" },
+  { value: "album", label: "Album" }
+];
 
 function borderForField(
   hasError: boolean,
@@ -85,6 +90,8 @@ function CreateMetadataPageInner() {
   const storeMetadata = useCreateReleaseDraftStore((s) => s.metadata);
   const setMetadata = useCreateReleaseDraftStore((s) => s.setMetadata);
   const storeTracks = useCreateReleaseDraftStore((s) => s.tracks);
+  const setTracks = useCreateReleaseDraftStore((s) => s.setTracks);
+  const syncTrackFilesLength = useCreateReleaseDraftStore((s) => s.syncTrackFilesLength);
   const [isHydrating, setIsHydrating] = useState(Boolean(releaseIdParam));
   const [hydrateError, setHydrateError] = useState<string | null>(null);
   const [draftOfferId, setDraftOfferId] = useState<string | null>(null);
@@ -178,6 +185,17 @@ function CreateMetadataPageInner() {
 
   const values = watch();
   const lastSyncedValuesRef = useRef<string>("");
+
+  // Single: keep store track list aligned with one WAV slot (avoid orphan trackFiles after EP → Single).
+  useEffect(() => {
+    if (values.releaseType !== "single") return;
+    const tracks = useCreateReleaseDraftStore.getState().tracks;
+    if (tracks.length <= 1) return;
+    const title = values.releaseTitle?.trim() ?? "";
+    const base = tracks[0] ?? { title: "", explicit: false };
+    setTracks([{ ...base, title: title || base.title }]);
+    syncTrackFilesLength(1);
+  }, [values.releaseType, values.releaseTitle, setTracks, syncTrackFilesLength]);
 
   useEffect(() => {
     if (!releaseIdParam || isHydrating || hydrateError) return;
@@ -287,7 +305,7 @@ function CreateMetadataPageInner() {
 
   return (
     <CreateShell title="Релиз · Паспорт">
-      <div className="rounded-[24px] border border-white/[0.08] bg-surface/80 px-5 py-5 shadow-[0_18px_40px_rgba(0,0,0,0.7)] backdrop-blur-2xl">
+      <div className="glass-glow glass-glow-charged px-5 py-6">
         {isHydrating ? (
           <div
             className="pointer-events-none flex flex-col gap-4"
@@ -316,7 +334,7 @@ function CreateMetadataPageInner() {
             <div className="h-14 animate-pulse rounded-[20px] bg-white/[0.08]" />
           </div>
         ) : (
-          <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="flex flex-col gap-4">
+          <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="flex flex-col gap-6">
             {hydrateError && (
               <p className="break-words rounded-[14px] border border-red-500/30 bg-red-950/40 px-3 py-2 text-[12px] leading-relaxed text-red-100">
                 {hydrateError}
@@ -380,13 +398,15 @@ function CreateMetadataPageInner() {
               )}
             </AnimatePresence>
             <div className="min-w-0 space-y-1.5">
-              <label className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.18em] text-white/60">
-                <Mic2 className="h-3.5 w-3.5 text-white/45" aria-hidden />
+              <label
+                className={`mb-2.5 flex items-center gap-2 ${WIZARD_FIELD_LABEL_CLASS}`}
+              >
+                <Mic2 className="h-3.5 w-3.5 text-white/35" aria-hidden />
                 Артист
               </label>
               <input
                 {...register("primaryArtist")}
-                className={`${artistInputBase} ${borderForField(
+                className={`${WIZARD_INPUT_CLASS} ${borderForField(
                   Boolean(errors.primaryArtist),
                   touchedFields.primaryArtist,
                   dirtyFields.primaryArtist,
@@ -399,12 +419,12 @@ function CreateMetadataPageInner() {
             </div>
 
             <div className="min-w-0 space-y-1.5">
-              <label className="block text-[11px] font-medium uppercase tracking-[0.18em] text-white/60">
+              <label className={`mb-2.5 block ${WIZARD_FIELD_LABEL_CLASS}`}>
                 Название релиза
               </label>
               <input
                 {...register("releaseTitle")}
-                className={`${GLASS_FIELD_BASE} ${borderForField(
+                className={`${WIZARD_INPUT_CLASS} ${borderForField(
                   Boolean(errors.releaseTitle),
                   touchedFields.releaseTitle,
                   dirtyFields.releaseTitle,
@@ -415,90 +435,120 @@ function CreateMetadataPageInner() {
               <FormFieldError message={errors.releaseTitle?.message} />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <MetadataSelectField
-                label="Язык исполнения"
-                Icon={Languages}
-                errorMessage={errors.language?.message}
-                {...register("language")}
-                selectClassName={borderForField(
-                  Boolean(errors.language),
-                  touchedFields.language,
-                  dirtyFields.language
-                )}
-              >
-                {PERFORMANCE_LANGUAGE_VALUES.map((code) => (
-                  <option key={code} value={code}>
-                    {PERFORMANCE_LANGUAGE_LABELS[code]}
-                  </option>
-                ))}
-              </MetadataSelectField>
-
-              <MetadataSelectField
-                label="Контент с матом"
-                Icon={AlertTriangle}
-                iconClassName={values.explicit ? "text-amber-400" : "text-white/40"}
-                errorMessage={errors.explicit?.message}
-                value={values.explicit ? "explicit" : "clean"}
-                onChange={(e) =>
-                  setValue("explicit", e.target.value === "explicit", {
-                    shouldValidate: true,
-                    shouldDirty: true,
-                    shouldTouch: true
-                  })
-                }
-                selectClassName={borderForField(
-                  Boolean(errors.explicit),
-                  touchedFields.explicit,
-                  dirtyFields.explicit
-                )}
-              >
-                <option value="clean">Чистая версия</option>
-                <option value="explicit">Есть мат</option>
-              </MetadataSelectField>
-
-              <MetadataSelectField
-                label="Тип релиза"
-                Icon={Disc}
-                {...register("releaseType")}
-                selectClassName={borderForField(
-                  Boolean(errors.releaseType),
-                  touchedFields.releaseType,
-                  dirtyFields.releaseType
-                )}
-              >
-                <option value="single">Single</option>
-                <option value="ep">EP</option>
-                <option value="album">Album</option>
-              </MetadataSelectField>
-
-              <MetadataSelectField
-                label="Жанр"
-                Icon={Music2}
-                errorMessage={errors.genre?.message}
-                {...register("genre")}
-                selectClassName={borderForField(
-                  Boolean(errors.genre),
-                  touchedFields.genre,
-                  dirtyFields.genre
-                )}
-              >
-                <option value="" disabled hidden>
-                  —
+            <MetadataSelectField
+              label="Язык исполнения"
+              Icon={Languages}
+              errorMessage={errors.language?.message}
+              {...register("language")}
+              selectClassName={borderForField(
+                Boolean(errors.language),
+                touchedFields.language,
+                dirtyFields.language
+              )}
+            >
+              {PERFORMANCE_LANGUAGE_VALUES.map((code) => (
+                <option key={code} value={code}>
+                  {PERFORMANCE_LANGUAGE_LABELS[code]}
                 </option>
-                <option value="Techno">Techno</option>
-                <option value="House">House</option>
-                <option value="Hip-hop">Hip-hop</option>
-                <option value="Pop">Pop</option>
-                <option value="Electronic">Electronic</option>
-                <option value="Other">Другое</option>
-              </MetadataSelectField>
+              ))}
+            </MetadataSelectField>
+
+            <MetadataSelectField
+              label="Контент с матом"
+              Icon={AlertTriangle}
+              iconClassName={values.explicit ? "text-amber-400" : "text-white/40"}
+              errorMessage={errors.explicit?.message}
+              value={values.explicit ? "explicit" : "clean"}
+              onChange={(e) =>
+                setValue("explicit", e.target.value === "explicit", {
+                  shouldValidate: true,
+                  shouldDirty: true,
+                  shouldTouch: true
+                })
+              }
+              selectClassName={borderForField(
+                Boolean(errors.explicit),
+                touchedFields.explicit,
+                dirtyFields.explicit
+              )}
+            >
+              <option value="clean">Чистая версия</option>
+              <option value="explicit">Есть мат</option>
+            </MetadataSelectField>
+
+            <MetadataSelectField
+              label="Жанр"
+              Icon={Music2}
+              errorMessage={errors.genre?.message}
+              {...register("genre")}
+              selectClassName={borderForField(
+                Boolean(errors.genre),
+                touchedFields.genre,
+                dirtyFields.genre
+              )}
+            >
+              <option value="" disabled hidden>
+                —
+              </option>
+              <option value="Techno">Techno</option>
+              <option value="House">House</option>
+              <option value="Hip-hop">Hip-hop</option>
+              <option value="Pop">Pop</option>
+              <option value="Electronic">Electronic</option>
+              <option value="Other">Другое</option>
+            </MetadataSelectField>
+
+            <div className="min-w-0">
+              <label
+                className={`mb-3 flex items-center gap-2 ${WIZARD_FIELD_LABEL_CLASS}`}
+              >
+                <Disc className="h-3.5 w-3.5 text-white/35" aria-hidden />
+                Тип релиза
+              </label>
+              <div className="flex gap-2">
+                {RELEASE_TYPE_SEGMENTS.map(({ value: rt, label }) => {
+                  const active = values.releaseType === rt;
+                  return (
+                    <motion.button
+                      key={rt}
+                      type="button"
+                      onClick={() => {
+                        hapticMap.impactLight();
+                        setValue("releaseType", rt, {
+                          shouldValidate: true,
+                          shouldDirty: true,
+                          shouldTouch: true
+                        });
+                      }}
+                      whileTap={{ scale: 0.96 }}
+                      className={`flex-1 rounded-xl py-3.5 text-sm font-bold tracking-tight transition-all duration-200 ${
+                        active
+                          ? "text-white"
+                          : "border border-white/[0.05] bg-white/[0.03] text-white/25"
+                      }`}
+                      style={
+                        active
+                          ? {
+                              background: "linear-gradient(135deg, #818cf8, #c084fc)",
+                              boxShadow: "0 0 24px rgba(129,140,248,0.3)"
+                            }
+                          : undefined
+                      }
+                    >
+                      {label}
+                    </motion.button>
+                  );
+                })}
+              </div>
+              <FormFieldError message={errors.releaseType?.message} />
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-4">
               <div className="min-w-0 space-y-1.5">
-                <label className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.18em] text-white/60">
-                  <Calendar className="h-3.5 w-3.5 text-white/45" strokeWidth={1.5} aria-hidden />
+                <label
+                  className={`mb-2.5 flex items-center gap-2 ${WIZARD_FIELD_LABEL_CLASS}`}
+                >
+                  <Calendar className="h-3.5 w-3.5 text-white/35" strokeWidth={1.5} aria-hidden />
                   Плановая дата релиза
                 </label>
                 <div
@@ -529,12 +579,12 @@ function CreateMetadataPageInner() {
                 </p>
               )}
               <div className="min-w-0 space-y-1.5">
-                <label className="block text-[11px] font-medium uppercase tracking-[0.18em] text-white/60">
+                <label className={`mb-2.5 block ${WIZARD_FIELD_LABEL_CLASS}`}>
                   Лейбл
                 </label>
                 <input
                   {...register("label")}
-                  className={`${GLASS_FIELD_BASE} ${borderForField(
+                  className={`${WIZARD_INPUT_CLASS} ${borderForField(
                     Boolean(errors.label),
                     touchedFields.label,
                     dirtyFields.label
@@ -550,7 +600,7 @@ function CreateMetadataPageInner() {
             <MagneticButton
               type="submit"
               disabled={!canProceed || isSubmitting}
-              className="mt-1 inline-flex h-[56px] w-full items-center justify-center rounded-[20px] bg-gradient-to-tr from-[#4F46E5] to-[#7C3AED] text-[16px] font-semibold text-white shadow-[0_14px_40px_rgba(88,80,236,0.6)] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+              className="pulse-glow mt-1 inline-flex h-14 w-full items-center justify-center rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-[16px] font-bold text-white drop-shadow-[0_0_20px_rgba(168,85,247,0.45)] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
             >
               {isSubmitting ? "Сохраняем…" : "Далее"}
             </MagneticButton>

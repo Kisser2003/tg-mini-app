@@ -823,7 +823,7 @@ async function postDraftUploadState(
       /* ignore */
     }
     if ((!res.ok || !body.ok) && process.env.NODE_ENV === "development") {
-      console.warn("[postDraftUploadState] bypass — server said:", {
+      console.warn("[postDraftUploadState] server response:", {
         phase,
         releaseId,
         status: res.status,
@@ -839,11 +839,11 @@ async function postDraftUploadState(
         hadDevUserHeader: Boolean(authHeaders["X-Dev-Telegram-User-Id"])
       });
     }
+    return res.ok && body.ok === true;
   } catch (e) {
-    console.warn("[postDraftUploadState] bypass — fetch failed:", phase, releaseId, e);
+    console.warn("[postDraftUploadState] fetch failed:", phase, releaseId, e);
+    return false;
   }
-   /** TEMP: всегда true, чтобы не блокировать «Далее» на шаге треков */
-  return true;
 }
 
 /**

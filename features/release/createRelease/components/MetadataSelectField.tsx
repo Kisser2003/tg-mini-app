@@ -4,10 +4,9 @@ import { forwardRef, useId } from "react";
 import type { LucideIcon } from "lucide-react";
 import { ChevronDown } from "lucide-react";
 import { FormFieldError } from "@/components/FormFieldError";
-import { GLASS_FIELD_BASE } from "@/lib/glass-form-classes";
+import { GLASS_FIELD_BASE, WIZARD_FIELD_LABEL_CLASS } from "@/lib/glass-form-classes";
 
-const METADATA_LABEL_CLASS =
-  "mb-1.5 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-white/40";
+const METADATA_LABEL_CLASS = `mb-2.5 flex items-center gap-1.5 ${WIZARD_FIELD_LABEL_CLASS}`;
 
 export type MetadataSelectFieldProps = {
   label: string;
