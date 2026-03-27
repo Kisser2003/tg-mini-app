@@ -29,8 +29,7 @@ function toNumber(v: string | number): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-/** Включить обратно баланс/RPC/transactions, когда кошелёк выйдет из «спящего режима». */
-const WALLET_FEATURE_ENABLED = false;
+const WALLET_FEATURE_ENABLED = true;
 
 async function handleWalletStats(
   _request: NextRequest,

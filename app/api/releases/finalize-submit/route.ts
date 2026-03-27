@@ -8,6 +8,7 @@ import { formatErrorMessage } from "@/lib/errors";
 import { escapeHtml } from "@/lib/telegram-bot.server";
 import { sendTelegramNotification } from "@/lib/telegram-notifications";
 import { getReleaseDisplayTitle, type ReleaseRecord } from "@/repositories/releases.repo";
+import { runAiMetadataPrecheckForRelease } from "@/lib/release-ai-moderation.server";
 
 async function notifyReleaseSubmittedForModeration(
   record: ReleaseRecord,
@@ -90,6 +91,26 @@ async function handleFinalizeSubmit(
   const current = currentRow as ReleaseRecord;
   if (current.status === "processing" || current.status === "ready") {
     return NextResponse.json({ ok: true, record: current });
+  }
+
+  const aiGate = await runAiMetadataPrecheckForRelease(admin, releaseId, telegramUserId);
+  if (!aiGate.allow) {
+    if (aiGate.status === 400) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: aiGate.error,
+          details: aiGate.details,
+          ai_moderation: true,
+          confidence_score: aiGate.confidence_score
+        },
+        { status: 400 }
+      );
+    }
+    return NextResponse.json(
+      { ok: false, error: aiGate.error },
+      { status: aiGate.status }
+    );
   }
 
   const { data: rpcData, error: rpcError } = await admin.rpc("finalize_release", {

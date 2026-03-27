@@ -84,32 +84,13 @@ function verifyHmacSignature(
   return timingSafeEqualUtf8(hmacB64, sig);
 }
 
+/**
+ * Верификация секрета вебхука — всегда активна.
+ * SUPABASE_WEBHOOK_SECRET обязателен: если не задан → 503.
+ * Отсутствие заголовков → 401. Несовпадение → 401.
+ * Bypass-флаги (WEBHOOK_REQUIRE_SECRET, SKIP_WEBHOOK_SECRET_VERIFY, WEBHOOK_DISABLE_SECRET_CHECK) удалены.
+ */
 function checkWebhookAuth(request: Request, rawBody: string): WebhookAuthResult {
-  if (process.env.WEBHOOK_REQUIRE_SECRET !== "true") {
-    const g = globalThis as typeof globalThis & { __tgWebhookSecretWarned?: boolean };
-    if (!g.__tgWebhookSecretWarned) {
-      g.__tgWebhookSecretWarned = true;
-      console.warn(
-        "[webhooks/release-status-change] проверка секрета пропущена (WEBHOOK_REQUIRE_SECRET не true). Поставь WEBHOOK_REQUIRE_SECRET=true после настройки заголовков."
-      );
-    }
-    return { ok: true };
-  }
-
-  if (process.env.SKIP_WEBHOOK_SECRET_VERIFY === "true") {
-    console.warn(
-      "[webhooks/release-status-change] SKIP_WEBHOOK_SECRET_VERIFY=true — проверка отключена"
-    );
-    return { ok: true };
-  }
-
-  if (process.env.WEBHOOK_DISABLE_SECRET_CHECK === "true") {
-    console.warn(
-      "[webhooks/release-status-change] WEBHOOK_DISABLE_SECRET_CHECK=true — проверка отключена (временно)"
-    );
-    return { ok: true };
-  }
-
   const expected = process.env.SUPABASE_WEBHOOK_SECRET?.trim();
   if (!expected) {
     return { ok: false, reason: "missing_env" };
@@ -175,10 +156,9 @@ export async function POST(request: Request): Promise<Response> {
   if (!auth.ok) {
     const hintMissing =
       "В Supabase → Database Webhooks → HTTP Headers: имя **`x-supabase-signature`** или **`x-supabase-webhook-secret`**, " +
-      "значение — **то же**, что **`SUPABASE_WEBHOOK_SECRET`** в Vercel. Либо **`Authorization: Bearer <секрет>`**. " +
-      "Временно без проверки: **`WEBHOOK_DISABLE_SECRET_CHECK=true`** в Vercel.";
+      "значение — **то же**, что **`SUPABASE_WEBHOOK_SECRET`** в Vercel. Либо **`Authorization: Bearer <секрет>`**.";
     const hintMismatch =
-      "Секрет/HMAC не совпадает с `SUPABASE_WEBHOOK_SECRET` в Vercel. Проверь значение заголовка или отключи проверку временно.";
+      "Секрет/HMAC не совпадает с `SUPABASE_WEBHOOK_SECRET` в Vercel. Проверьте значение заголовка в настройках вебхука.";
 
     console.error(
       "[webhooks/release-status-change] 401:",

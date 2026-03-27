@@ -25,6 +25,8 @@ import {
   releaseTelegramClosingConfirmation,
   triggerHaptic
 } from "@/lib/telegram";
+import { useTelegramMainButton } from "@/lib/hooks/useTelegramMainButton";
+import { validateWavFile } from "@/lib/wav-validator";
 import { toast } from "sonner";
 
 export default function CreateTracksPage() {
@@ -210,6 +212,23 @@ export default function CreateTracksPage() {
     [router, setSubmitError, setTracks, syncTrackFilesLength]
   );
 
+  const isNextDisabled =
+    !isValid || isSubmitting || isUploadingWav || isWavTransferActive;
+  const nextButtonText =
+    isUploadingWav || isWavTransferActive
+      ? "Загружаем WAV…"
+      : isSubmitting
+        ? "Сохраняем…"
+        : "Далее";
+
+  // Telegram native MainButton — mirrors the in-page submit button.
+  useTelegramMainButton({
+    text: nextButtonText,
+    onClick: () => void handleSubmit(handleNext)(),
+    disabled: isNextDisabled,
+    loading: isUploadingWav || isSubmitting
+  });
+
   return (
     <CreateShell title="Релиз · Треки">
       {!guard.allowed ? (
@@ -307,6 +326,15 @@ export default function CreateTracksPage() {
                     return;
                   }
                   void (async () => {
+                    // Validate WAV spec before initiating upload
+                    const validation = await validateWavFile(file);
+                    if (!validation.ok) {
+                      setTrackFile(index, null);
+                      setSubmitError(validation.reason);
+                      toast.error(validation.reason);
+                      return;
+                    }
+
                     setTrackUploadProgress((prev) => ({ ...prev, [index]: 0 }));
                     const ok = await uploadTrackWavAtIndex({
                       index,

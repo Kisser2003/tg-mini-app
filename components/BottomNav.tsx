@@ -4,7 +4,7 @@ import { memo, useMemo } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import type { LucideIcon } from "lucide-react";
-import { Library, Shield } from "lucide-react";
+import { Library, Shield, Wallet } from "lucide-react";
 import { useKeyboardVisible } from "@/hooks/useKeyboardVisible";
 import { useScrollDirection } from "@/hooks/useScrollDirection";
 import { isAdminUi } from "@/lib/admin";
@@ -83,8 +83,7 @@ function BottomNavInner() {
   const items = useMemo<NavItem[]>(
     () => [
       { label: "Мои релизы", href: "/library", icon: Library },
-      // Кошелёк заморожен (ранняя стадия) — вкладка скрыта до включения фичи.
-      // { label: "Кошелек", href: "/wallet", icon: Wallet },
+      { label: "Кошелёк", href: "/wallet", icon: Wallet },
       ...(showAdminTab ? [{ label: "Админ", href: "/admin", icon: Shield }] : [])
     ],
     [showAdminTab]

@@ -12,6 +12,10 @@ import {
 } from "@/lib/metadata-validator";
 import { parseArtistLinksFromJson } from "@/lib/artist-links";
 import { parsePerformanceLanguage } from "@/lib/performance-language";
+import {
+  buildAiModerationInput,
+  runAiMetadataPrecheck
+} from "@/lib/release-ai-moderation.server";
 
 const bodySchema = z.object({
   releaseId: z.string().uuid(),
@@ -60,7 +64,7 @@ async function handleSubmitPrecheck(
   const { data: releaseRow, error: relErr } = await admin
     .from("releases")
     .select(
-      "id, user_id, client_request_id, release_type, artist_name, title, track_name, collaborators, performance_language, artist_links"
+      "id, user_id, client_request_id, release_type, artist_name, title, track_name, collaborators, performance_language, artist_links, explicit, is_explicit, lyrics"
     )
     .eq("id", releaseId)
     .maybeSingle();
@@ -120,7 +124,7 @@ async function handleSubmitPrecheck(
 
   const { data: trackRows, error: trErr } = await admin
     .from("tracks")
-    .select("title, index")
+    .select("title, index, explicit")
     .eq("release_id", releaseId)
     .order("index", { ascending: true });
 
@@ -171,6 +175,48 @@ async function handleSubmitPrecheck(
       },
       { status: 400 }
     );
+  }
+
+  const rel = releaseRow as typeof row & {
+    collaborators?: unknown;
+    explicit?: boolean | null;
+    is_explicit?: boolean | null;
+    lyrics?: string | null;
+  };
+
+  const moderationInput = buildAiModerationInput({
+    artist_name: rel.artist_name,
+    title: rel.title,
+    track_name: rel.track_name,
+    performance_language: rel.performance_language,
+    artist_links: rel.artist_links,
+    collaborators: rel.collaborators,
+    explicit: rel.explicit,
+    is_explicit: rel.is_explicit,
+    lyrics: rel.lyrics,
+    trackRows: trackRows ?? []
+  });
+
+  const aiOutcome = await runAiMetadataPrecheck(admin, {
+    releaseId,
+    telegramUserId,
+    input: moderationInput
+  });
+
+  if (!aiOutcome.allow) {
+    if (aiOutcome.status === 400) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: aiOutcome.error,
+          details: aiOutcome.details,
+          ai_moderation: true,
+          confidence_score: aiOutcome.confidence_score
+        },
+        { status: 400 }
+      );
+    }
+    return NextResponse.json({ ok: false, error: aiOutcome.error }, { status: aiOutcome.status });
   }
 
   return NextResponse.json({ ok: true });

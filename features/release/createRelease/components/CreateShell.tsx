@@ -11,6 +11,7 @@ import {
 import { CreateStepTransition } from "@/features/release/createRelease/components/CreateStepTransition";
 import { hapticMap } from "@/lib/haptic-map";
 import { SPRING_PROGRESS } from "@/lib/motion-spring";
+import { useTelegramBackButton } from "@/lib/hooks/useTelegramBackButton";
 
 export function CreateShell({
   children,
@@ -28,6 +29,16 @@ export function CreateShell({
     return (activeIndex / denom) * 100;
   }, [activeIndex]);
 
+  // Show Telegram native BackButton on all steps except the first.
+  // Falls back gracefully when running outside the Telegram Mini App.
+  useTelegramBackButton(
+    () => {
+      hapticMap.impactLight();
+      router.push(getCreateBackPath(pathname));
+    },
+    activeIndex > 0
+  );
+
   return (
     <div className="bg-background px-5 py-6 pb-10 text-text">
       <div className="mx-auto flex w-full max-w-[440px] flex-col gap-5 font-sans">
@@ -35,13 +46,15 @@ export function CreateShell({
         {/* Static shell header — does not re-animate on step changes */}
         <header className="space-y-3">
           <div className="flex items-center justify-between gap-3">
+            {/* Fallback back button for non-Telegram environments (browser dev/testing) */}
             <button
               type="button"
               onClick={() => {
                 hapticMap.impactLight();
                 router.push(getCreateBackPath(pathname));
               }}
-              className="text-[12px] text-text-muted hover:text-white transition-colors"
+              className="text-[12px] text-text-muted hover:text-white transition-colors lg:hidden"
+              aria-label="Назад"
             >
               ← Назад
             </button>

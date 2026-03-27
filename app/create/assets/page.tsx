@@ -21,6 +21,7 @@ import {
   releaseTelegramClosingConfirmation,
   triggerHaptic
 } from "@/lib/telegram";
+import { useTelegramMainButton } from "@/lib/hooks/useTelegramMainButton";
 import { toast } from "sonner";
 
 export default function CreateAssetsPage() {
@@ -120,6 +121,14 @@ export default function CreateAssetsPage() {
       setIsUploading(false);
     }
   }, [artworkFile, artworkUrl, releaseId, router, setSubmitError]);
+
+  // Telegram native MainButton — mirrors the in-page "Далее" button.
+  useTelegramMainButton({
+    text: isUploading ? "Загружаем..." : "Далее",
+    onClick: handleNext,
+    disabled: !canGoNext || isUploading,
+    loading: isUploading
+  });
 
   return (
     <CreateShell title="Релиз · Обложка">

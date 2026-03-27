@@ -17,8 +17,15 @@ Deno.serve(async (req) => {
 
   const token = Deno.env.get("TELEGRAM_BOT_TOKEN");
   const chatId = Deno.env.get("ADMIN_CHAT_ID");
-  const adminAppUrl =
-    Deno.env.get("ADMIN_APP_URL") ?? "https://t.me/your_bot_name/app?startapp=admin";
+  const PLACEHOLDER_URL = "https://t.me/your_bot_name/app?startapp=admin";
+  const adminAppUrl = Deno.env.get("ADMIN_APP_URL") ?? PLACEHOLDER_URL;
+
+  if (adminAppUrl === PLACEHOLDER_URL) {
+    console.warn(
+      "[notify-admin] ADMIN_APP_URL is not set — deep-link button uses placeholder. " +
+        "Set ADMIN_APP_URL in Supabase Edge Function secrets (e.g. https://t.me/<bot>/app?startapp=admin)."
+    );
+  }
 
   if (!token || !chatId) {
     return Response.json(

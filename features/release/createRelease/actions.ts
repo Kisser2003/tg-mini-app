@@ -60,6 +60,15 @@ export function getLastSubmitPrecheckHttpStatus(): number | null {
   return lastSubmitPrecheckHttpStatus;
 }
 
+function appendDetailBulletsToErrorMessage(base: string, details: unknown): string {
+  if (!Array.isArray(details) || details.length === 0) return base;
+  const bullets = details
+    .filter((x): x is string => typeof x === "string" && x.trim().length > 0)
+    .map((line) => `• ${line.trim()}`);
+  if (bullets.length === 0) return base;
+  return `${base}\n\n${bullets.join("\n")}`;
+}
+
 /** Числовой id для API/Storage из строки стора (Telegram id). */
 function parseStoreUserId(raw: string | null): number | null {
   if (raw == null || raw === "") return null;
@@ -169,7 +178,7 @@ async function submitReleaseViaServiceApi(params: {
     return null;
   }
 
-  let body: { ok?: boolean; record?: ReleaseRecord; error?: string } = {};
+  let body: { ok?: boolean; record?: ReleaseRecord; error?: string; details?: unknown } = {};
   try {
     body = (await res.json()) as typeof body;
   } catch {
@@ -181,11 +190,11 @@ async function submitReleaseViaServiceApi(params: {
       status: res.status,
       body
     });
-    throw new Error(
+    const core =
       typeof body.error === "string" && body.error.length > 0
         ? body.error
-        : "Не удалось отправить релиз на модерацию."
-    );
+        : "Не удалось отправить релиз на модерацию.";
+    throw new Error(appendDetailBulletsToErrorMessage(core, body.details));
   }
 
   return body.record;
@@ -244,12 +253,13 @@ async function requestReleaseSubmitPrecheck(params: {
     };
     console.error("[requestReleaseSubmitPrecheck] failed", errPayload);
 
-    const msg =
+    const core =
       typeof body.error === "string" && body.error.length > 0
         ? body.error
         : res.status === 401
           ? "Не удалось подтвердить сессию Telegram. Откройте мини-приложение из Telegram."
           : "Не удалось проверить треки перед отправкой.";
+    const msg = appendDetailBulletsToErrorMessage(core, body.details);
     return { ok: false, message: msg };
   }
 

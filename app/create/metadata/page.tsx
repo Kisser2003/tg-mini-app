@@ -26,6 +26,7 @@ import { MagneticButton } from "@/components/MagneticButton";
 import { hapticMap } from "@/lib/haptic-map";
 import { toast } from "sonner";
 import { getTelegramUserId } from "@/lib/telegram";
+import { useTelegramMainButton } from "@/lib/hooks/useTelegramMainButton";
 import {
   getMetadataFieldWarningFlags,
   validateMetadata,
@@ -275,6 +276,14 @@ function CreateMetadataPageInner() {
     Boolean(values.releaseTitle?.trim()) &&
     Boolean(values.genre?.trim()) &&
     Boolean(values.language);
+
+  // Telegram native MainButton — triggers form submit.
+  useTelegramMainButton({
+    text: isSubmitting ? "Сохраняем…" : "Далее",
+    onClick: () => void handleSubmit(onSubmit, onInvalid)(),
+    disabled: !canProceed || isSubmitting,
+    loading: isSubmitting
+  });
 
   return (
     <CreateShell title="Релиз · Паспорт">

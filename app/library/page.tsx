@@ -48,6 +48,7 @@ type ReleaseRow = Pick<
   | "error_message"
   | "admin_notes"
   | "draft_upload_started"
+  | "isrc"
 >;
 
 const ARTWORK_SIZES = "(max-width: 768px) 100vw, 33vw";
@@ -206,7 +207,8 @@ function LibraryPageInner() {
     fetchReleasesForUser,
     {
       ...SWR_LIST_OPTIONS,
-      refreshInterval: 7000,
+      refreshInterval: (latestData: ReleaseRow[] | undefined) =>
+        latestData?.some((r) => normalizeReleaseStatus(r.status) === "processing") ? 7000 : 0,
       keepPreviousData: false
     }
   );
@@ -653,6 +655,11 @@ function LibraryPageInner() {
                             <p className="text-xs text-white/60">
                               {new Date(release.created_at).toLocaleDateString("ru-RU")}
                             </p>
+                            {release.isrc && (
+                              <p className="mt-0.5 font-mono text-[10px] text-white/35">
+                                ISRC {release.isrc}
+                              </p>
+                            )}
                           </div>
                           <LibraryStatusBadge
                             statusMeta={statusMeta}

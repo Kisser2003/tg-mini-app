@@ -1,6 +1,5 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { getExpectedAdminTelegramId } from "@/lib/admin";
 import {
   parseTelegramInitDataWithoutVerification,
   verifyTelegramInitData,
@@ -44,9 +43,7 @@ const unauthorized = () =>
 /**
  * Обёртка для App Router API route handlers: проверка подписи `initData` через `TELEGRAM_BOT_TOKEN`.
  * Источник initData: заголовок `X-Telegram-Init-Data` или cookie `tg_init_data`.
- *
- * Обход проверки подписи: только для Telegram ID из `getExpectedAdminTelegramId()` (810176982 по умолчанию),
- * если в initData передан такой `user.id` — считаем запрос авторизованным (отладка / истёкшая сессия).
+ * Все пользователи, включая администраторов, проходят полную HMAC-верификацию initData.
  */
 export function withTelegramAuth(
   handler: TelegramAuthHandler,
@@ -69,15 +66,6 @@ export function withTelegramAuth(
       }
       console.warn("[withTelegramAuth] missing initData (header/cookie)");
       return unauthorized();
-    }
-
-    const adminId = getExpectedAdminTelegramId();
-    const loose = parseTelegramInitDataWithoutVerification(initDataRaw);
-    if (loose && loose.user.id === adminId) {
-      return handler(request, {
-        user: loose.user,
-        authDate: loose.authDate
-      });
     }
 
     const botToken = process.env.TELEGRAM_BOT_TOKEN;

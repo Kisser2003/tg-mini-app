@@ -20,6 +20,14 @@ type MainButton = {
   offClick: (handler: () => void) => void;
 };
 
+type BackButton = {
+  isVisible: boolean;
+  show: () => void;
+  hide: () => void;
+  onClick: (handler: () => void) => void;
+  offClick: (handler: () => void) => void;
+};
+
 type HapticFeedback = {
   impactOccurred?: (style: "light" | "medium" | "heavy" | "rigid" | "soft") => void;
   notificationOccurred?: (type: "error" | "success" | "warning") => void;
@@ -39,6 +47,7 @@ type TelegramWebApp = {
   themeParams?: Record<string, string>;
   isExpanded?: boolean;
   MainButton?: MainButton;
+  BackButton?: BackButton;
   HapticFeedback?: HapticFeedback;
   expand?: () => void;
   ready?: () => void;
