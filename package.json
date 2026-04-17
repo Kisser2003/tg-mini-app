@@ -7,14 +7,18 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "lint:fix": "next lint --fix",
     "typecheck": "tsc --noEmit",
+    "check": "npm run lint && npm run typecheck",
     "verify:webhook": "node scripts/verify-webhook-secret.mjs",
     "verify:release-db": "node scripts/verify-release-in-db.mjs",
     "db:types": "supabase gen types typescript --linked > types/database.types.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:all": "npm run check && npm run test && npm run build",
+    "clean": "rm -rf .next node_modules/.cache tsconfig.tsbuildinfo"
   },
   "dependencies": {
     "@google/genai": "^1.46.0",
