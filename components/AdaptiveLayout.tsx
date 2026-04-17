@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { useIsTelegramMiniApp } from "@/lib/hooks/useIsTelegramMiniApp";
 import { BottomNavHost } from "./BottomNavHost";
 import { FAB } from "./FAB";
@@ -10,15 +11,25 @@ import { Sidebar } from "./Sidebar";
  * Адаптивный layout: Telegram Mini App vs Web
  * - Telegram: max-w-[450px], bottom navigation
  * - Web: полный экран, sidebar навигация
+ * - Public pages (login): no sidebar, centered content
  */
 export function AdaptiveLayout({ children }: { children: React.ReactNode }) {
   const isTelegram = useIsTelegramMiniApp();
+  const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
+
+  // Public pages without navigation
+  const isPublicPage = pathname === "/login";
 
   // Prevent hydration mismatch by rendering universal layout first
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Public page layout (no sidebar, no navigation)
+  if (isPublicPage) {
+    return <>{children}</>;
+  }
 
   // During SSR and initial mount, render universal layout
   if (!mounted) {
