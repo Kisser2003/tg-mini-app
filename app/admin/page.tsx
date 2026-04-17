@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, type Variants } from "framer-motion";
-import { BarChart3, DollarSign, RefreshCcw, TrendingUp } from "lucide-react";
+import { BarChart3, RefreshCcw, TrendingUp } from "lucide-react";
 import useSWR from "swr";
 import { toast } from "sonner";
 import { AdminRejectModal } from "@/components/AdminRejectModal";
@@ -50,14 +50,6 @@ const adminQueueItem: Variants = {
     transition: { type: "spring", stiffness: 280, damping: 24 }
   }
 };
-
-function formatHoldRub(n: number): string {
-  return new Intl.NumberFormat("ru-RU", {
-    style: "currency",
-    currency: "RUB",
-    maximumFractionDigits: 0
-  }).format(n);
-}
 
 export default function AdminPage() {
   const router = useRouter();
@@ -186,7 +178,6 @@ export default function AdminPage() {
   const showQueueSkeleton = isLoading && data === undefined;
   const pendingQueueCount = stats?.pending_queue ?? moderationQueue.length;
   const readyToday = stats?.ready_today ?? 0;
-  const holdSum = stats?.pending_hold_sum ?? 0;
 
   return (
     <div className="min-h-[100dvh] px-5 pb-44 pt-14">
@@ -227,13 +218,6 @@ export default function AdminPage() {
           value={readyToday}
           delay={0.2}
           accentClass="gradient-text-teal"
-        />
-        <StatsTile
-          icon={DollarSign}
-          label="В холде"
-          value={formatHoldRub(holdSum)}
-          delay={0.3}
-          accentClass="gradient-text-gold"
         />
       </div>
 

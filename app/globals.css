@@ -514,3 +514,51 @@ button {
     opacity: 1;
   }
 }
+
+/* ==========================================
+   ADAPTIVE WEB STYLES (Desktop)
+   ========================================== */
+
+/* Адаптивные карточки для desktop */
+@media (min-width: 1024px) {
+  .glass-card {
+    border-radius: 32px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  /* Увеличенные отступы для desktop */
+  .app-main-scroll {
+    padding-top: 2rem !important;
+    padding-bottom: 2rem !important;
+  }
+
+  /* Адаптивная сетка для карточек релизов */
+  .release-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1.5rem;
+  }
+
+  /* Адаптивный текст: крупнее на desktop */
+  h1 {
+    font-size: 3rem;
+  }
+
+  h2 {
+    font-size: 2rem;
+  }
+
+  /* Более крупные кнопки на desktop */
+  button {
+    font-size: 1rem;
+  }
+}
+
+/* Ultra-wide screens: ограничиваем ширину контента */
+@media (min-width: 1920px) {
+  .app-main-scroll {
+    max-width: 1600px;
+    margin: 0 auto;
+  }
+}

@@ -3,10 +3,11 @@ import type { NextRequest } from "next/server";
 import { z } from "zod";
 import type { TelegramAuthContext } from "@/lib/api/with-telegram-auth";
 import { withTelegramAuth } from "@/lib/api/with-telegram-auth";
-import { supabase } from "@/lib/supabase";
+import { createSupabaseAdmin } from "@/lib/supabase-admin";
+import { getUserProfileByTelegramId } from "@/lib/auth/hybrid-auth";
 
 export type UserPreferences = {
-  user_id: number;
+  user_uuid: string;
   push_notifications: boolean;
   payout_method: string | null;
   payout_details: Record<string, unknown> | null;
@@ -19,14 +20,23 @@ async function handleGetPreferences(
   _request: NextRequest,
   ctx: TelegramAuthContext
 ): Promise<Response> {
-  const userId = ctx.user.id;
+  const admin = createSupabaseAdmin();
+  if (!admin) {
+    return NextResponse.json({ ok: false, error: "Server misconfigured" }, { status: 500 });
+  }
 
-  const { data, error } = await supabase
+  // Get user UUID from Telegram ID
+  const userProfile = await getUserProfileByTelegramId(BigInt(ctx.user.id));
+  if (!userProfile) {
+    return NextResponse.json({ ok: false, error: "User profile not found" }, { status: 404 });
+  }
+
+  const { data, error } = await admin
     .from("user_preferences")
     .select(
-      "user_id, push_notifications, payout_method, payout_details, updated_at"
+      "user_uuid, push_notifications, payout_method, payout_details, updated_at"
     )
-    .eq("user_id", userId)
+    .eq("user_uuid", userProfile.id)
     .maybeSingle();
 
   if (error) {
@@ -39,7 +49,7 @@ async function handleGetPreferences(
     return NextResponse.json({
       ok: true,
       preferences: {
-        user_id: userId,
+        user_uuid: userProfile.id,
         push_notifications: true,
         payout_method: null,
         payout_details: null,
@@ -65,7 +75,16 @@ async function handlePostPreferences(
   request: NextRequest,
   ctx: TelegramAuthContext
 ): Promise<Response> {
-  const userId = ctx.user.id;
+  const admin = createSupabaseAdmin();
+  if (!admin) {
+    return NextResponse.json({ ok: false, error: "Server misconfigured" }, { status: 500 });
+  }
+
+  // Get user UUID from Telegram ID
+  const userProfile = await getUserProfileByTelegramId(BigInt(ctx.user.id));
+  if (!userProfile) {
+    return NextResponse.json({ ok: false, error: "User profile not found" }, { status: 404 });
+  }
 
   let json: unknown;
   try {
@@ -83,14 +102,14 @@ async function handlePostPreferences(
   }
 
   const payload = {
-    user_id: userId,
+    user_uuid: userProfile.id,
     ...parsed.data
   };
 
-  const { data, error } = await supabase
+  const { data, error } = await admin
     .from("user_preferences")
-    .upsert(payload, { onConflict: "user_id" })
-    .select("user_id, push_notifications, payout_method, payout_details, updated_at")
+    .upsert(payload, { onConflict: "user_uuid" })
+    .select("user_uuid, push_notifications, payout_method, payout_details, updated_at")
     .maybeSingle();
 
   if (error) {

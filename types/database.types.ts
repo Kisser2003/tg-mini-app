@@ -39,6 +39,47 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_moderation_logs: {
+        Row: {
+          confidence_score: number | null
+          created_at: string | null
+          flagged_reasons: Json | null
+          id: string
+          model: string | null
+          release_id: string | null
+          status: string | null
+          user_id: number | null
+        }
+        Insert: {
+          confidence_score?: number | null
+          created_at?: string | null
+          flagged_reasons?: Json | null
+          id?: string
+          model?: string | null
+          release_id?: string | null
+          status?: string | null
+          user_id?: number | null
+        }
+        Update: {
+          confidence_score?: number | null
+          created_at?: string | null
+          flagged_reasons?: Json | null
+          id?: string
+          model?: string | null
+          release_id?: string | null
+          status?: string | null
+          user_id?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_moderation_logs_release_id_fkey"
+            columns: ["release_id"]
+            isOneToOne: false
+            referencedRelation: "releases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       error_logs: {
         Row: {
           created_at: string
@@ -66,47 +107,6 @@ export type Database = {
         }
         Relationships: []
       }
-      ai_moderation_logs: {
-        Row: {
-          id: string
-          release_id: string
-          user_id: number | null
-          status: string
-          flagged_reasons: Json
-          confidence_score: number | null
-          model: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          release_id: string
-          user_id?: number | null
-          status: string
-          flagged_reasons?: Json
-          confidence_score?: number | null
-          model?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          release_id?: string
-          user_id?: number | null
-          status?: string
-          flagged_reasons?: Json
-          confidence_score?: number | null
-          model?: string | null
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "ai_moderation_logs_release_id_fkey"
-            columns: ["release_id"]
-            isOneToOne: false
-            referencedRelation: "releases"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       release_logs: {
         Row: {
           created_at: string | null
@@ -133,76 +133,6 @@ export type Database = {
           status?: string | null
         }
         Relationships: []
-      }
-      release_tracks: {
-        Row: {
-          audio_url: string
-          created_at: string | null
-          explicit: boolean | null
-          file_path: string | null
-          id: string
-          index: number
-          release_id: string
-          title: string
-        }
-        Insert: {
-          audio_url: string
-          created_at?: string | null
-          explicit?: boolean | null
-          file_path?: string | null
-          id?: string
-          index: number
-          release_id: string
-          title: string
-        }
-        Update: {
-          audio_url?: string
-          created_at?: string | null
-          explicit?: boolean | null
-          file_path?: string | null
-          id?: string
-          index?: number
-          release_id?: string
-          title?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "release_tracks_release_id_fkey"
-            columns: ["release_id"]
-            isOneToOne: false
-            referencedRelation: "releases"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      release_views: {
-        Row: {
-          id: string
-          release_id: string
-          user_id: string
-          viewed_at: string
-        }
-        Insert: {
-          id?: string
-          release_id: string
-          user_id: string
-          viewed_at?: string
-        }
-        Update: {
-          id?: string
-          release_id?: string
-          user_id?: string
-          viewed_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "release_views_release_id_fkey"
-            columns: ["release_id"]
-            isOneToOne: false
-            referencedRelation: "releases"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       releases: {
         Row: {
@@ -243,6 +173,7 @@ export type Database = {
           track_name: string | null
           upc: string | null
           user_id: string | null
+          user_uuid: string | null
         }
         Insert: {
           admin_notes?: string | null
@@ -282,6 +213,7 @@ export type Database = {
           track_name?: string | null
           upc?: string | null
           user_id?: string | null
+          user_uuid?: string | null
         }
         Update: {
           admin_notes?: string | null
@@ -321,8 +253,17 @@ export type Database = {
           track_name?: string | null
           upc?: string | null
           user_id?: string | null
+          user_uuid?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "releases_user_uuid_fkey"
+            columns: ["user_uuid"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       tracks: {
         Row: {
@@ -337,6 +278,7 @@ export type Database = {
           telegram_id: string | null
           title: string | null
           user_id: number | null
+          user_uuid: string | null
         }
         Insert: {
           created_at?: string | null
@@ -350,6 +292,7 @@ export type Database = {
           telegram_id?: string | null
           title?: string | null
           user_id?: number | null
+          user_uuid?: string | null
         }
         Update: {
           created_at?: string | null
@@ -363,6 +306,7 @@ export type Database = {
           telegram_id?: string | null
           title?: string | null
           user_id?: number | null
+          user_uuid?: string | null
         }
         Relationships: [
           {
@@ -372,46 +316,14 @@ export type Database = {
             referencedRelation: "releases"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "tracks_user_uuid_fkey"
+            columns: ["user_uuid"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
         ]
-      }
-      transactions: {
-        Row: {
-          amount: number
-          available_at: string | null
-          created_at: string
-          currency: string
-          description: string | null
-          id: string
-          metadata: Json | null
-          status: string
-          type: string
-          user_id: string
-        }
-        Insert: {
-          amount: number
-          available_at?: string | null
-          created_at?: string
-          currency?: string
-          description?: string | null
-          id?: string
-          metadata?: Json | null
-          status?: string
-          type: string
-          user_id: string
-        }
-        Update: {
-          amount?: number
-          available_at?: string | null
-          created_at?: string
-          currency?: string
-          description?: string | null
-          id?: string
-          metadata?: Json | null
-          status?: string
-          type?: string
-          user_id?: string
-        }
-        Relationships: []
       }
       user_preferences: {
         Row: {
@@ -421,6 +333,7 @@ export type Database = {
           push_notifications: boolean | null
           updated_at: string | null
           user_id: number
+          user_uuid: string | null
         }
         Insert: {
           created_at?: string | null
@@ -429,6 +342,7 @@ export type Database = {
           push_notifications?: boolean | null
           updated_at?: string | null
           user_id: number
+          user_uuid?: string | null
         }
         Update: {
           created_at?: string | null
@@ -437,6 +351,63 @@ export type Database = {
           push_notifications?: boolean | null
           updated_at?: string | null
           user_id?: number
+          user_uuid?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_preferences_user_uuid_fkey"
+            columns: ["user_uuid"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      users: {
+        Row: {
+          account_linked_at: string | null
+          created_at: string
+          display_name: string | null
+          email: string | null
+          id: string
+          telegram_first_name: string | null
+          telegram_id: number | null
+          telegram_is_premium: boolean | null
+          telegram_language_code: string | null
+          telegram_last_name: string | null
+          telegram_photo_url: string | null
+          telegram_username: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_linked_at?: string | null
+          created_at?: string
+          display_name?: string | null
+          email?: string | null
+          id: string
+          telegram_first_name?: string | null
+          telegram_id?: number | null
+          telegram_is_premium?: boolean | null
+          telegram_language_code?: string | null
+          telegram_last_name?: string | null
+          telegram_photo_url?: string | null
+          telegram_username?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_linked_at?: string | null
+          created_at?: string
+          display_name?: string | null
+          email?: string | null
+          id?: string
+          telegram_first_name?: string | null
+          telegram_id?: number | null
+          telegram_is_premium?: boolean | null
+          telegram_language_code?: string | null
+          telegram_last_name?: string | null
+          telegram_photo_url?: string | null
+          telegram_username?: string | null
+          updated_at?: string
         }
         Relationships: []
       }
@@ -453,10 +424,17 @@ export type Database = {
         }
         Returns: string
       }
+      current_user_uuid: { Args: never; Returns: string }
       finalize_release: {
         Args: { p_client_request_id: string; p_release_id: string }
         Returns: Json
       }
+      get_current_user_id: { Args: never; Returns: string }
+      get_user_id_by_telegram: {
+        Args: { p_telegram_id: number }
+        Returns: string
+      }
+      is_admin_request: { Args: never; Returns: boolean }
       log_release_event: {
         Args: {
           p_error?: string
@@ -465,6 +443,14 @@ export type Database = {
           p_status: string
         }
         Returns: undefined
+      }
+      migrate_table_user_ids_to_uuid: {
+        Args: {
+          p_new_column_name?: string
+          p_old_column_name?: string
+          p_table_name: string
+        }
+        Returns: number
       }
     }
     Enums: {

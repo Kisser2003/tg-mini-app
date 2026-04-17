@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import type { Database } from "@/types/database.types";
 import { getTelegramUserIdForSupabaseRequests } from "./telegram";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ?? "";
@@ -37,3 +38,17 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   }
   // Realtime при необходимости настраивается отдельно; для REST и Storage достаточно global.fetch.
 });
+
+/**
+ * Supabase client для браузера с поддержкой Auth (для веб-логина)
+ * Использует localStorage для хранения сессии
+ */
+export function createSupabaseBrowser() {
+  return createClient<Database>(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true
+    }
+  });
+}

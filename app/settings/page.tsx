@@ -3,10 +3,11 @@
 import { useState, useCallback } from "react";
 import useSWR from "swr";
 import { motion } from "framer-motion";
-import { Bell, CreditCard, MoonStar, Save, ShieldCheck } from "lucide-react";
+import { Bell, CreditCard, LogOut, MoonStar, Save, ShieldCheck } from "lucide-react";
 import { GlassCard } from "@/components/GlassCard";
 import { getTelegramApiAuthHeaders } from "@/lib/telegram";
 import { toast } from "sonner";
+import { useLogout, useWebAuth } from "@/lib/hooks/useWebAuth";
 import type { UserPreferences } from "@/app/api/settings/preferences/route";
 
 // ─── Fetcher ──────────────────────────────────────────────────────────────────
@@ -314,6 +315,50 @@ export default function SettingsPage() {
         </span>
         <span className="text-xs text-white/60">Защищено</span>
       </motion.div>
+
+      {/* Logout button for web users */}
+      <WebLogoutButton />
     </div>
+  );
+}
+
+function WebLogoutButton() {
+  const webUser = useWebAuth();
+  const { logout } = useLogout();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  // Показываем только для веб-пользователей (не в Telegram)
+  if (typeof window === "undefined") return null;
+  if (window.Telegram?.WebApp?.initData) return null;
+  if (!webUser) return null;
+
+  const handleLogout = async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    try {
+      await logout();
+    } catch (err) {
+      console.error("Logout error:", err);
+      toast.error("Ошибка выхода");
+      setIsLoggingOut(false);
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.2, type: "spring", stiffness: 320, damping: 22 }}
+    >
+      <button
+        type="button"
+        onClick={handleLogout}
+        disabled={isLoggingOut}
+        className="glass-card w-full flex items-center justify-center gap-2 p-4 text-sm text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
+      >
+        <LogOut className="h-4 w-4" />
+        {isLoggingOut ? "Выход..." : "Выйти из аккаунта"}
+      </button>
+    </motion.div>
   );
 }

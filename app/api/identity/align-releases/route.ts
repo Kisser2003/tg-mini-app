@@ -2,10 +2,14 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { withTelegramAuth } from "@/lib/api/with-telegram-auth";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
+import { getUserProfileByTelegramId } from "@/lib/auth/hybrid-auth";
 
 /**
- * Склеивает user_id с telegram_id для строк, где telegram_id уже совпадает с текущим пользователем Mini App,
- * но user_id отличается (например, после тестов с другим id). Только service role.
+ * Migrates releases and tracks to use user_uuid (hybrid auth schema).
+ * Updates records where telegram_id matches but user_uuid is not set.
+ * 
+ * DEPRECATED: This is a migration helper. After full migration to UUID schema,
+ * all new records should use user_uuid directly.
  */
 async function handleAlign(_request: NextRequest, ctx: { user: { id: number } }): Promise<Response> {
   const tg = Math.trunc(ctx.user.id);
@@ -18,29 +22,46 @@ async function handleAlign(_request: NextRequest, ctx: { user: { id: number } })
     return NextResponse.json({ ok: false, error: "Server misconfigured" }, { status: 503 });
   }
 
+  // Get user UUID from Telegram ID
+  const userProfile = await getUserProfileByTelegramId(BigInt(tg));
+  if (!userProfile) {
+    return NextResponse.json({ ok: false, error: "User profile not found" }, { status: 404 });
+  }
+
+  // Update releases to use user_uuid
   const { error: relErr } = await admin
     .from("releases")
-    .update({ user_id: tg, telegram_id: tg })
-    .eq("telegram_id", tg)
-    .neq("user_id", tg);
+    .update({ user_uuid: userProfile.id, user_id: String(tg), telegram_id: String(tg) })
+    .eq("telegram_id", String(tg))
+    .is("user_uuid", null);
 
   if (relErr) {
     console.error("[identity/align-releases] releases update:", relErr.message);
     return NextResponse.json({ ok: false, error: relErr.message }, { status: 500 });
   }
 
-  const { error: trErr } = await admin
+  // Update tracks to use user_uuid
+  const { error: trErr, data: updatedTracks } = await admin
     .from("tracks")
-    .update({ user_id: tg, telegram_id: tg })
-    .eq("telegram_id", tg)
-    .neq("user_id", tg);
+    .update({ user_uuid: userProfile.id })
+    .eq("telegram_id", String(tg))
+    .is("user_uuid", null)
+    .select("id");
 
   if (trErr) {
     console.error("[identity/align-releases] tracks update:", trErr.message);
     return NextResponse.json({ ok: false, error: trErr.message }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true, telegramId: tg });
+  return NextResponse.json({
+    ok: true,
+    telegramId: tg,
+    userUuid: userProfile.id,
+    updated: {
+      releases: "migrated",
+      tracks: updatedTracks?.length || 0
+    }
+  });
 }
 
 export const POST = withTelegramAuth(handleAlign);

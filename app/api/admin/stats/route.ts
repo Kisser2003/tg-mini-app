@@ -44,14 +44,10 @@ async function handleAdminStats(_request: NextRequest, ctx: TelegramAuthContext)
     return NextResponse.json({ ok: false, error: "Failed to count ready today" }, { status: 500 });
   }
 
-  // Кошелёк заморожен — не суммируем pending по `transactions` (раньше было через отдельный запрос).
-  const pendingHoldSum = 0;
-
   const body: AdminStatsResponse = {
     ok: true,
     pending_queue: pendingQueue ?? 0,
-    ready_today: readyToday ?? 0,
-    pending_hold_sum: pendingHoldSum
+    ready_today: readyToday ?? 0
   };
 
   return NextResponse.json(body);

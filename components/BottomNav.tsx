@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import type { LucideIcon } from "lucide-react";
-import { LayoutDashboard, Shield, Wallet } from "lucide-react";
+import { LayoutDashboard, Shield } from "lucide-react";
 import { isAdminUi } from "@/lib/admin";
 import { hapticMap } from "@/lib/haptic-map";
 import { useHideOnScrollDown } from "@/lib/hooks/useHideOnScrollDown";
@@ -27,6 +27,8 @@ function isTabActive(pathname: string, path: string): boolean {
 const BottomNavInner = memo(function BottomNavInner() {
   const pathname = usePathname();
   const barVisible = useHideOnScrollDown();
+  
+  // Hooks must be called before any conditional returns
   const showAdminTab = useMemo(() => {
     initTelegramWebApp();
     return isAdminUi();
@@ -35,11 +37,15 @@ const BottomNavInner = memo(function BottomNavInner() {
   const tabs = useMemo<NavTab[]>(
     () => [
       { path: "/library", icon: LayoutDashboard, label: "Мои релизы" },
-      { path: "/wallet", icon: Wallet, label: "Кошелёк" },
       ...(showAdminTab ? [{ path: "/admin", icon: Shield, label: "Админ" }] : [])
     ],
     [showAdminTab]
   );
+
+  // Hide on auth pages (after all hooks)
+  if (pathname === "/login") {
+    return null;
+  }
 
   return (
     <nav className="pointer-events-none fixed bottom-0 left-0 right-0 z-50" aria-label="Основная навигация">

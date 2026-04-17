@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { useHaptics } from "@/lib/hooks/useHaptics";
 import { useHideOnScrollDown } from "@/lib/hooks/useHideOnScrollDown";
+import { useIsTelegramMiniApp } from "@/lib/hooks/useIsTelegramMiniApp";
 
 /** Floating action — Lovable FAB, routes to create flow (hidden on wizard). */
 export function FAB() {
@@ -12,12 +13,17 @@ export function FAB() {
   const pathname = usePathname();
   const haptics = useHaptics();
   const fabVisible = useHideOnScrollDown();
+  const isTelegram = useIsTelegramMiniApp();
 
   if (pathname?.startsWith("/create")) {
     return null;
   }
   /* Library uses top icon-row + optional global FAB elsewhere */
   if (pathname === "/" || pathname === "/library") {
+    return null;
+  }
+  /* Hide on auth pages */
+  if (pathname === "/login") {
     return null;
   }
 
@@ -38,9 +44,10 @@ export function FAB() {
           }}
           className="pulse-glow fixed z-[55] flex h-[60px] w-[60px] items-center justify-center rounded-full text-white"
           style={{
-            bottom:
-              "calc(var(--bottom-nav-height, 4.5rem) + 0.75rem + env(safe-area-inset-bottom, 0px))",
-            right: "1.25rem",
+            bottom: isTelegram
+              ? "calc(var(--bottom-nav-height, 4.5rem) + 0.75rem + env(safe-area-inset-bottom, 0px))"
+              : "2rem",
+            right: isTelegram ? "1.25rem" : "2rem",
             background: "linear-gradient(135deg, #818cf8, #c084fc)",
             border: "0.5px solid rgba(255,255,255,0.15)"
           }}

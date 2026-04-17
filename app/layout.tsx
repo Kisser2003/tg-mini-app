@@ -8,8 +8,7 @@ import { AppErrorBoundary } from "@/components/ErrorBoundary";
 import { PageTransition } from "@/components/PageTransition";
 import { InputFocusScroll } from "@/components/InputFocusScroll";
 import { TelegramBootstrap } from "@/components/TelegramBootstrap";
-import { BottomNavHost } from "@/components/BottomNavHost";
-import { FAB } from "@/components/FAB";
+import { AdaptiveLayout } from "@/components/AdaptiveLayout";
 import { NoiseOverlay } from "@/components/NoiseOverlay";
 function supabasePreconnectOrigin(): string | null {
   const raw = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -80,20 +79,13 @@ export default function RootLayout({
           <div className="light-hero" />
           <div className="light-fab" />
         </div>
-        <div className="relative z-[1] mx-auto w-full max-w-[450px] min-h-[100dvh]">
-          <div
-            id="app-main-scroll"
-            className="app-main-scroll relative px-3 pb-[calc(7rem+env(safe-area-inset-bottom,0px))] pt-4"
-          >
-            <AppProviders>
-              <AppErrorBoundary>
-                <PageTransition>{children}</PageTransition>
-              </AppErrorBoundary>
-            </AppProviders>
-          </div>
-          <BottomNavHost />
-          <FAB />
-        </div>
+        <AppProviders>
+          <AppErrorBoundary>
+            <AdaptiveLayout>
+              <PageTransition>{children}</PageTransition>
+            </AdaptiveLayout>
+          </AppErrorBoundary>
+        </AppProviders>
         <NoiseOverlay />
       </body>
     </html>
