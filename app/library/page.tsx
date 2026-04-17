@@ -17,6 +17,7 @@ import { getReleaseDisplayTitle } from "@/repositories/releases.repo";
 import { useReleases, type ReleaseListRow } from "@/lib/hooks/useReleases";
 import { hapticMap } from "@/lib/haptic-map";
 import { toast } from "sonner";
+import { AuthGuard } from "@/components/AuthGuard";
 
 type LibraryStatusFilter = "all" | "processing" | "ready" | "failed";
 
@@ -488,18 +489,20 @@ function LibraryPageInner() {
 
 export default function LibraryPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="min-h-[100dvh] px-5 pt-14 pb-44">
-          <div className="mx-auto max-w-lg space-y-6">
-            <div className="h-36 animate-pulse rounded-[1.25rem] bg-white/[0.06]" />
-            <LibraryStatsSkeletonRow />
-            <LibraryReleaseSkeletonGrid count={5} />
+    <AuthGuard>
+      <Suspense
+        fallback={
+          <div className="min-h-[100dvh] px-5 pt-14 pb-44">
+            <div className="mx-auto max-w-lg space-y-6">
+              <div className="h-36 animate-pulse rounded-[1.25rem] bg-white/[0.06]" />
+              <LibraryStatsSkeletonRow />
+              <LibraryReleaseSkeletonGrid count={5} />
+            </div>
           </div>
-        </div>
-      }
-    >
-      <LibraryPageInner />
-    </Suspense>
+        }
+      >
+        <LibraryPageInner />
+      </Suspense>
+    </AuthGuard>
   );
 }
