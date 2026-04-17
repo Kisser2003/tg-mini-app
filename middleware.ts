@@ -3,15 +3,14 @@ import type { NextRequest } from "next/server";
 
 /**
  * Middleware для базового роутинга
- * Детальная проверка авторизации происходит на client-side через useWebAuth
+ * Auth checks happen on client-side for reliability (Supabase uses localStorage)
+ * Pages handle their own auth-aware redirects
  */
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   
-  // Редирект с корня на /library
-  if (pathname === "/") {
-    return NextResponse.redirect(new URL("/library", request.url));
-  }
+  // No server-side redirects - let pages handle auth routing
+  // This prevents 404s and allows proper client-side auth checks
   
   return NextResponse.next();
 }

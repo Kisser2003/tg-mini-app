@@ -7,17 +7,17 @@ import { useWebAuth } from "@/lib/hooks/useWebAuth";
 import { LoadingScreen } from "@/components/LoadingScreen";
 
 /**
- * Root page - smart redirect based on authentication
- * - Authenticated users → /library (main dashboard)
- * - Unauthenticated users → /login
+ * Signup route handler
+ * - If authenticated: redirect to /library
+ * - If not authenticated: redirect to /login with signup mode
  */
-export default function HomePage() {
+export default function SignupPage() {
   const router = useRouter();
   const isTelegram = useIsTelegramMiniApp();
   const webUser = useWebAuth({ redirectToLogin: false });
 
   useEffect(() => {
-    // Telegram users: always go to library
+    // Telegram users: redirect to library
     if (isTelegram) {
       router.replace("/library");
       return;
@@ -25,13 +25,13 @@ export default function HomePage() {
 
     // Web users
     if (webUser === undefined) {
-      // Not authenticated: go to login
-      router.replace("/login");
+      // Not authenticated: go to login page with signup hint
+      router.replace("/login?mode=signup");
     } else if (webUser) {
       // Authenticated: go to library
       router.replace("/library");
     }
-    // webUser === null means loading, show loader below
+    // webUser === null means loading, show loader
   }, [isTelegram, webUser, router]);
 
   return <LoadingScreen />;
