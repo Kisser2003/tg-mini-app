@@ -37,7 +37,6 @@
   ],
   "exclude": [
     "node_modules",
-    "lovable-ref",
     "supabase/functions/**/*"
   ]
 }
