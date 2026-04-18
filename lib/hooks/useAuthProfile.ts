@@ -4,23 +4,48 @@ import useSWR from "swr";
 import { createSupabaseBrowser } from "@/lib/supabase";
 import type { UserProfile } from "@/lib/auth/hybrid-auth";
 
+const USERS_PROFILE_COLUMNS =
+  "id, telegram_id, telegram_username, telegram_first_name, telegram_last_name, email, display_name, account_linked_at, created_at, updated_at" as const;
+
+/**
+ * Прямое чтение своей строки в public.users (RLS: auth.uid() = id).
+ * Нужно, если /api/auth/profile недоступен (нет service role на сервере и т.п.) —
+ * иначе имя из БД не попадёт в приветствие.
+ */
+async function fetchProfileFromPublicUsers(
+  userId: string
+): Promise<UserProfile | null> {
+  const supabase = createSupabaseBrowser();
+  const { data, error } = await supabase
+    .from("users")
+    .select(USERS_PROFILE_COLUMNS)
+    .eq("id", userId)
+    .single();
+
+  if (error || !data) return null;
+  return data as unknown as UserProfile;
+}
+
 async function fetchAuthProfile(): Promise<UserProfile | null> {
   const supabase = createSupabaseBrowser();
   const {
     data: { session }
   } = await supabase.auth.getSession();
-  if (!session?.access_token) return null;
+  if (!session?.access_token || !session.user?.id) return null;
+
   const res = await fetch("/api/auth/profile", {
     headers: { Authorization: `Bearer ${session.access_token}` }
   });
-  if (!res.ok) return null;
-  const json = (await res.json()) as { ok?: boolean; user?: UserProfile };
-  if (!json.ok || !json.user) return null;
-  return json.user;
+  if (res.ok) {
+    const json = (await res.json()) as { ok?: boolean; user?: UserProfile };
+    if (json.ok && json.user) return json.user;
+  }
+
+  return fetchProfileFromPublicUsers(session.user.id);
 }
 
 /**
- * Профиль из public.users (GET /api/auth/profile) для веб-сессии.
+ * Профиль из public.users: сначала GET /api/auth/profile, иначе прямой select по RLS.
  * Для Telegram Mini App без JWT обычно null — используйте данные из useReleases.
  */
 export function useAuthProfile(enabled: boolean, sessionUserId: string | null) {

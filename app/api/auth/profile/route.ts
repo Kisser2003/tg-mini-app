@@ -12,6 +12,20 @@ import { createSupabaseAdmin } from "@/lib/supabase-admin";
 import { getTelegramInitDataFromRequest } from "@/lib/api/get-telegram-init-data-from-request";
 import { verifyTelegramInitData, parseTelegramInitDataWithoutVerification } from "@/lib/telegram-init-data.server";
 import { getUserProfile, getUserProfileByTelegramId, getOrCreateTelegramUser } from "@/lib/auth/hybrid-auth";
+import type { UserProfile } from "@/lib/auth/hybrid-auth";
+
+/** Bigint из PostgREST нельзя сериализовать в JSON — иначе 500 и пустой профиль на клиенте. */
+function profileToJsonSafe(profile: UserProfile): Record<string, unknown> {
+  return {
+    ...profile,
+    telegram_id:
+      profile.telegram_id == null
+        ? null
+        : typeof profile.telegram_id === "bigint"
+          ? profile.telegram_id.toString()
+          : profile.telegram_id
+  };
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -38,7 +52,7 @@ export async function GET(request: NextRequest) {
         if (profile) {
           return NextResponse.json({
             ok: true,
-            user: profile,
+            user: profileToJsonSafe(profile),
             auth_method: "supabase"
           });
         }
@@ -76,7 +90,7 @@ export async function GET(request: NextRequest) {
         if (profile) {
           return NextResponse.json({
             ok: true,
-            user: profile,
+            user: profileToJsonSafe(profile),
             auth_method: "telegram"
           });
         }
