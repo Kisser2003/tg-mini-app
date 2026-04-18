@@ -36,6 +36,23 @@ const bodySchema = z.object({
   clientRequestId: z.string().uuid()
 });
 
+/** PostgREST для `RETURNS SETOF releases` отдаёт полную строку; кастомный `RETURNS jsonb` — нет (ломает клиент). */
+const RELEASE_ROW_STATUSES = new Set([
+  "draft",
+  "pending",
+  "processing",
+  "ready",
+  "failed",
+  "review"
+]);
+
+function looksLikeReleaseTableRow(x: unknown): x is ReleaseRecord {
+  if (!x || typeof x !== "object") return false;
+  const o = x as Record<string, unknown>;
+  if (typeof o.id !== "string" || o.id.length < 32) return false;
+  return typeof o.status === "string" && RELEASE_ROW_STATUSES.has(o.status);
+}
+
 async function handleFinalizeSubmit(request: NextRequest, actor: ReleaseActor): Promise<Response> {
   const admin = createSupabaseAdmin();
   if (!admin) {
@@ -115,11 +132,26 @@ async function handleFinalizeSubmit(request: NextRequest, actor: ReleaseActor): 
   });
 
   if (!rpcError) {
-    const rows = Array.isArray(rpcData) ? rpcData : rpcData ? [rpcData] : [];
-    if (rows.length > 0) {
-      const rec = rows[0] as ReleaseRecord;
-      await notifyReleaseSubmittedForModeration(rec);
-      return NextResponse.json({ ok: true, record: rec });
+    const rawRows = Array.isArray(rpcData) ? rpcData : rpcData != null ? [rpcData] : [];
+    if (rawRows.length > 0) {
+      const first = rawRows[0];
+      let rec: ReleaseRecord | null = null;
+      if (looksLikeReleaseTableRow(first)) {
+        rec = first;
+      } else {
+        const { data: refetched, error: refetchErr } = await admin
+          .from("releases")
+          .select("*")
+          .eq("id", releaseId)
+          .maybeSingle();
+        if (!refetchErr && refetched && looksLikeReleaseTableRow(refetched)) {
+          rec = refetched as ReleaseRecord;
+        }
+      }
+      if (rec != null && (rec.status === "processing" || rec.status === "ready")) {
+        await notifyReleaseSubmittedForModeration(rec);
+        return NextResponse.json({ ok: true, record: rec });
+      }
     }
   } else {
     const isMissing =
