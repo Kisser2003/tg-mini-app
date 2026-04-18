@@ -2,6 +2,8 @@
 -- Идемпотентность: при повторном вызове, если статус уже processing или ready, возвращается текущая строка без ошибки.
 
 DROP FUNCTION IF EXISTS public.finalize_release(uuid);
+-- Смена RETURNS (например jsonb → SETOF) через CREATE OR REPLACE невозможна — сброс перед CREATE.
+DROP FUNCTION IF EXISTS public.finalize_release(uuid, uuid);
 
 CREATE OR REPLACE FUNCTION public.finalize_release(
   p_release_id uuid,
