@@ -12,6 +12,7 @@ function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialMode = searchParams.get("mode") === "signup" ? "signup" : "login";
+  const redirectTo = searchParams.get("redirect") || "/library";
   const [mode, setMode] = useState<AuthMode>(initialMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -33,7 +34,7 @@ function LoginPageContent() {
           email,
           password,
           options: {
-            emailRedirectTo: `${window.location.origin}/library`,
+            emailRedirectTo: `${window.location.origin}/auth/confirm?redirect=${encodeURIComponent(redirectTo)}`,
             data: {
               display_name: email.split("@")[0]
             }
@@ -43,11 +44,12 @@ function LoginPageContent() {
         if (signUpError) throw signUpError;
 
         if (data.user && data.session) {
-          // Email confirmed automatically
+          // Email confirmed automatically (для разработки)
           setSuccess("Аккаунт создан! Перенаправляем...");
-          setTimeout(() => router.push("/library"), 1500);
-        } else {
-          setSuccess("Проверьте email для подтверждения аккаунта");
+          setTimeout(() => router.push(redirectTo), 1500);
+        } else if (data.user) {
+          // Email требует подтверждения
+          setSuccess("Проверьте email для подтверждения аккаунта. Письмо отправлено на " + email);
         }
       } else {
         const { data, error: signInError } = await supabase.auth.signInWithPassword({
@@ -59,7 +61,7 @@ function LoginPageContent() {
 
         if (data.session) {
           setSuccess("Вход выполнен! Перенаправляем...");
-          setTimeout(() => router.push("/library"), 1000);
+          setTimeout(() => router.push(redirectTo), 1000);
         }
       }
     } catch (err: any) {
@@ -134,9 +136,20 @@ function LoginPageContent() {
 
             {/* Password */}
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-white/80 mb-2">
-                Пароль
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label htmlFor="password" className="block text-sm font-medium text-white/80">
+                  Пароль
+                </label>
+                {mode === "login" && (
+                  <button
+                    type="button"
+                    onClick={() => router.push("/auth/reset-password")}
+                    className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+                  >
+                    Забыли пароль?
+                  </button>
+                )}
+              </div>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" size={18} />
                 <input

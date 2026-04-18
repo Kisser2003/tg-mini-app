@@ -1,18 +1,67 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { createSupabaseMiddleware } from "@/lib/supabase";
 
 /**
- * Middleware для базового роутинга
- * Auth checks happen on client-side for reliability (Supabase uses localStorage)
- * Pages handle their own auth-aware redirects
+ * Middleware для защиты приватных роутов
+ * - Telegram Mini App: пропускается (определяем по заголовкам или отсутствию web auth)
+ * - Web: проверяем Supabase auth через cookies
+ * - Незалогиненные web пользователи → редирект на /login
  */
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // Публичные роуты - доступны всем
+  const publicPaths = [
+    "/login",
+    "/auth/signup",
+    "/auth/confirm",
+    "/auth/reset-password",
+    "/auth/update-password"
+  ];
+  const isPublicPath = 
+    pathname === "/" || 
+    publicPaths.some(path => pathname.startsWith(path));
+
+  if (isPublicPath) {
+    return NextResponse.next();
+  }
+
+  // Проверяем Telegram Mini App по заголовкам
+  // Telegram WebApp добавляет специфичные заголовки или tgWebAppData
+  const userAgent = request.headers.get("user-agent") || "";
+  const isTelegramUserAgent = userAgent.toLowerCase().includes("telegram");
   
-  // No server-side redirects - let pages handle auth routing
-  // This prevents 404s and allows proper client-side auth checks
-  
-  return NextResponse.next();
+  // Если это похоже на Telegram - пропускаем
+  // (дополнительная проверка будет на клиенте в AuthGuard)
+  if (isTelegramUserAgent) {
+    return NextResponse.next();
+  }
+
+  // Для обычных веб-пользователей проверяем auth через cookies
+  const response = NextResponse.next();
+  const supabase = createSupabaseMiddleware(request, response);
+
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+
+    // Если нет сессии - редирект на login
+    if (!session) {
+      const redirectUrl = request.nextUrl.clone();
+      redirectUrl.pathname = "/login";
+      // Сохраняем куда пользователь хотел попасть
+      redirectUrl.searchParams.set("redirect", pathname);
+      return NextResponse.redirect(redirectUrl);
+    }
+
+    return response;
+  } catch (error) {
+    console.error("[middleware] Auth check error:", error);
+    // В случае ошибки редиректим на login
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.pathname = "/login";
+    return NextResponse.redirect(redirectUrl);
+  }
 }
 
 export const config = {

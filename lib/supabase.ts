@@ -1,6 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
+import { createServerClient } from "@supabase/ssr";
 import type { Database } from "@/types/database.types";
 import { getTelegramUserIdForSupabaseRequests } from "./telegram";
+import type { NextRequest, NextResponse } from "next/server";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ?? "";
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() ?? "";
@@ -49,6 +51,26 @@ export function createSupabaseBrowser() {
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true
+    }
+  });
+}
+
+/**
+ * Supabase client для middleware с поддержкой cookies
+ * Используется для серверной проверки авторизации
+ */
+export function createSupabaseMiddleware(request: NextRequest, response: NextResponse) {
+  return createServerClient<Database>(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+      getAll() {
+        return request.cookies.getAll();
+      },
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value, options }) => {
+          request.cookies.set(name, value);
+          response.cookies.set(name, value, options);
+        });
+      }
     }
   });
 }

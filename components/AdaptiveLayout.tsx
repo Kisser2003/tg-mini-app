@@ -19,7 +19,9 @@ export function AdaptiveLayout({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false);
 
   // Public pages without navigation
-  const isPublicPage = pathname === "/login";
+  const isPublicPage = 
+    pathname === "/login" || 
+    pathname.startsWith("/auth/");
 
   // Prevent hydration mismatch by rendering universal layout first
   useEffect(() => {
