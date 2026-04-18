@@ -64,7 +64,7 @@ npm install
 
 **Обратная связь (опционально):** миграция [supabase/migrations/20260324120000_feedback.sql](supabase/migrations/20260324120000_feedback.sql) — таблица `feedback`; отдельного HTTP-эндпоинта в этом репозитории пока нет.
 
-**Postgres (рекомендуется):** примените миграцию [supabase/migrations/20250320120000_finalize_release_transaction.sql](supabase/migrations/20250320120000_finalize_release_transaction.sql) — функция `finalize_release(p_release_id uuid, p_client_request_id uuid)` атомарно переводит `draft` → `processing` и пишет строку в `release_logs` (идемпотентна при повторном вызове). Старая перегрузка `finalize_release(uuid)` удаляется скриптом. Если RPC недоступна, клиент делает проверку по `client_request_id` и обновляет статус в [repositories/releases.repo.ts](repositories/releases.repo.ts) (`finalizeReleaseFallback`).
+**Postgres / `finalize_release`:** каноническая функция — `RETURNS SETOF public.releases`, переход `draft` \| `pending` → `processing`, лог в `release_logs`. Исторически: [20250320120000_finalize_release_transaction.sql](supabase/migrations/20250320120000_finalize_release_transaction.sql), затем `pending` в [20260325120000_release_pending_admin_notes.sql](supabase/migrations/20260325120000_release_pending_admin_notes.sql). **Прод и любые ручные правки:** примените [20260418210000_finalize_release_setof_canonical.sql](supabase/migrations/20260418210000_finalize_release_setof_canonical.sql) — `DROP` + `CREATE` (заменяет кастомный `RETURNS jsonb`). Если RPC недоступна, клиент использует фолбэк в [repositories/releases.repo.ts](repositories/releases.repo.ts).
 
 4. Run dev server:
 

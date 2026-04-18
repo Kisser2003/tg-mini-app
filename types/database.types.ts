@@ -427,7 +427,7 @@ export type Database = {
       current_user_uuid: { Args: never; Returns: string }
       finalize_release: {
         Args: { p_client_request_id: string; p_release_id: string }
-        Returns: Json
+        Returns: Database["public"]["Tables"]["releases"]["Row"][]
       }
       get_current_user_id: { Args: never; Returns: string }
       get_user_id_by_telegram: {
