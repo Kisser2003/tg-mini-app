@@ -472,10 +472,16 @@ export async function getMyReleases(userId: number | string): Promise<ReleaseRec
 export async function getMyReleasesForWebUser(
   client: SupabaseClient<Database>
 ): Promise<ReleaseRecord[]> {
+  const {
+    data: { user }
+  } = await client.auth.getUser();
+  if (!user?.id) return [];
+
   const { data, error } = await withRetry(async () => {
     return await client
       .from("releases")
       .select("*")
+      .eq("user_uuid", user.id)
       .order("created_at", { ascending: false });
   });
 
