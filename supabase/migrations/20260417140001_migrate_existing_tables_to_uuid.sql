@@ -27,17 +27,32 @@ ALTER TABLE public.tracks
 
 CREATE INDEX IF NOT EXISTS tracks_user_uuid_idx ON public.tracks(user_uuid);
 
--- transactions table
-ALTER TABLE public.transactions 
-  ADD COLUMN IF NOT EXISTS user_uuid uuid REFERENCES public.users(id) ON DELETE CASCADE;
+-- transactions / payout_accounts — только если таблицы есть (кошелёк мог быть только в архивных миграциях).
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_catalog.pg_tables
+    WHERE schemaname = 'public' AND tablename = 'transactions'
+  ) THEN
+    ALTER TABLE public.transactions
+      ADD COLUMN IF NOT EXISTS user_uuid uuid REFERENCES public.users(id) ON DELETE CASCADE;
+    CREATE INDEX IF NOT EXISTS transactions_user_uuid_idx ON public.transactions(user_uuid);
+  END IF;
+END
+$$;
 
-CREATE INDEX IF NOT EXISTS transactions_user_uuid_idx ON public.transactions(user_uuid);
-
--- payout_accounts table
-ALTER TABLE public.payout_accounts 
-  ADD COLUMN IF NOT EXISTS user_uuid uuid REFERENCES public.users(id) ON DELETE CASCADE;
-
-CREATE INDEX IF NOT EXISTS payout_accounts_user_uuid_idx ON public.payout_accounts(user_uuid);
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_catalog.pg_tables
+    WHERE schemaname = 'public' AND tablename = 'payout_accounts'
+  ) THEN
+    ALTER TABLE public.payout_accounts
+      ADD COLUMN IF NOT EXISTS user_uuid uuid REFERENCES public.users(id) ON DELETE CASCADE;
+    CREATE INDEX IF NOT EXISTS payout_accounts_user_uuid_idx ON public.payout_accounts(user_uuid);
+  END IF;
+END
+$$;
 
 -- user_preferences table
 ALTER TABLE public.user_preferences 
@@ -156,17 +171,6 @@ SELECT
   count(*) - count(user_uuid) as pending_rows,
   round(100.0 * count(user_uuid) / NULLIF(count(*), 0), 2) as migration_percent
 FROM public.tracks
-WHERE user_id IS NOT NULL
-
-UNION ALL
-
-SELECT
-  'transactions' as table_name,
-  count(*) as total_rows,
-  count(user_uuid) as migrated_rows,
-  count(*) - count(user_uuid) as pending_rows,
-  round(100.0 * count(user_uuid) / NULLIF(count(*), 0), 2) as migration_percent
-FROM public.transactions
 WHERE user_id IS NOT NULL
 
 UNION ALL

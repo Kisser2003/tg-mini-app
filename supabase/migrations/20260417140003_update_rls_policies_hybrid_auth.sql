@@ -48,6 +48,10 @@ DROP POLICY IF EXISTS "Users can insert own releases" ON public.releases;
 DROP POLICY IF EXISTS "Users can update own releases" ON public.releases;
 DROP POLICY IF EXISTS "Users can delete own releases" ON public.releases;
 DROP POLICY IF EXISTS "own_releases" ON public.releases;
+DROP POLICY IF EXISTS "releases_select_own" ON public.releases;
+DROP POLICY IF EXISTS "releases_insert_own" ON public.releases;
+DROP POLICY IF EXISTS "releases_update_own" ON public.releases;
+DROP POLICY IF EXISTS "releases_delete_own" ON public.releases;
 
 -- New hybrid auth policies
 CREATE POLICY "releases_select_own" ON public.releases
@@ -95,6 +99,10 @@ DROP POLICY IF EXISTS "Users can read own tracks" ON public.tracks;
 DROP POLICY IF EXISTS "Users can insert own tracks" ON public.tracks;
 DROP POLICY IF EXISTS "Users can update own tracks" ON public.tracks;
 DROP POLICY IF EXISTS "Users can delete own tracks" ON public.tracks;
+DROP POLICY IF EXISTS "tracks_select_own" ON public.tracks;
+DROP POLICY IF EXISTS "tracks_insert_own" ON public.tracks;
+DROP POLICY IF EXISTS "tracks_update_own" ON public.tracks;
+DROP POLICY IF EXISTS "tracks_delete_own" ON public.tracks;
 
 CREATE POLICY "tracks_select_own" ON public.tracks
   FOR SELECT
@@ -134,16 +142,24 @@ CREATE POLICY "tracks_delete_own" ON public.tracks
   );
 
 -- ===========================================================================
--- TRANSACTIONS TABLE - Update RLS policies
+-- TRANSACTIONS TABLE - Update RLS policies (таблица есть только если применяли кошелёк)
 -- ===========================================================================
 
-DROP POLICY IF EXISTS "transactions_select_own" ON public.transactions;
-
-CREATE POLICY "transactions_select_own" ON public.transactions
-  FOR SELECT
-  USING (
-    user_uuid = public.current_user_uuid()
-  );
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_catalog.pg_tables
+    WHERE schemaname = 'public' AND tablename = 'transactions'
+  ) THEN
+    DROP POLICY IF EXISTS "transactions_select_own" ON public.transactions;
+    CREATE POLICY "transactions_select_own" ON public.transactions
+      FOR SELECT
+      USING (
+        user_uuid = public.current_user_uuid()
+      );
+  END IF;
+END
+$$;
 
 -- Note: INSERT/UPDATE/DELETE for transactions remains service_role only
 
@@ -151,28 +167,34 @@ CREATE POLICY "transactions_select_own" ON public.transactions
 -- PAYOUT_ACCOUNTS TABLE - Update RLS policies
 -- ===========================================================================
 
-DROP POLICY IF EXISTS "payout_accounts_select_own" ON public.payout_accounts;
-
-CREATE POLICY "payout_accounts_select_own" ON public.payout_accounts
-  FOR SELECT
-  USING (
-    user_uuid = public.current_user_uuid()
-  );
-
-CREATE POLICY "payout_accounts_insert_own" ON public.payout_accounts
-  FOR INSERT
-  WITH CHECK (
-    user_uuid = public.current_user_uuid()
-  );
-
-CREATE POLICY "payout_accounts_update_own" ON public.payout_accounts
-  FOR UPDATE
-  USING (
-    user_uuid = public.current_user_uuid()
-  )
-  WITH CHECK (
-    user_uuid = public.current_user_uuid()
-  );
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_catalog.pg_tables
+    WHERE schemaname = 'public' AND tablename = 'payout_accounts'
+  ) THEN
+    DROP POLICY IF EXISTS "payout_accounts_select_own" ON public.payout_accounts;
+    CREATE POLICY "payout_accounts_select_own" ON public.payout_accounts
+      FOR SELECT
+      USING (
+        user_uuid = public.current_user_uuid()
+      );
+    CREATE POLICY "payout_accounts_insert_own" ON public.payout_accounts
+      FOR INSERT
+      WITH CHECK (
+        user_uuid = public.current_user_uuid()
+      );
+    CREATE POLICY "payout_accounts_update_own" ON public.payout_accounts
+      FOR UPDATE
+      USING (
+        user_uuid = public.current_user_uuid()
+      )
+      WITH CHECK (
+        user_uuid = public.current_user_uuid()
+      );
+  END IF;
+END
+$$;
 
 -- ===========================================================================
 -- USER_PREFERENCES TABLE - Update RLS policies and schema
@@ -183,6 +205,9 @@ CREATE POLICY "payout_accounts_update_own" ON public.payout_accounts
 
 -- Drop old policy
 DROP POLICY IF EXISTS "own_prefs" ON public.user_preferences;
+DROP POLICY IF EXISTS "user_prefs_select_own" ON public.user_preferences;
+DROP POLICY IF EXISTS "user_prefs_insert_own" ON public.user_preferences;
+DROP POLICY IF EXISTS "user_prefs_update_own" ON public.user_preferences;
 
 -- Create new hybrid auth policy
 CREATE POLICY "user_prefs_select_own" ON public.user_preferences
@@ -241,6 +266,8 @@ CREATE POLICY "user_prefs_update_own" ON public.user_preferences
 -- Update admin policy (already uses is_admin_request(), so should be OK)
 -- But let's also add user access to their own release logs
 
+DROP POLICY IF EXISTS "release_logs_select_own" ON public.release_logs;
+
 CREATE POLICY "release_logs_select_own" ON public.release_logs
   FOR SELECT
   USING (
@@ -282,32 +309,53 @@ END
 $$;
 
 -- ===========================================================================
--- Update wallet balance function to work with UUID
+-- Update wallet balance function to work with UUID (только если есть кошелёк)
 -- ===========================================================================
 
-CREATE OR REPLACE FUNCTION public.get_user_balance_uuid(p_user_uuid uuid)
-RETURNS numeric
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-SET search_path = public
-AS $$
-  SELECT coalesce(sum(amount), 0)::numeric
-  FROM public.transactions
-  WHERE user_uuid = p_user_uuid
-    AND status = 'completed'::public.wallet_transaction_status;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_catalog.pg_tables
+    WHERE schemaname = 'public' AND tablename = 'transactions'
+  ) AND EXISTS (
+    SELECT 1 FROM pg_catalog.pg_type t
+    JOIN pg_namespace n ON n.oid = t.typnamespace
+    WHERE n.nspname = 'public' AND t.typname = 'wallet_transaction_status'
+  ) THEN
+    CREATE OR REPLACE FUNCTION public.get_user_balance_uuid(p_user_uuid uuid)
+    RETURNS numeric
+    LANGUAGE sql
+    STABLE
+    SECURITY DEFINER
+    SET search_path = public
+    AS $wal$
+      SELECT coalesce(sum(amount), 0)::numeric
+      FROM public.transactions
+      WHERE user_uuid = p_user_uuid
+        AND status = 'completed'::public.wallet_transaction_status;
+    $wal$;
+
+    COMMENT ON FUNCTION public.get_user_balance_uuid(uuid) IS
+      'Get balance for user by UUID. Replaces get_user_balance(text) for hybrid auth.';
+
+    GRANT EXECUTE ON FUNCTION public.get_user_balance_uuid(uuid) TO anon, authenticated, service_role;
+  END IF;
+END
 $$;
-
-COMMENT ON FUNCTION public.get_user_balance_uuid(uuid) IS 
-  'Get balance for user by UUID. Replaces get_user_balance(text) for hybrid auth.';
-
-GRANT EXECUTE ON FUNCTION public.get_user_balance_uuid(uuid) TO anon, authenticated, service_role;
 
 -- Update holding period function if exists
 DO $$
 BEGIN
-  IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'get_user_balance') THEN
-    -- Create UUID version that mirrors the bigint version
+  IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'get_user_balance')
+     AND EXISTS (
+       SELECT 1 FROM pg_catalog.pg_tables
+       WHERE schemaname = 'public' AND tablename = 'transactions'
+     )
+     AND EXISTS (
+       SELECT 1 FROM pg_catalog.pg_type t
+       JOIN pg_namespace n ON n.oid = t.typnamespace
+       WHERE n.nspname = 'public' AND t.typname = 'wallet_transaction_status'
+     ) THEN
     CREATE OR REPLACE FUNCTION public.get_user_balance_uuid(
       p_user_uuid uuid,
       p_only_available boolean DEFAULT false

@@ -20,49 +20,52 @@ DECLARE
   v_email text;
   v_encrypted_password text;
 BEGIN
-  -- Get all unique Telegram IDs from various tables
+  CREATE TEMP TABLE _tg_seed_candidates (
+    telegram_id bigint,
+    telegram_username text
+  ) ON COMMIT DROP;
+
+  INSERT INTO _tg_seed_candidates
+  SELECT
+    COALESCE(telegram_id::bigint, user_id::bigint),
+    telegram_username
+  FROM public.releases
+  WHERE COALESCE(telegram_id, user_id) IS NOT NULL;
+
+  INSERT INTO _tg_seed_candidates
+  SELECT user_id, NULL
+  FROM public.user_preferences
+  WHERE user_id IS NOT NULL;
+
+  IF EXISTS (
+    SELECT 1 FROM pg_catalog.pg_tables
+    WHERE schemaname = 'public' AND tablename = 'transactions'
+  ) THEN
+    INSERT INTO _tg_seed_candidates
+    SELECT user_id, NULL
+    FROM public.transactions
+    WHERE user_id IS NOT NULL;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM pg_catalog.pg_tables
+    WHERE schemaname = 'public' AND tablename = 'admin_users'
+  ) THEN
+    INSERT INTO _tg_seed_candidates
+    SELECT telegram_id, NULL
+    FROM public.admin_users
+    WHERE telegram_id IS NOT NULL;
+  END IF;
+
   FOR v_telegram_user IN (
     SELECT DISTINCT ON (telegram_id)
       telegram_id,
       telegram_username,
-      NULL as telegram_first_name,
-      NULL as telegram_last_name
-    FROM (
-      -- From releases
-      SELECT 
-        COALESCE(telegram_id::bigint, user_id::bigint) as telegram_id,
-        telegram_username
-      FROM public.releases
-      WHERE COALESCE(telegram_id, user_id) IS NOT NULL
-      
-      UNION
-      
-      -- From user_preferences
-      SELECT 
-        user_id as telegram_id,
-        NULL as telegram_username
-      FROM public.user_preferences
-      WHERE user_id IS NOT NULL
-      
-      UNION
-      
-      -- From transactions
-      SELECT 
-        user_id as telegram_id,
-        NULL as telegram_username
-      FROM public.transactions
-      WHERE user_id IS NOT NULL
-      
-      UNION
-      
-      -- From admin_users
-      SELECT 
-        telegram_id,
-        NULL as telegram_username
-      FROM public.admin_users
-      WHERE telegram_id IS NOT NULL
-    ) all_telegram_ids
+      NULL::text AS telegram_first_name,
+      NULL::text AS telegram_last_name
+    FROM _tg_seed_candidates
     WHERE telegram_id IS NOT NULL
+    ORDER BY telegram_id
   ) LOOP
     -- Check if user already exists in public.users
     SELECT id INTO v_user_uuid
@@ -180,21 +183,37 @@ WHERE t.user_uuid IS NULL
   AND t.user_id IS NOT NULL
   AND u.telegram_id = t.user_id;
 
--- Migrate transactions
-UPDATE public.transactions t
-SET user_uuid = u.id
-FROM public.users u
-WHERE t.user_uuid IS NULL
-  AND t.user_id IS NOT NULL
-  AND u.telegram_id = t.user_id;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_catalog.pg_tables
+    WHERE schemaname = 'public' AND tablename = 'transactions'
+  ) THEN
+    UPDATE public.transactions t
+    SET user_uuid = u.id
+    FROM public.users u
+    WHERE t.user_uuid IS NULL
+      AND t.user_id IS NOT NULL
+      AND u.telegram_id = t.user_id;
+  END IF;
+END
+$$;
 
--- Migrate payout_accounts
-UPDATE public.payout_accounts p
-SET user_uuid = u.id
-FROM public.users u
-WHERE p.user_uuid IS NULL
-  AND p.user_id IS NOT NULL
-  AND u.telegram_id = p.user_id;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_catalog.pg_tables
+    WHERE schemaname = 'public' AND tablename = 'payout_accounts'
+  ) THEN
+    UPDATE public.payout_accounts p
+    SET user_uuid = u.id
+    FROM public.users u
+    WHERE p.user_uuid IS NULL
+      AND p.user_id IS NOT NULL
+      AND u.telegram_id = p.user_id;
+  END IF;
+END
+$$;
 
 -- Migrate user_preferences (convert to UUID-based primary key)
 -- First, add user_uuid and populate it
@@ -275,7 +294,7 @@ BEGIN
   RAISE NOTICE '==================================================';
   
   FOR v_status IN SELECT * FROM public.migration_status ORDER BY table_name LOOP
-    RAISE NOTICE '% : % / % rows migrated (%%)',
+    RAISE NOTICE '% : % / % rows migrated (% %%)',
       rpad(v_status.table_name, 20),
       v_status.migrated_rows,
       v_status.total_rows,
@@ -302,19 +321,29 @@ AS $$
 BEGIN
   RETURN QUERY
   SELECT 'releases'::text, migrate_table_user_ids_to_uuid('releases', 'user_id', 'user_uuid');
-  
+
   RETURN QUERY
   SELECT 'releases_telegram'::text, migrate_table_user_ids_to_uuid('releases', 'telegram_id', 'user_uuid');
-  
+
   RETURN QUERY
   SELECT 'tracks'::text, migrate_table_user_ids_to_uuid('tracks', 'user_id', 'user_uuid');
-  
-  RETURN QUERY
-  SELECT 'transactions'::text, migrate_table_user_ids_to_uuid('transactions', 'user_id', 'user_uuid');
-  
-  RETURN QUERY
-  SELECT 'payout_accounts'::text, migrate_table_user_ids_to_uuid('payout_accounts', 'user_id', 'user_uuid');
-  
+
+  IF EXISTS (
+    SELECT 1 FROM pg_catalog.pg_tables
+    WHERE schemaname = 'public' AND tablename = 'transactions'
+  ) THEN
+    RETURN QUERY
+    SELECT 'transactions'::text, migrate_table_user_ids_to_uuid('transactions', 'user_id', 'user_uuid');
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM pg_catalog.pg_tables
+    WHERE schemaname = 'public' AND tablename = 'payout_accounts'
+  ) THEN
+    RETURN QUERY
+    SELECT 'payout_accounts'::text, migrate_table_user_ids_to_uuid('payout_accounts', 'user_id', 'user_uuid');
+  END IF;
+
   RETURN QUERY
   SELECT 'user_preferences'::text, migrate_table_user_ids_to_uuid('user_preferences', 'user_id', 'user_uuid');
 END;

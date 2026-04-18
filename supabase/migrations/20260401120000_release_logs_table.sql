@@ -28,12 +28,10 @@ CREATE POLICY "release_logs_select_own" ON public.release_logs
       SELECT 1
       FROM public.releases r
       WHERE r.id = release_logs.release_id
-        AND r.user_id = (
-          nullif(
-            trim(coalesce(current_setting('request.headers', true)::jsonb->>'x-telegram-user-id', '')),
-            ''
-          )
-        )::bigint
+        AND trim(r.user_id::text) = nullif(
+          trim(coalesce(current_setting('request.headers', true)::jsonb->>'x-telegram-user-id', '')),
+          ''
+        )
     )
   );
 
@@ -47,7 +45,7 @@ CREATE POLICY "Admin full access to ALL release_logs" ON public.release_logs
     coalesce(
       current_setting('request.headers', true)::jsonb->>'x-telegram-user-id',
       ''
-    ) = (SELECT value FROM pg_settings WHERE name = 'app.admin_telegram_id' LIMIT 1)
+    ) = (SELECT setting FROM pg_settings WHERE name = 'app.admin_telegram_id' LIMIT 1)
     OR
     coalesce(
       current_setting('request.headers', true)::jsonb->>'x-telegram-user-id',
