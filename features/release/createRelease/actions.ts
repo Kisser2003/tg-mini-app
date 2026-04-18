@@ -51,6 +51,7 @@ import { parseArtistLinksFromJson } from "@/lib/artist-links";
 import { parseCollaboratorsFromDb } from "@/lib/collaborators";
 import { parsePerformanceLanguage } from "@/lib/performance-language";
 import { celebrateReleaseSubmission } from "@/lib/confetti-release-success";
+import { refreshReleasesListAfterSubmit } from "@/lib/releases-swr-cache";
 import { toast } from "sonner";
 
 /** Таймаут коротких операций Supabase (insert/upsert в БД). Загрузка WAV идёт напрямую в Storage без лимита. */
@@ -1549,6 +1550,8 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
       if (verified.status === "pending" || verified.status === "processing") {
         celebrateReleaseSubmission();
       }
+
+      await refreshReleasesListAfterSubmit(verified).catch(() => {});
 
       const storeOk = useCreateReleaseDraftStore.getState();
       storeOk.setSubmitStatus("success");
