@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
-import type { TelegramAuthContext } from "@/lib/api/with-telegram-auth";
-import { withTelegramAuth } from "@/lib/api/with-telegram-auth";
+import { resolveReleaseActor } from "@/lib/api/resolve-submit-actor";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
 import { formatErrorMessage } from "@/lib/errors";
-import { isTelegramReleaseOwner } from "@/lib/release-ownership.server";
+import { isReleaseActorOwner } from "@/lib/release-ownership.server";
 
 const bodySchema = z.object({
   releaseId: z.string().uuid(),
@@ -13,10 +12,12 @@ const bodySchema = z.object({
   patch: z.record(z.string(), z.unknown())
 });
 
-async function handleSaveDraftPatch(
-  request: NextRequest,
-  ctx: TelegramAuthContext
-): Promise<Response> {
+async function handleSaveDraftPatch(request: NextRequest): Promise<Response> {
+  const actor = await resolveReleaseActor(request);
+  if (!actor) {
+    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  }
+
   const admin = createSupabaseAdmin();
   if (!admin) {
     return NextResponse.json(
@@ -38,7 +39,6 @@ async function handleSaveDraftPatch(
   }
 
   const { releaseId, patch } = parsed.data;
-  const telegramUserId = ctx.user.id;
 
   const { data: row, error: loadErr } = await admin
     .from("releases")
@@ -56,7 +56,7 @@ async function handleSaveDraftPatch(
   }
 
   const rowObj = row as Record<string, unknown>;
-  if (!(await isTelegramReleaseOwner(admin, rowObj, telegramUserId))) {
+  if (!(await isReleaseActorOwner(admin, rowObj, actor))) {
     return NextResponse.json({ ok: false, error: "Нет доступа к этому релизу." }, { status: 403 });
   }
 
@@ -82,4 +82,4 @@ async function handleSaveDraftPatch(
   return NextResponse.json({ ok: true, record: rows[0] });
 }
 
-export const POST = withTelegramAuth(handleSaveDraftPatch);
+export const POST = handleSaveDraftPatch;

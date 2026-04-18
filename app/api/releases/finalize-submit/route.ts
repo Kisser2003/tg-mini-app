@@ -1,33 +1,34 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
-import type { TelegramAuthContext } from "@/lib/api/with-telegram-auth";
-import { withTelegramAuth } from "@/lib/api/with-telegram-auth";
+import { resolveReleaseActor } from "@/lib/api/resolve-submit-actor";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
-import { isTelegramReleaseOwner } from "@/lib/release-ownership.server";
+import {
+  isReleaseActorOwner,
+  numericUserIdForReleaseAiLogs,
+  type ReleaseActor
+} from "@/lib/release-ownership.server";
 import { formatErrorMessage } from "@/lib/errors";
 import { escapeHtml } from "@/lib/telegram-bot.server";
 import { sendTelegramNotification } from "@/lib/telegram-notifications";
 import { getReleaseDisplayTitle, type ReleaseRecord } from "@/repositories/releases.repo";
 import { runAiMetadataPrecheckForRelease } from "@/lib/release-ai-moderation.server";
 
-async function notifyReleaseSubmittedForModeration(
-  record: ReleaseRecord,
-  telegramUserId: number
-): Promise<void> {
-  const fromRow =
+/** Уведомление в Telegram только если у релиза есть реальный `telegram_id` (не веб-only). */
+async function notifyReleaseSubmittedForModeration(record: ReleaseRecord): Promise<void> {
+  const tid =
     record.telegram_id != null && String(record.telegram_id).trim() !== ""
       ? String(record.telegram_id)
-      : record.user_id != null && String(record.user_id).trim() !== ""
-        ? String(record.user_id)
-        : String(telegramUserId);
+      : null;
+  if (!tid) {
+    return;
+  }
   const rawTitle = getReleaseDisplayTitle(record);
   const title = escapeHtml(rawTitle.length > 0 ? rawTitle : "релиз");
   const text =
     `🚀 <b>Ваш релиз «${title}» отправлен на модерацию!</b>\n\n` +
     `Мы проверим его в течение 24 часов и пришлем уведомление здесь.`;
-  /** Обязательно await — иначе на Vercel serverless ответ уходит до fetch в Telegram API. */
-  await sendTelegramNotification(fromRow, text);
+  await sendTelegramNotification(tid, text);
 }
 
 const bodySchema = z.object({
@@ -35,10 +36,7 @@ const bodySchema = z.object({
   clientRequestId: z.string().uuid()
 });
 
-async function handleFinalizeSubmit(
-  request: NextRequest,
-  ctx: TelegramAuthContext
-): Promise<Response> {
+async function handleFinalizeSubmit(request: NextRequest, actor: ReleaseActor): Promise<Response> {
   const admin = createSupabaseAdmin();
   if (!admin) {
     return NextResponse.json(
@@ -60,7 +58,6 @@ async function handleFinalizeSubmit(
   }
 
   const { releaseId, clientRequestId } = parsed.data;
-  const telegramUserId = ctx.user.id;
 
   const { data: currentRow, error: loadErr } = await admin
     .from("releases")
@@ -77,7 +74,8 @@ async function handleFinalizeSubmit(
     return NextResponse.json({ ok: false, error: "Релиз не найден." }, { status: 404 });
   }
 
-  if (!(await isTelegramReleaseOwner(admin, currentRow as Record<string, unknown>, telegramUserId))) {
+  const rowObj = currentRow as Record<string, unknown>;
+  if (!(await isReleaseActorOwner(admin, rowObj, actor))) {
     return NextResponse.json({ ok: false, error: "Нет доступа к этому релизу." }, { status: 403 });
   }
 
@@ -93,7 +91,8 @@ async function handleFinalizeSubmit(
     return NextResponse.json({ ok: true, record: current });
   }
 
-  const aiGate = await runAiMetadataPrecheckForRelease(admin, releaseId, telegramUserId);
+  const aiUserId = numericUserIdForReleaseAiLogs(actor, rowObj);
+  const aiGate = await runAiMetadataPrecheckForRelease(admin, releaseId, aiUserId);
   if (!aiGate.allow) {
     if (aiGate.status === 400) {
       return NextResponse.json(
@@ -107,10 +106,7 @@ async function handleFinalizeSubmit(
         { status: 400 }
       );
     }
-    return NextResponse.json(
-      { ok: false, error: aiGate.error },
-      { status: aiGate.status }
-    );
+    return NextResponse.json({ ok: false, error: aiGate.error }, { status: aiGate.status });
   }
 
   const { data: rpcData, error: rpcError } = await admin.rpc("finalize_release", {
@@ -122,7 +118,7 @@ async function handleFinalizeSubmit(
     const rows = Array.isArray(rpcData) ? rpcData : rpcData ? [rpcData] : [];
     if (rows.length > 0) {
       const rec = rows[0] as ReleaseRecord;
-      await notifyReleaseSubmittedForModeration(rec, telegramUserId);
+      await notifyReleaseSubmittedForModeration(rec);
       return NextResponse.json({ ok: true, record: rec });
     }
   } else {
@@ -176,8 +172,14 @@ async function handleFinalizeSubmit(
     );
   }
 
-  await notifyReleaseSubmittedForModeration(rows[0], telegramUserId);
+  await notifyReleaseSubmittedForModeration(rows[0]);
   return NextResponse.json({ ok: true, record: rows[0] });
 }
 
-export const POST = withTelegramAuth(handleFinalizeSubmit);
+export async function POST(request: NextRequest): Promise<Response> {
+  const actor = await resolveReleaseActor(request);
+  if (!actor) {
+    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  }
+  return handleFinalizeSubmit(request, actor);
+}

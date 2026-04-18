@@ -1,25 +1,26 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
-import type { TelegramAuthContext } from "@/lib/api/with-telegram-auth";
-import { withTelegramAuth } from "@/lib/api/with-telegram-auth";
+import { resolveReleaseActor } from "@/lib/api/resolve-submit-actor";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
 import {
   formatErrorMessage,
   isMissingReleasesColumnError,
   logSupabaseUpdateError
 } from "@/lib/errors";
-import { isTelegramReleaseOwner } from "@/lib/release-ownership.server";
+import { isReleaseActorOwner } from "@/lib/release-ownership.server";
 
 const bodySchema = z.object({
   releaseId: z.string().uuid(),
   phase: z.enum(["start", "complete", "failed"])
 });
 
-async function handleDraftUploadState(
-  request: NextRequest,
-  ctx: TelegramAuthContext
-): Promise<Response> {
+async function handleDraftUploadState(request: NextRequest): Promise<Response> {
+  const actor = await resolveReleaseActor(request);
+  if (!actor) {
+    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  }
+
   const admin = createSupabaseAdmin();
   if (!admin) {
     console.error("[releases/draft-upload-state] missing Supabase admin");
@@ -39,7 +40,6 @@ async function handleDraftUploadState(
   }
 
   const { releaseId, phase } = parsed.data;
-  const telegramUserId = ctx.user.id;
 
   const { data: row, error: loadErr } = await admin
     .from("releases")
@@ -56,7 +56,7 @@ async function handleDraftUploadState(
     return NextResponse.json({ ok: false, error: "Релиз не найден." }, { status: 404 });
   }
 
-  if (!(await isTelegramReleaseOwner(admin, row as Record<string, unknown>, telegramUserId))) {
+  if (!(await isReleaseActorOwner(admin, row as Record<string, unknown>, actor))) {
     return NextResponse.json({ ok: false, error: "Нет доступа к этому релизу." }, { status: 403 });
   }
 
@@ -177,4 +177,4 @@ async function handleDraftUploadState(
   return NextResponse.json({ ok: true });
 }
 
-export const POST = withTelegramAuth(handleDraftUploadState);
+export const POST = handleDraftUploadState;

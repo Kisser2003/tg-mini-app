@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import type { NextRequest } from "next/server";
-import type { TelegramAuthContext } from "@/lib/api/with-telegram-auth";
-import { withTelegramAuth } from "@/lib/api/with-telegram-auth";
+import { resolveReleaseActor } from "@/lib/api/resolve-submit-actor";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
-import { isTelegramReleaseOwner } from "@/lib/release-ownership.server";
+import {
+  isReleaseActorOwner,
+  numericUserIdForReleaseAiLogs,
+  type ReleaseActor
+} from "@/lib/release-ownership.server";
 import { RELEASE_TYPE_VALUES, type ReleaseType } from "@/lib/db-enums";
 import {
   collectReleaseArtistLinkErrors,
@@ -34,10 +37,7 @@ function releaseTypeTrackRuleMessage(releaseType: ReleaseType, count: number): s
   return null;
 }
 
-async function handleSubmitPrecheck(
-  request: NextRequest,
-  ctx: TelegramAuthContext
-): Promise<Response> {
+async function handleSubmitPrecheck(request: NextRequest, actor: ReleaseActor): Promise<Response> {
   const admin = createSupabaseAdmin();
   if (!admin) {
     console.error("[releases/submit-precheck] missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
@@ -60,7 +60,6 @@ async function handleSubmitPrecheck(
   }
 
   const { releaseId, clientRequestId, declaredTrackCount } = parsed.data;
-  const telegramUserId = ctx.user.id;
 
   const { data: releaseRow, error: relErr } = await admin
     .from("releases")
@@ -79,7 +78,8 @@ async function handleSubmitPrecheck(
     return NextResponse.json({ ok: false, error: "Релиз не найден." }, { status: 404 });
   }
 
-  if (!(await isTelegramReleaseOwner(admin, releaseRow as Record<string, unknown>, telegramUserId))) {
+  const rowObj = releaseRow as Record<string, unknown>;
+  if (!(await isReleaseActorOwner(admin, rowObj, actor))) {
     return NextResponse.json({ ok: false, error: "Нет доступа к этому релизу." }, { status: 403 });
   }
 
@@ -197,9 +197,10 @@ async function handleSubmitPrecheck(
     trackRows: trackRows ?? []
   });
 
+  const aiUserId = numericUserIdForReleaseAiLogs(actor, rowObj);
   const aiOutcome = await runAiMetadataPrecheck(admin, {
     releaseId,
-    telegramUserId,
+    telegramUserId: aiUserId,
     input: moderationInput
   });
 
@@ -222,4 +223,10 @@ async function handleSubmitPrecheck(
   return NextResponse.json({ ok: true });
 }
 
-export const POST = withTelegramAuth(handleSubmitPrecheck);
+export async function POST(request: NextRequest): Promise<Response> {
+  const actor = await resolveReleaseActor(request);
+  if (!actor) {
+    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  }
+  return handleSubmitPrecheck(request, actor);
+}
