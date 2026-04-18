@@ -369,7 +369,7 @@ function LibraryPageInner() {
             transition={{ delay: 0.4 }}
           >
             <motion.div
-              className="mb-8 flex h-32 w-32 items-center justify-center rounded-full"
+              className="mb-8 flex h-32 w-32 items-center justify-center overflow-hidden rounded-full"
               style={{
                 background:
                   "radial-gradient(circle at 35% 35%, rgba(129,140,248,0.15), rgba(76,29,149,0.08) 50%, rgba(3,3,3,0.6))",
@@ -379,7 +379,7 @@ function LibraryPageInner() {
               animate={{ scale: [1, 1.04, 1], opacity: [0.7, 1, 0.7] }}
               transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
             >
-              <SoundwaveVisualizer className="scale-75" />
+              <SoundwaveVisualizer className="h-[4.5rem] w-[5.75rem] max-w-[90%] scale-95" />
             </motion.div>
             <p className="mb-2 font-display text-xl font-bold tracking-tight text-white/80">
               Пока нет релизов

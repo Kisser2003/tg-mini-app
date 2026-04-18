@@ -21,7 +21,10 @@ function barDuration(i: number): number {
 /** Lovable-style bars; deterministic (no Math.random) for SSR/hydration. */
 export function SoundwaveVisualizer({ className = "" }: { className?: string }) {
   return (
-    <div className={`flex h-28 items-end justify-center gap-[2px] ${className}`} aria-hidden>
+    <div
+      className={`flex h-28 max-h-full items-end justify-center gap-[2px] overflow-hidden ${className}`}
+      aria-hidden
+    >
       {Array.from({ length: BARS }, (_, i) => {
         const peak = barPeak(i);
         const mult = barScaleY(i);

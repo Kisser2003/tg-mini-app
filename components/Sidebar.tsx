@@ -2,15 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useMemo } from "react";
 import { LayoutDashboard, Shield, LogOut, Music } from "lucide-react";
 import { useLogout } from "@/lib/hooks/useWebAuth";
 import { motion } from "framer-motion";
-
-const navItems = [
-  { path: "/", icon: LayoutDashboard, label: "Релизы" },
-  { path: "/library", icon: Music, label: "Библиотека" },
-  { path: "/admin", icon: Shield, label: "Админка" }
-];
+import { isAdminUi } from "@/lib/admin";
+import { initTelegramWebApp } from "@/lib/telegram";
 
 /**
  * Боковая навигация для веб-версии (desktop)
@@ -18,6 +15,20 @@ const navItems = [
 export function Sidebar() {
   const pathname = usePathname();
   const { logout } = useLogout();
+
+  const showAdminTab = useMemo(() => {
+    initTelegramWebApp();
+    return isAdminUi();
+  }, []);
+
+  const navItems = useMemo(
+    () => [
+      { path: "/", icon: LayoutDashboard, label: "Релизы" },
+      { path: "/library", icon: Music, label: "Библиотека" },
+      ...(showAdminTab ? [{ path: "/admin", icon: Shield, label: "Админка" }] : [])
+    ],
+    [showAdminTab]
+  );
 
   // Скрываем на странице логина
   if (pathname === "/login") {
