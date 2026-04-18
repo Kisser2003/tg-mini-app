@@ -99,13 +99,19 @@ export default {
         "empty-wave-glow": {
           "0%, 100%": { opacity: "0.45" },
           "50%": { opacity: "0.9" }
+        },
+        /** Фоновая волна за hero (библиотека) — CSS, не Framer */
+        "hero-wave-bar": {
+          "0%, 100%": { transform: "scaleY(0.08)" },
+          "50%": { transform: "scaleY(var(--peak, 0.5))" }
         }
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         "empty-wave-breathe": "empty-wave-breathe 3.2s ease-in-out infinite",
-        "empty-wave-glow": "empty-wave-glow 2.4s ease-in-out infinite"
+        "empty-wave-glow": "empty-wave-glow 2.4s ease-in-out infinite",
+        "hero-wave-bar": "hero-wave-bar var(--bar-dur, 1.6s) ease-in-out infinite"
       }
     }
   },
