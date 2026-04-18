@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { LogIn, UserPlus, Mail, Lock, AlertCircle, Sparkles } from "lucide-react";
+import { LogIn, UserPlus, Mail, Lock, AlertCircle, Sparkles, UserRound } from "lucide-react";
 import { createSupabaseBrowser } from "@/lib/supabase";
 
 type AuthMode = "login" | "signup";
@@ -14,6 +14,8 @@ function LoginPageContent() {
   const initialMode = searchParams.get("mode") === "signup" ? "signup" : "login";
   const redirectTo = searchParams.get("redirect") || "/library";
   const [mode, setMode] = useState<AuthMode>(initialMode);
+  /** Имя артиста / сценическое имя — только при регистрации */
+  const [artistName, setArtistName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -30,13 +32,26 @@ function LoginPageContent() {
       const supabase = createSupabaseBrowser();
 
       if (mode === "signup") {
+        const name = artistName.trim();
+        if (name.length < 2) {
+          setError("Укажите имя артиста (минимум 2 символа).");
+          setLoading(false);
+          return;
+        }
+        if (name.length > 120) {
+          setError("Имя слишком длинное (максимум 120 символов).");
+          setLoading(false);
+          return;
+        }
+
         const { data, error: signUpError } = await supabase.auth.signUp({
           email,
           password,
           options: {
             emailRedirectTo: `${window.location.origin}/auth/confirm?redirect=${encodeURIComponent(redirectTo)}`,
             data: {
-              display_name: email.split("@")[0]
+              display_name: name,
+              full_name: name
             }
           }
         });
@@ -82,6 +97,9 @@ function LoginPageContent() {
     setMode(mode === "login" ? "signup" : "login");
     setError("");
     setSuccess("");
+    if (mode === "signup") {
+      setArtistName("");
+    }
   };
 
   return (
@@ -120,6 +138,37 @@ function LoginPageContent() {
           className="glass p-8 rounded-2xl"
         >
           <form onSubmit={handleAuth} className="space-y-6">
+            {/* Имя артиста — только регистрация */}
+            {mode === "signup" && (
+              <div>
+                <label htmlFor="artistName" className="block text-sm font-medium text-white/80 mb-2">
+                  Имя артиста
+                </label>
+                <div className="relative">
+                  <UserRound
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40"
+                    size={18}
+                  />
+                  <input
+                    id="artistName"
+                    type="text"
+                    value={artistName}
+                    onChange={(e) => setArtistName(e.target.value)}
+                    required
+                    disabled={loading}
+                    autoComplete="name"
+                    placeholder="Как вас показывать в релизах"
+                    minLength={2}
+                    maxLength={120}
+                    className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/30 focus:outline-none focus:border-indigo-400/50 focus:ring-2 focus:ring-indigo-400/20 transition-all disabled:opacity-50"
+                  />
+                </div>
+                <p className="mt-1 text-xs text-white/50">
+                  Сценическое имя или имя для приветствия в сервисе
+                </p>
+              </div>
+            )}
+
             {/* Email */}
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-white/80 mb-2">
