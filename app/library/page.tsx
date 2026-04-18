@@ -49,7 +49,9 @@ function LibraryPageInner() {
   const searchParams = useSearchParams();
   const {
     userId,
+    authReady,
     telegramUser: user,
+    greetingName,
     releases,
     releaseStats,
     data,
@@ -109,23 +111,23 @@ function LibraryPageInner() {
   );
 
   const hasReleases = releases.length > 0;
-  const showTelegramWait = userId === null;
-  const showListSkeleton = userId != null && isLoading && data === undefined;
+  /** Нет контекста пользователя (сессия / Telegram) или ещё не инициализировали */
+  const showAuthWait = !authReady || userId === null;
+  const showListSkeleton =
+    authReady && userId != null && isLoading && data === undefined;
   const showEmptyState =
-    userId != null && !isLoading && !showListSkeleton && (error != null || releases.length === 0);
+    authReady &&
+    userId != null &&
+    !isLoading &&
+    !showListSkeleton &&
+    (error != null || releases.length === 0);
 
   const displayStats =
     error != null ? { ready: 0, processing: 0, failed: 0 } : releaseStats;
 
-  const artistFirstName = useMemo(() => {
-    const n = user?.first_name?.trim();
-    if (n) return n;
-    const u = user?.username?.trim();
-    if (u) return u;
-    return "Артист";
-  }, [user]);
+  const artistFirstName = greetingName;
 
-  const isEmpty = !showTelegramWait && !showListSkeleton && !error && releases.length === 0;
+  const isEmpty = !showAuthWait && !showListSkeleton && !error && releases.length === 0;
 
   const renderReleaseBlock = (release: ReleaseListRow, listIndex: number) => {
     const displayTitle = getReleaseDisplayTitle(release);
@@ -252,7 +254,7 @@ function LibraryPageInner() {
             hapticMap.impactLight();
             void mutate(undefined, { revalidate: true });
           }}
-          disabled={isValidating || showTelegramWait}
+          disabled={isValidating || showAuthWait}
           aria-label="Обновить список"
           className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04] text-white/70 backdrop-blur-md transition-colors hover:bg-white/[0.07] hover:text-white disabled:opacity-40"
         >
@@ -298,7 +300,7 @@ function LibraryPageInner() {
           </div>
         </motion.div>
 
-        {showTelegramWait || showListSkeleton ? (
+        {showAuthWait || showListSkeleton ? (
           <div className="glass-glow glass-glow-charged mb-12 px-4 py-5">
             <LibraryStatsSkeletonRow />
           </div>
@@ -328,10 +330,14 @@ function LibraryPageInner() {
           </div>
         )}
 
-        {showTelegramWait || showListSkeleton ? (
+        {showAuthWait || showListSkeleton ? (
           <div className="glass-glow glass-glow-charged space-y-4 px-4 py-5">
             <p className="text-[13px] text-white/45">
-              {showTelegramWait ? "Подключаем Telegram…" : "Загружаем твои релизы…"}
+              {!authReady
+                ? "Загрузка…"
+                : userId === null
+                  ? "Подключаем Telegram…"
+                  : "Загружаем твои релизы…"}
             </p>
             <LibraryReleaseSkeletonGrid count={6} />
           </div>

@@ -1,6 +1,8 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { logSupabaseUpdateError } from "../../lib/errors";
 import { supabase } from "../../lib/supabase";
+import type { Database } from "@/types/database.types";
 import { RELEASE_STATUS_VALUES, RELEASE_TYPE_VALUES } from "../../lib/db-enums";
 import type {
   ReleaseRecord,
@@ -461,6 +463,29 @@ export async function getMyReleases(userId: number | string): Promise<ReleaseRec
   }
 
   return (data ?? []) as ReleaseRecord[];
+}
+
+/**
+ * Список релизов для веб-пользователя (email/password): запрос с JWT из браузерного клиента.
+ * RLS (`user_uuid = auth.uid()`) отфильтрует строки; anon + x-telegram-user-id тут не используется.
+ */
+export async function getMyReleasesForWebUser(
+  client: SupabaseClient<Database>
+): Promise<ReleaseRecord[]> {
+  const { data, error } = await withRetry(async () => {
+    return await client
+      .from("releases")
+      .select("*")
+      .order("created_at", { ascending: false });
+  });
+
+  if (error) {
+    console.error("Supabase Error:", error);
+    logSupabaseUpdateError("getMyReleasesForWebUser", error);
+    throw error;
+  }
+
+  return (data ?? []) as unknown as ReleaseRecord[];
 }
 
 /**

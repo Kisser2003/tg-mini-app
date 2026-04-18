@@ -3,17 +3,23 @@
 import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import { initUserContextInStore } from "@/features/release/createRelease/actions";
-import { getMyReleases, type ReleaseRecord } from "@/repositories/releases.repo";
+import {
+  getMyReleases,
+  getMyReleasesForWebUser,
+  type ReleaseRecord
+} from "@/repositories/releases.repo";
 import {
   getTelegramWebApp,
   getTelegramUserIdForSupabaseRequests,
   initTelegramWebApp,
   type TelegramUser
 } from "@/lib/telegram";
+import { createSupabaseBrowser } from "@/lib/supabase";
 import { USER_REQUEST_TIMEOUT_MESSAGE } from "@/lib/errors";
 import { SWR_LIST_OPTIONS } from "@/lib/swr-config";
 import { withRequestTimeout } from "@/lib/withRequestTimeout";
 import { normalizeReleaseStatus } from "@/lib/release-status";
+import type { Session } from "@supabase/supabase-js";
 
 export type ReleaseListRow = Pick<
   ReleaseRecord,
@@ -31,7 +37,13 @@ export type ReleaseListRow = Pick<
 
 const RELEASES_LIST_TIMEOUT_MS = 15000;
 
-async function fetchReleasesForUser([, uid]: readonly ["releases", string]): Promise<ReleaseListRow[]> {
+type ReleasesSwrKey =
+  | readonly ["releases", "telegram", string]
+  | readonly ["releases", "web", string];
+
+async function fetchReleasesTelegram([, , uid]: readonly ["releases", "telegram", string]): Promise<
+  ReleaseListRow[]
+> {
   const rows = await withRequestTimeout(
     getMyReleases(uid),
     RELEASES_LIST_TIMEOUT_MS,
@@ -40,24 +52,105 @@ async function fetchReleasesForUser([, uid]: readonly ["releases", string]): Pro
   return rows as ReleaseListRow[];
 }
 
+async function fetchReleasesWeb([, , _authUid]: readonly ["releases", "web", string]): Promise<
+  ReleaseListRow[]
+> {
+  const client = createSupabaseBrowser();
+  const rows = await withRequestTimeout(
+    getMyReleasesForWebUser(client),
+    RELEASES_LIST_TIMEOUT_MS,
+    USER_REQUEST_TIMEOUT_MESSAGE
+  );
+  return rows as ReleaseListRow[];
+}
+
+async function fetchReleases(key: ReleasesSwrKey): Promise<ReleaseListRow[]> {
+  if (key[1] === "telegram") {
+    return fetchReleasesTelegram(key);
+  }
+  return fetchReleasesWeb(key);
+}
+
 /**
- * Library list: same SWR key `["releases", telegramUserId]` and refresh rules as the dashboard.
+ * Library list: Telegram — по telegram id + anon/заголовок; Web — по JWT и RLS.
  */
 export function useReleases() {
+  const [authReady, setAuthReady] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  /** telegram | web — откуда взяли userId для SWR */
+  const [authMode, setAuthMode] = useState<"telegram" | "web" | null>(null);
   const [user, setUser] = useState<TelegramUser | null>(null);
+  const [greetingName, setGreetingName] = useState<string>("Артист");
 
   useEffect(() => {
+    let cancelled = false;
     initTelegramWebApp();
     initUserContextInStore();
-    setUser(getTelegramWebApp()?.initDataUnsafe?.user ?? null);
+
     const tid = getTelegramUserIdForSupabaseRequests();
-    setUserId(tid != null ? String(tid) : null);
+    if (tid != null) {
+      setUser(getTelegramWebApp()?.initDataUnsafe?.user ?? null);
+      setUserId(String(tid));
+      setAuthMode("telegram");
+      const tg = getTelegramWebApp()?.initDataUnsafe?.user;
+      const name =
+        tg?.first_name?.trim() ||
+        tg?.username?.trim() ||
+        "Артист";
+      setGreetingName(name);
+      setAuthReady(true);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const supabase = createSupabaseBrowser();
+
+    const applySession = (session: Session | null) => {
+      if (cancelled) return;
+      if (session?.user) {
+        setUserId(session.user.id);
+        setAuthMode("web");
+        const meta = session.user.user_metadata as { display_name?: string | null };
+        const email = session.user.email;
+        const name =
+          meta?.display_name?.trim() ||
+          email?.split("@")[0]?.trim() ||
+          "Артист";
+        setGreetingName(name);
+      } else {
+        setUserId(null);
+        setAuthMode(null);
+        setGreetingName("Артист");
+      }
+      setAuthReady(true);
+    };
+
+    void supabase.auth.getSession().then(({ data: { session } }) => {
+      applySession(session);
+    });
+
+    const {
+      data: { subscription }
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      applySession(session);
+    });
+
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
   }, []);
 
-  const swrKey = userId != null ? (["releases", userId] as const) : null;
+  const swrKey: ReleasesSwrKey | null = useMemo(() => {
+    if (!authReady || userId == null || authMode == null) return null;
+    if (authMode === "telegram") {
+      return ["releases", "telegram", userId];
+    }
+    return ["releases", "web", userId];
+  }, [authReady, userId, authMode]);
 
-  const swr = useSWR(swrKey, fetchReleasesForUser, {
+  const swr = useSWR(swrKey, fetchReleases, {
     ...SWR_LIST_OPTIONS,
     revalidateOnFocus: true,
     refreshInterval: (latestData: ReleaseListRow[] | undefined) =>
@@ -82,7 +175,10 @@ export function useReleases() {
 
   return {
     userId,
+    authReady,
+    authMode,
     telegramUser: user,
+    greetingName,
     releases,
     releaseStats,
     ...swr
