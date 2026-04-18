@@ -180,7 +180,7 @@ export default function AdminPage() {
   const readyToday = stats?.ready_today ?? 0;
 
   return (
-    <div className="min-h-[100dvh] px-5 pb-44 pt-14">
+    <div className="min-h-app px-5 pb-44 pt-14">
       <PullRefreshBrand />
 
       <div className="mb-4 flex justify-end">

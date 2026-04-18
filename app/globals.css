@@ -43,6 +43,8 @@
     --radius: 1rem;
 
     --ss-black: #030303;
+    /** Верхняя кромка градиента (статус-бар / theme-color) — совпадает с login hero */
+    --theme-color-status: #0a0a0f;
     --ss-indigo: #1e1b4b;
     --ss-purple: #4c1d95;
     --ss-teal: #115e59;
@@ -65,12 +67,22 @@
 
 /*
  * Глобальный скролл документа (window): без вложенного overflow-y-auto в layout.
- * !important — перебить утилиты Tailwind на body при необходимости.
+ * Фон на html + fixed — закрашивает safe-area под полупрозрачным UI iOS (без «серой маски»).
  */
 html {
   scroll-behavior: smooth;
   -webkit-tap-highlight-color: transparent;
+  color-scheme: dark;
   background-color: var(--ss-black);
+  background-image:
+    radial-gradient(ellipse 60% 50% at 20% 10%, rgba(30, 27, 75, 0.55) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 60% at 75% 85%, rgba(76, 29, 149, 0.35) 0%, transparent 55%),
+    radial-gradient(ellipse 45% 40% at 60% 30%, rgba(17, 94, 89, 0.2) 0%, transparent 50%),
+    radial-gradient(ellipse 30% 35% at 40% 70%, rgba(76, 29, 149, 0.15) 0%, transparent 50%);
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+  min-height: 100%;
+  min-height: 100dvh;
 }
 
 /* Фокус клавиатуры сохраняем; убираем лишний outline при тапе */
@@ -96,12 +108,10 @@ body {
   margin: 0;
   padding: 0;
   font-family: var(--font-inter), Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
-  background-color: var(--ss-black);
   color: hsl(var(--foreground));
   overflow-x: hidden;
   overflow-y: auto !important;
   height: auto !important;
-  min-height: 100%;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: none;
@@ -110,13 +120,12 @@ body {
 
 /**
  * Краевой контент с отступами под Dynamic Island / home indicator.
- * Фон body + .mesh-bg тянутся на весь экран; отступы только у приложения внутри.
+ * Фон на html; отступы только у приложения внутри.
  */
 .app-safe-shell {
   box-sizing: border-box;
   position: relative;
   z-index: 1;
-  min-height: 100vh;
   min-height: 100dvh;
   min-height: -webkit-fill-available;
   padding-top: var(--safe-top);
@@ -128,11 +137,13 @@ body {
 /** Высота колонки контента без двойного учёта safe-area (оболочка уже с padding) */
 .min-h-app {
   min-height: calc(100dvh - var(--safe-top) - var(--safe-bottom));
-  min-height: calc(100vh - var(--safe-top) - var(--safe-bottom));
 }
 
 /* Нативный мини-апп: без выделения текста, кроме полей ввода */
 body {
+  background-color: transparent;
+  min-height: 100%;
+  min-height: 100dvh;
   -webkit-user-select: none;
   user-select: none;
 }
@@ -321,29 +332,14 @@ button {
   background-size: 128px 128px;
 }
 
-/* ── Ambient mesh background ── */
+/* ── Ambient mesh: слой над html-фоном (градиенты на html — см. выше), только блики ── */
 .mesh-bg {
   position: fixed;
   inset: 0;
   z-index: 0;
-  background: var(--ss-black);
+  background: transparent;
   overflow: hidden;
   pointer-events: none;
-}
-
-.mesh-bg::before {
-  content: "";
-  position: absolute;
-  width: 140%;
-  height: 140%;
-  top: -20%;
-  left: -20%;
-  background:
-    radial-gradient(ellipse 60% 50% at 20% 10%, rgba(30, 27, 75, 0.55) 0%, transparent 60%),
-    radial-gradient(ellipse 50% 60% at 75% 85%, rgba(76, 29, 149, 0.35) 0%, transparent 55%),
-    radial-gradient(ellipse 45% 40% at 60% 30%, rgba(17, 94, 89, 0.2) 0%, transparent 50%),
-    radial-gradient(ellipse 30% 35% at 40% 70%, rgba(76, 29, 149, 0.15) 0%, transparent 50%);
-  animation: meshDrift 20s ease-in-out infinite alternate;
 }
 
 .mesh-bg .light-hero {
@@ -366,15 +362,6 @@ button {
   background: radial-gradient(circle, rgba(192, 132, 252, 0.06) 0%, transparent 70%);
   border-radius: 50%;
   animation: lightPulse 10s ease-in-out infinite reverse;
-}
-
-@keyframes meshDrift {
-  0% {
-    transform: translate(0, 0) rotate(0deg);
-  }
-  100% {
-    transform: translate(2%, -1.5%) rotate(1deg);
-  }
 }
 
 @keyframes lightPulse {

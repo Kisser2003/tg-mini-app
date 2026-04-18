@@ -35,12 +35,15 @@ const spaceGrotesk = Space_Grotesk({
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"),
   title: "omf mini app",
-  description: "Премиальный Telegram Mini App для музыкальной дистрибуции"
+  description: "Премиальный Telegram Mini App для музыкальной дистрибуции",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent"
+  }
 };
 
 /**
- * Генерирует <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
- * и theme-color для тёмной схемы (фон #030303 = --ss-black).
+ * Viewport + theme-color: верхний край градиента (--theme-color-status) для стыка со статус-баром Safari.
  */
 export const viewport: Viewport = {
   width: "device-width",
@@ -48,7 +51,10 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: "cover",
-  themeColor: [{ media: "(prefers-color-scheme: dark)", color: "#030303" }]
+  themeColor: [
+    { media: "(prefers-color-scheme: dark)", color: "#0a0a0f" },
+    { color: "#0a0a0f" }
+  ]
 };
 
 export default function RootLayout({
@@ -66,9 +72,8 @@ export default function RootLayout({
         ) : null}
       </head>
       <body
-        className={`${inter.variable} ${spaceGrotesk.variable} bg-[#030303] font-sans text-foreground antialiased`}
+        className={`${inter.variable} ${spaceGrotesk.variable} font-sans text-foreground antialiased`}
         style={{
-          backgroundColor: "var(--ss-black)",
           ["--bottom-nav-height" as string]: "4.5rem"
         }}
       >

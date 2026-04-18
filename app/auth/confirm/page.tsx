@@ -45,11 +45,7 @@ function ConfirmEmailContent() {
   }, [router, searchParams]);
 
   return (
-    <div className="min-h-[100dvh] flex items-center justify-center px-5 py-10">
-      {/* Background gradient */}
-      <div className="fixed inset-0 -z-10 bg-gradient-to-br from-[#0a0a0f] via-[#13131a] to-[#0a0a0f]" />
-      <div className="fixed inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-900/20 via-transparent to-transparent" />
-
+    <div className="flex min-h-app items-center justify-center px-5 py-10">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -129,8 +125,8 @@ export default function ConfirmEmailPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-[100dvh] flex items-center justify-center">
-          <Loader2 className="text-indigo-400 animate-spin" size={48} />
+        <div className="flex min-h-app items-center justify-center">
+          <Loader2 className="animate-spin text-indigo-400" size={48} />
         </div>
       }
     >
