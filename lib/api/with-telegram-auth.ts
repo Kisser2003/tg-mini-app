@@ -80,6 +80,75 @@ const unauthorized = () =>
   NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
 
 /**
+ * Тот же контекст, что и в `withTelegramAuth`, но без вызова handler — для гибридных маршрутов
+ * (например сборка WAV после чанков для веб-сессии Supabase без Telegram initData).
+ */
+export function getTelegramAuthContextFromRequest(
+  request: NextRequest,
+  verifyOptions?: WithTelegramAuthOptions
+): TelegramAuthContext | null {
+  const initDataRaw = getTelegramInitDataFromRequest(request);
+
+  if (process.env.NODE_ENV === "development") {
+    console.debug("[withTelegramAuth]", {
+      hasToken: !!process.env.TELEGRAM_BOT_TOKEN,
+      receivedData: Boolean(initDataRaw)
+    });
+  }
+
+  if (!initDataRaw) {
+    const devCtx = tryDevTelegramUserIdBypass(request);
+    if (devCtx) {
+      logAdminAuthDiagnostics(request, "dev-bypass-no-initData", devCtx.user.id);
+      return devCtx;
+    }
+    return null;
+  }
+
+  const botToken = process.env.TELEGRAM_BOT_TOKEN;
+
+  if (!botToken) {
+    console.warn("[withTelegramAuth] missing TELEGRAM_BOT_TOKEN (non-admin user)");
+    return null;
+  }
+
+  const verified: VerifiedTelegramInitData | null = verifyTelegramInitData(
+    initDataRaw,
+    botToken,
+    verifyOptions
+  );
+
+  if (!verified) {
+    const looseOnFail = parseTelegramInitDataWithoutVerification(initDataRaw);
+    const devIdRaw = request.headers.get(DEV_USER_ID_HEADER)?.trim();
+    if (
+      process.env.NODE_ENV === "development" &&
+      isDevApiAuthEnabled() &&
+      looseOnFail &&
+      devIdRaw &&
+      Number(devIdRaw) === looseOnFail.user.id
+    ) {
+      console.warn(
+        "[withTelegramAuth] DEV bypass: initData verify failed; user id matches X-Dev-Telegram-User-Id"
+      );
+      logAdminAuthDiagnostics(request, "dev-bypass-initData-verify-failed", looseOnFail.user.id);
+      return {
+        user: looseOnFail.user,
+        authDate: looseOnFail.authDate
+      };
+    }
+    console.warn("[withTelegramAuth] initData signature verification failed or auth_date stale");
+    return null;
+  }
+
+  logAdminAuthDiagnostics(request, "initData-verified", verified.user.id);
+  return {
+    user: verified.user,
+    authDate: verified.authDate
+  };
+}
+
+/**
  * Обёртка для App Router API route handlers: проверка подписи `initData` через `TELEGRAM_BOT_TOKEN`.
  * Источник initData: заголовок `X-Telegram-Init-Data` или cookie `tg_init_data`.
  * Все пользователи, включая администраторов, проходят полную HMAC-верификацию initData.
@@ -89,65 +158,13 @@ export function withTelegramAuth(
   verifyOptions?: WithTelegramAuthOptions
 ): (request: NextRequest) => Promise<Response> {
   return async (request: NextRequest) => {
-    const initDataRaw = getTelegramInitDataFromRequest(request);
-
-    if (process.env.NODE_ENV === "development") {
-      console.debug("[withTelegramAuth]", {
-        hasToken: !!process.env.TELEGRAM_BOT_TOKEN,
-        receivedData: Boolean(initDataRaw)
-      });
-    }
-
-    if (!initDataRaw) {
-      const devCtx = tryDevTelegramUserIdBypass(request);
-      if (devCtx) {
-        logAdminAuthDiagnostics(request, "dev-bypass-no-initData", devCtx.user.id);
-        return handler(request, devCtx);
+    const ctx = getTelegramAuthContextFromRequest(request, verifyOptions);
+    if (!ctx) {
+      if (!getTelegramInitDataFromRequest(request)) {
+        console.warn("[withTelegramAuth] missing initData (header/cookie)");
       }
-      console.warn("[withTelegramAuth] missing initData (header/cookie)");
       return unauthorized();
     }
-
-    const botToken = process.env.TELEGRAM_BOT_TOKEN;
-
-    if (!botToken) {
-      console.warn("[withTelegramAuth] missing TELEGRAM_BOT_TOKEN (non-admin user)");
-      return unauthorized();
-    }
-
-    const verified: VerifiedTelegramInitData | null = verifyTelegramInitData(
-      initDataRaw,
-      botToken,
-      verifyOptions
-    );
-
-    if (!verified) {
-      const looseOnFail = parseTelegramInitDataWithoutVerification(initDataRaw);
-      const devIdRaw = request.headers.get(DEV_USER_ID_HEADER)?.trim();
-      if (
-        process.env.NODE_ENV === "development" &&
-        isDevApiAuthEnabled() &&
-        looseOnFail &&
-        devIdRaw &&
-        Number(devIdRaw) === looseOnFail.user.id
-      ) {
-        console.warn(
-          "[withTelegramAuth] DEV bypass: initData verify failed; user id matches X-Dev-Telegram-User-Id"
-        );
-        logAdminAuthDiagnostics(request, "dev-bypass-initData-verify-failed", looseOnFail.user.id);
-        return handler(request, {
-          user: looseOnFail.user,
-          authDate: looseOnFail.authDate
-        });
-      }
-      console.warn("[withTelegramAuth] initData signature verification failed or auth_date stale");
-      return unauthorized();
-    }
-
-    logAdminAuthDiagnostics(request, "initData-verified", verified.user.id);
-    return handler(request, {
-      user: verified.user,
-      authDate: verified.authDate
-    });
+    return handler(request, ctx);
   };
 }

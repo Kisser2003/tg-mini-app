@@ -20,7 +20,8 @@
     "test:all": "npm run check && npm run test && npm run build",
     "clean": "rm -rf .next node_modules/.cache tsconfig.tsbuildinfo",
     "supabase:empty-storage": "node scripts/empty-storage-buckets.mjs",
-    "supabase:delete-auth-users": "node scripts/delete-all-auth-users.mjs"
+    "supabase:delete-auth-users": "node scripts/delete-all-auth-users.mjs",
+    "supabase:wipe-releases": "node scripts/wipe-all-releases.mjs"
   },
   "dependencies": {
     "@google/genai": "^1.46.0",

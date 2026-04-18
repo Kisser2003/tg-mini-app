@@ -2,8 +2,9 @@ import { Buffer } from "node:buffer";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
-import { withTelegramAuth } from "@/lib/api/with-telegram-auth";
+import { getTelegramAuthContextFromRequest } from "@/lib/api/with-telegram-auth";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
+import { getSupabaseAuthUserIdFromCookies } from "@/lib/supabase-cookies-server";
 import { STORAGE_BUCKET_RELEASE_TRACKS } from "@/lib/storage-buckets";
 import { getReleaseTrackAudioPartPath, getReleaseTrackAudioPath } from "@/lib/storagePaths";
 
@@ -16,24 +17,47 @@ const bodySchema = z.object({
 /** ~200 MiB WAV (8 MiB × 25 частей + запас). Vercel: держим в пределах лимита памяти функции. */
 const MAX_STITCH_BYTES = 210 * 1024 * 1024;
 
-async function handleStitch(
+/**
+ * Числовой сегмент путей Storage: Telegram id или синтетический id веб-пользователя.
+ * Telegram — из initData; веб — только если cookie-сессия совпадает с `releases.user_uuid`.
+ */
+async function resolveStitchStorageUserId(
   request: NextRequest,
-  ctx: { user: { id: number } }
+  releaseId: string
+): Promise<number | null> {
+  const tgCtx = getTelegramAuthContextFromRequest(request);
+  if (tgCtx) {
+    return Math.trunc(tgCtx.user.id);
+  }
+
+  const authUserId = await getSupabaseAuthUserIdFromCookies();
+  if (!authUserId) return null;
+
+  const admin = createSupabaseAdmin();
+  if (!admin) return null;
+
+  const { data: row, error } = await admin
+    .from("releases")
+    .select("user_id, user_uuid")
+    .eq("id", releaseId)
+    .maybeSingle();
+
+  if (error || !row) return null;
+  if (row.user_uuid !== authUserId) return null;
+
+  const raw = row.user_id as unknown;
+  const n =
+    typeof raw === "bigint" ? Number(raw) : typeof raw === "number" ? raw : Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return Math.trunc(n);
+}
+
+async function runStitch(
+  tg: number,
+  releaseId: string,
+  trackIndex: number,
+  partCount: number
 ): Promise<Response> {
-  const tg = Math.trunc(ctx.user.id);
-  let json: unknown;
-  try {
-    json = await request.json();
-  } catch {
-    return NextResponse.json({ ok: false, error: "Invalid JSON" }, { status: 400 });
-  }
-
-  const parsed = bodySchema.safeParse(json);
-  if (!parsed.success) {
-    return NextResponse.json({ ok: false, error: "Invalid body" }, { status: 400 });
-  }
-
-  const { releaseId, trackIndex, partCount } = parsed.data;
   const admin = createSupabaseAdmin();
   if (!admin) {
     return NextResponse.json({ ok: false, error: "Server misconfigured" }, { status: 503 });
@@ -88,4 +112,25 @@ async function handleStitch(
   return NextResponse.json({ ok: true, publicUrl });
 }
 
-export const POST = withTelegramAuth(handleStitch);
+export async function POST(request: NextRequest): Promise<Response> {
+  let json: unknown;
+  try {
+    json = await request.json();
+  } catch {
+    return NextResponse.json({ ok: false, error: "Invalid JSON" }, { status: 400 });
+  }
+
+  const parsed = bodySchema.safeParse(json);
+  if (!parsed.success) {
+    return NextResponse.json({ ok: false, error: "Invalid body" }, { status: 400 });
+  }
+
+  const { releaseId, trackIndex, partCount } = parsed.data;
+
+  const tg = await resolveStitchStorageUserId(request, releaseId);
+  if (tg == null) {
+    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  }
+
+  return runStitch(tg, releaseId, trackIndex, partCount);
+}
