@@ -38,13 +38,17 @@ export const metadata: Metadata = {
   description: "Премиальный Telegram Mini App для музыкальной дистрибуции"
 };
 
+/**
+ * Генерирует <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+ * и theme-color для тёмной схемы (фон #030303 = --ss-black).
+ */
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
   viewportFit: "cover",
-  themeColor: "#030303"
+  themeColor: [{ media: "(prefers-color-scheme: dark)", color: "#030303" }]
 };
 
 export default function RootLayout({
@@ -79,13 +83,15 @@ export default function RootLayout({
           <div className="light-hero" />
           <div className="light-fab" />
         </div>
-        <AppProviders>
-          <AppErrorBoundary>
-            <AdaptiveLayout>
-              <PageTransition>{children}</PageTransition>
-            </AdaptiveLayout>
-          </AppErrorBoundary>
-        </AppProviders>
+        <div className="app-safe-shell">
+          <AppProviders>
+            <AppErrorBoundary>
+              <AdaptiveLayout>
+                <PageTransition>{children}</PageTransition>
+              </AdaptiveLayout>
+            </AppErrorBoundary>
+          </AppProviders>
+        </div>
         <NoiseOverlay />
       </body>
     </html>

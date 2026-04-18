@@ -36,12 +36,12 @@ export function AdaptiveLayout({ children }: { children: React.ReactNode }) {
   // During SSR and initial mount, render universal layout
   if (!mounted) {
     return (
-      <div className="relative z-[1] w-full min-h-[100dvh] flex">
+      <div className="relative z-[1] flex w-full min-h-app">
         <Sidebar />
-        <div className="flex-1 ml-0 lg:ml-64">
+        <div className="ml-0 flex-1 lg:ml-64">
           <div
             id="app-main-scroll"
-            className="app-main-scroll relative px-4 md:px-8 lg:px-12 py-6 md:py-8 max-w-[1400px]"
+            className="app-main-scroll relative max-w-[1400px] px-4 py-6 md:px-8 md:py-8 lg:px-12"
           >
             {children}
           </div>
@@ -53,12 +53,12 @@ export function AdaptiveLayout({ children }: { children: React.ReactNode }) {
 
   // After hydration, render adaptive layout
   if (isTelegram) {
-    // Telegram Mini App: узкий mobile layout
+    // Telegram Mini App: узкий mobile layout (нижний inset — в .app-safe-shell + fixed nav)
     return (
-      <div className="relative z-[1] mx-auto w-full max-w-[450px] min-h-[100dvh]">
+      <div className="relative z-[1] mx-auto min-h-app w-full max-w-[450px]">
         <div
           id="app-main-scroll"
-          className="app-main-scroll relative px-3 pb-[calc(7rem+env(safe-area-inset-bottom,0px))] pt-4"
+          className="app-main-scroll relative px-3 pb-28 pt-4"
         >
           {children}
         </div>
@@ -70,12 +70,12 @@ export function AdaptiveLayout({ children }: { children: React.ReactNode }) {
 
   // Web: полноценный desktop layout с sidebar
   return (
-    <div className="relative z-[1] w-full min-h-[100dvh] flex">
+    <div className="relative z-[1] flex min-h-app w-full">
       <Sidebar />
-      <div className="flex-1 ml-0 lg:ml-64">
+      <div className="ml-0 flex-1 lg:ml-64">
         <div
           id="app-main-scroll"
-          className="app-main-scroll relative px-4 md:px-8 lg:px-12 py-6 md:py-8 max-w-[1400px]"
+          className="app-main-scroll relative max-w-[1400px] px-4 py-6 md:px-8 md:py-8 lg:px-12"
         >
           {children}
         </div>

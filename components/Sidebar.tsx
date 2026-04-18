@@ -36,7 +36,7 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="hidden lg:flex fixed left-0 top-0 h-full w-64 bg-black/40 backdrop-blur-xl border-r border-white/5 flex-col z-50">
+    <aside className="fixed bottom-0 left-0 top-[var(--safe-top)] z-50 hidden w-64 flex-col border-r border-white/5 bg-black/40 backdrop-blur-xl lg:flex">
       {/* Header */}
       <div className="p-6 border-b border-white/5">
         <h1 className="text-2xl font-display font-bold gradient-text">

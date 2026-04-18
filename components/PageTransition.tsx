@@ -24,7 +24,7 @@ export function PageTransition({ children }: { children: React.ReactNode }) {
     <AnimatePresence mode="wait" initial={false}>
       <motion.div
         key={pathname}
-        className="relative min-h-[100dvh] w-full min-w-0 overflow-x-hidden will-change-[opacity]"
+        className="relative min-h-app w-full min-w-0 overflow-x-hidden will-change-[opacity]"
         initial={{ opacity: instant ? 1 : 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: instant ? 1 : 0 }}

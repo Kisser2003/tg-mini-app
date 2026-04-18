@@ -6,6 +6,12 @@
 
 @layer base {
   :root {
+    /* iOS safe areas (viewport-fit=cover) — для calc() и компонентов */
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-right: env(safe-area-inset-right, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-left: env(safe-area-inset-left, 0px);
+
     --background: 240 20% 1.5%;
     --foreground: 0 0% 95%;
 
@@ -64,6 +70,7 @@
 html {
   scroll-behavior: smooth;
   -webkit-tap-highlight-color: transparent;
+  background-color: var(--ss-black);
 }
 
 /* Фокус клавиатуры сохраняем; убираем лишний outline при тапе */
@@ -99,6 +106,29 @@ body {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: none;
   touch-action: pan-y pinch-zoom;
+}
+
+/**
+ * Краевой контент с отступами под Dynamic Island / home indicator.
+ * Фон body + .mesh-bg тянутся на весь экран; отступы только у приложения внутри.
+ */
+.app-safe-shell {
+  box-sizing: border-box;
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  min-height: 100dvh;
+  min-height: -webkit-fill-available;
+  padding-top: var(--safe-top);
+  padding-right: var(--safe-right);
+  padding-bottom: var(--safe-bottom);
+  padding-left: var(--safe-left);
+}
+
+/** Высота колонки контента без двойного учёта safe-area (оболочка уже с padding) */
+.min-h-app {
+  min-height: calc(100dvh - var(--safe-top) - var(--safe-bottom));
+  min-height: calc(100vh - var(--safe-top) - var(--safe-bottom));
 }
 
 /* Нативный мини-апп: без выделения текста, кроме полей ввода */

@@ -255,7 +255,7 @@ function LibraryPageInner() {
   };
 
   return (
-    <div className="min-h-[100dvh] text-foreground">
+    <div className="min-h-app text-foreground">
       <PullRefreshBrand />
 
       <div
@@ -516,7 +516,7 @@ export default function LibraryPage() {
     <AuthGuard>
       <Suspense
         fallback={
-          <div className="min-h-[100dvh] px-5 pt-14 pb-44">
+          <div className="min-h-app px-5 pb-44 pt-14">
             <div className="mx-auto max-w-lg space-y-6">
               <div className="h-36 animate-pulse rounded-[1.25rem] bg-white/[0.06]" />
               <LibraryStatsSkeletonRow />
