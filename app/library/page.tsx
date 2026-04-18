@@ -18,13 +18,17 @@ import { useReleases, type ReleaseListRow } from "@/lib/hooks/useReleases";
 import { hapticMap } from "@/lib/haptic-map";
 import { toast } from "sonner";
 import { AuthGuard } from "@/components/AuthGuard";
+import { useIsTelegramMiniApp } from "@/lib/hooks/useIsTelegramMiniApp";
+import { pickProfileGreetingName, useAuthProfile } from "@/lib/hooks/useAuthProfile";
+import { LibraryWebAside } from "@/components/library/LibraryWebAside";
+import { cn } from "@/lib/utils";
 
 type LibraryStatusFilter = "all" | "processing" | "ready" | "failed";
 
 const STATUS_FILTER_CHIPS: { id: LibraryStatusFilter; label: string }[] = [
   { id: "all", label: "Все" },
-  { id: "processing", label: "На модерации" },
-  { id: "ready", label: "Готово" },
+  { id: "processing", label: "В проверке" },
+  { id: "ready", label: "Отгружено" },
   { id: "failed", label: "Отклонены" }
 ];
 
@@ -47,9 +51,11 @@ function mapToReleaseCardStatus(canonical: ReturnType<typeof normalizeReleaseSta
 function LibraryPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const isTelegram = useIsTelegramMiniApp();
   const {
     userId,
     authReady,
+    authMode,
     telegramUser: user,
     greetingName,
     releases,
@@ -60,6 +66,13 @@ function LibraryPageInner() {
     isValidating,
     mutate
   } = useReleases();
+
+  const { data: authProfile } = useAuthProfile(
+    Boolean(authReady && authMode === "web"),
+    authMode === "web" ? userId : null
+  );
+
+  const showWebAside = !isTelegram;
 
   const [expandedErrorId, setExpandedErrorId] = useState<string | null>(null);
   const [resumingId, setResumingId] = useState<string | null>(null);
@@ -125,7 +138,7 @@ function LibraryPageInner() {
   const displayStats =
     error != null ? { ready: 0, processing: 0, failed: 0 } : releaseStats;
 
-  const artistFirstName = greetingName;
+  const artistFirstName = pickProfileGreetingName(authProfile ?? undefined, greetingName);
 
   const isEmpty = !showAuthWait && !showListSkeleton && !error && releases.length === 0;
 
@@ -242,61 +255,68 @@ function LibraryPageInner() {
   };
 
   return (
-    <div className="min-h-[100dvh] px-5 pb-44 pt-14 text-foreground">
+    <div className="min-h-[100dvh] text-foreground">
       <PullRefreshBrand />
 
-      {/* Top actions: reference-minimal icon row (not between hero & stats) */}
-      <div className="mx-auto mb-4 flex w-full max-w-lg justify-end gap-2">
-        <motion.button
-          type="button"
-          whileTap={{ scale: 0.94 }}
-          onClick={() => {
-            hapticMap.impactLight();
-            void mutate(undefined, { revalidate: true });
-          }}
-          disabled={isValidating || showAuthWait}
-          aria-label="Обновить список"
-          className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04] text-white/70 backdrop-blur-md transition-colors hover:bg-white/[0.07] hover:text-white disabled:opacity-40"
+      <div
+        className={cn(
+          "mx-auto w-full px-5 pb-44 pt-14",
+          showWebAside ? "max-w-[1200px]" : "max-w-lg"
+        )}
+      >
+        <div
+          className={cn(
+            showWebAside &&
+              "xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(280px,320px)] xl:items-start xl:gap-10"
+          )}
         >
-          <RefreshCw className={`h-[18px] w-[18px] ${isValidating ? "animate-spin" : ""}`} />
-        </motion.button>
-        <motion.button
-          type="button"
-          whileTap={{ scale: 0.94 }}
-          onClick={handleCreate}
-          aria-label="Новый релиз"
-          className="flex h-10 w-10 items-center justify-center rounded-xl text-white pulse-glow"
-          style={{
-            background: "linear-gradient(135deg, #818cf8, #c084fc)",
-            boxShadow: "0 0 20px rgba(129,140,248,0.25)"
-          }}
-        >
-          <Plus className="h-[22px] w-[22px]" strokeWidth={2.5} />
-        </motion.button>
-      </div>
-
-      <div className="mx-auto w-full max-w-lg">
-        {/* Hero — Lovable Dashboard */}
+          <div className={cn("min-w-0", showWebAside ? "xl:max-w-none" : "mx-auto w-full max-w-lg")}>
+        {/* Hero — действия в правом верхнем углу карточки */}
         <motion.div
-          className="glass-glow glass-glow-charged relative mb-12 min-h-[140px] overflow-hidden p-8"
+          className="glass-glow glass-glow-charged relative mb-12 min-h-[140px] overflow-hidden p-8 pr-24 sm:pr-28"
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
         >
+          <div className="absolute right-4 top-4 z-20 flex gap-2 sm:right-6 sm:top-6">
+            <motion.button
+              type="button"
+              whileTap={{ scale: 0.94 }}
+              onClick={() => {
+                hapticMap.impactLight();
+                void mutate(undefined, { revalidate: true });
+              }}
+              disabled={isValidating || showAuthWait}
+              aria-label="Обновить список"
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.06] text-white/80 backdrop-blur-md transition-colors hover:bg-white/[0.1] hover:text-white disabled:opacity-40"
+            >
+              <RefreshCw className={`h-[18px] w-[18px] ${isValidating ? "animate-spin" : ""}`} />
+            </motion.button>
+            <motion.button
+              type="button"
+              whileTap={{ scale: 0.94 }}
+              onClick={handleCreate}
+              aria-label="Новый релиз"
+              className="flex h-10 w-10 items-center justify-center rounded-xl text-white pulse-glow"
+              style={{
+                background: "linear-gradient(135deg, #818cf8, #c084fc)",
+                boxShadow: "0 0 20px rgba(129,140,248,0.25)"
+              }}
+            >
+              <Plus className="h-[22px] w-[22px]" strokeWidth={2.5} />
+            </motion.button>
+          </div>
           <HeroWave />
-          <div className="relative z-10">
+          <div className="relative z-10 max-w-xl">
             <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/25">
               С возвращением
             </p>
             <h1 className="font-display text-4xl font-extrabold leading-none tracking-tighter gradient-text">
               Привет, {artistFirstName}
             </h1>
-            <p className="mt-3 max-w-[260px] text-sm font-light leading-relaxed text-white/30">
+            <p className="mt-3 max-w-[320px] text-sm font-light leading-relaxed text-white/30">
               Твой хаб дистрибуции: релизы и роялти в одном месте.
             </p>
-            {user?.id != null ? (
-              <p className="mt-2 text-[10px] text-white/20">UID: {user.id}</p>
-            ) : null}
           </div>
         </motion.div>
 
@@ -308,21 +328,21 @@ function LibraryPageInner() {
           <div className="mb-12 flex gap-3">
             <StatsTile
               icon={Disc3}
-              label="Релизы"
+              label="Всего"
               value={releases.length}
               delay={0.15}
               accentClass="gradient-text-blue"
             />
             <StatsTile
               icon={Clock}
-              label="На модерации"
+              label="В проверке"
               value={displayStats.processing}
               delay={0.25}
               accentClass="gradient-text-teal"
             />
             <StatsTile
               icon={Wallet}
-              label="Готово"
+              label="Отгружено"
               value={displayStats.ready}
               delay={0.35}
               accentClass="gradient-text-gold"
@@ -444,6 +464,16 @@ function LibraryPageInner() {
             </div>
           </>
         )}
+          </div>
+
+          {showWebAside ? (
+            <aside className="mt-10 min-w-0 xl:mt-0">
+              <div className="xl:sticky xl:top-24">
+                <LibraryWebAside />
+              </div>
+            </aside>
+          ) : null}
+        </div>
       </div>
 
       <AnimatePresence>

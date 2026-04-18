@@ -29,11 +29,11 @@ export function StatsTile({
         <Icon size={14} className="text-white/50" />
       </div>
       <p
-        className={`font-display text-3xl font-extrabold leading-none tracking-tighter ${accentClass}`}
+        className={`font-display text-4xl font-black leading-[0.95] tracking-tighter tabular-nums sm:text-5xl ${accentClass}`}
       >
         {value}
       </p>
-      <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.15em] text-white/30">
+      <p className="mt-4 text-[10px] font-semibold uppercase tracking-[0.15em] text-white/30">
         {label}
       </p>
     </motion.div>
