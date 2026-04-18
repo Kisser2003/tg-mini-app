@@ -8,12 +8,16 @@ import { createSupabaseBrowser } from "@/lib/supabase";
 
 type AuthMode = "login" | "signup";
 
+/** Регистрация только при явном ?mode=signup (или после клика «Зарегистрируйтесь»). Чистый /login — всегда вход. */
+function authModeFromSearchParams(searchParams: ReturnType<typeof useSearchParams>): AuthMode {
+  return searchParams.get("mode")?.toLowerCase().trim() === "signup" ? "signup" : "login";
+}
+
 function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const initialMode = searchParams.get("mode") === "signup" ? "signup" : "login";
+  const mode = authModeFromSearchParams(searchParams);
   const redirectTo = searchParams.get("redirect") || "/library";
-  const [mode, setMode] = useState<AuthMode>(initialMode);
   /** Имя артиста / сценическое имя — только при регистрации */
   const [artistName, setArtistName] = useState("");
   const [email, setEmail] = useState("");
@@ -21,6 +25,12 @@ function LoginPageContent() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
+  useEffect(() => {
+    if (authModeFromSearchParams(searchParams) === "login") {
+      setArtistName("");
+    }
+  }, [searchParams]);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -94,12 +104,16 @@ function LoginPageContent() {
   };
 
   const toggleMode = () => {
-    setMode(mode === "login" ? "signup" : "login");
     setError("");
     setSuccess("");
-    if (mode === "signup") {
-      setArtistName("");
+    const params = new URLSearchParams(searchParams.toString());
+    if (mode === "login") {
+      params.set("mode", "signup");
+    } else {
+      params.delete("mode");
     }
+    const qs = params.toString();
+    router.replace(qs ? `/login?${qs}` : "/login", { scroll: false });
   };
 
   return (
