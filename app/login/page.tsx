@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { LogIn, UserPlus, Mail, Lock, AlertCircle, Sparkles, UserRound } from "lucide-react";
 import { createSupabaseBrowser } from "@/lib/supabase";
+import { isTelegramClientShell } from "@/lib/telegram";
 import { useIsTelegramMiniApp } from "@/lib/hooks/useIsTelegramMiniApp";
 
 type AuthMode = "login" | "signup";
@@ -80,8 +81,13 @@ function LoginPageContent() {
           // Email confirmed automatically (для разработки)
           setSuccess("Аккаунт создан! Перенаправляем...");
           setTimeout(() => {
+            const target = redirectTo.startsWith("/") ? redirectTo : "/library";
+            if (isTelegramClientShell()) {
+              window.location.assign(target);
+              return;
+            }
             router.refresh();
-            router.push(redirectTo);
+            router.push(target);
           }, 1500);
         } else if (data.user) {
           // Email требует подтверждения
@@ -98,8 +104,13 @@ function LoginPageContent() {
         if (data.session) {
           setSuccess("Вход выполнен! Перенаправляем...");
           setTimeout(() => {
+            const target = redirectTo.startsWith("/") ? redirectTo : "/library";
+            if (isTelegramClientShell()) {
+              window.location.assign(target);
+              return;
+            }
             router.refresh();
-            router.push(redirectTo);
+            router.push(target);
           }, 800);
         }
       }

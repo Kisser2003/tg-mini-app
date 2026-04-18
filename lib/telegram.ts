@@ -70,6 +70,32 @@ export function getTelegramWebApp(): TelegramWebApp | null {
   return window.Telegram?.WebApp ?? null;
 }
 
+/**
+ * Открыт ли сайт во встроенном WebView Telegram (Mini App).
+ * Для пропуска веб-логина достаточно этого флага — не ждём `initData` (скрипт может подгрузиться позже).
+ * Подписанный `initData` для API по-прежнему проверяется отдельно.
+ */
+export function isTelegramClientShell(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const ua = navigator.userAgent?.toLowerCase() ?? "";
+    if (ua.includes("telegram")) return true;
+  } catch {
+    /* ignore */
+  }
+  if (window.Telegram?.WebApp != null) return true;
+  try {
+    if (typeof document !== "undefined" && document.cookie.length > 0) {
+      if (document.cookie.split(";").some((c) => c.trim().startsWith("tg_init_data="))) {
+        return true;
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return Boolean(getTelegramWebApp()?.initData?.trim());
+}
+
 export function isTelegramMiniApp(): boolean {
   return Boolean(getTelegramWebApp()?.initData);
 }
