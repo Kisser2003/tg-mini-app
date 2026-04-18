@@ -24,27 +24,33 @@ export async function addReleaseTrack(params: {
   userId: number;
   /** Совпадает с `user_id` и заголовком RLS; по умолчанию = userId. */
   telegramId?: number;
+  /** Для веб без Telegram: `auth.uid()` в RLS. */
+  supabaseUserUuid?: string | null;
   index: number;
   title: string;
   explicit: boolean;
   audioUrl: string;
 }): Promise<void> {
-  const validated = trackInsertSchema.parse(params);
+  const { supabaseUserUuid, ...schemaInput } = params;
+  const validated = trackInsertSchema.parse(schemaInput);
   const telegramId = validated.telegramId ?? validated.userId;
 
   const { error } = await withRetry(async () => {
-    const response = await supabase.from("tracks").upsert(
-      {
-        release_id: validated.releaseId,
-        user_id: validated.userId,
-        telegram_id: telegramId,
-        index: validated.index,
-        title: validated.title,
-        explicit: validated.explicit,
-        file_path: validated.audioUrl
-      },
-      { onConflict: "release_id,index" }
-    );
+    const row: Record<string, unknown> = {
+      release_id: validated.releaseId,
+      user_id: validated.userId,
+      telegram_id: supabaseUserUuid ? null : String(telegramId),
+      index: validated.index,
+      title: validated.title,
+      explicit: validated.explicit,
+      file_path: validated.audioUrl
+    };
+    if (supabaseUserUuid) {
+      row.user_uuid = supabaseUserUuid;
+    }
+    const response = await supabase.from("tracks").upsert(row as never, {
+      onConflict: "release_id,index"
+    });
     return response;
   });
 

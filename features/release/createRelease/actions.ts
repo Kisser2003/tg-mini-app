@@ -23,6 +23,7 @@ import {
   addReleaseTrack,
   cleanupReleaseTracks,
   createDraftRelease,
+  createDraftReleaseWeb,
   deleteReleaseFiles,
   ensureReleaseProcessing,
   getReleaseById,
@@ -35,9 +36,17 @@ import {
 } from "@/repositories/releases.repo";
 import type { ReleaseRecord, ReleaseStep1Payload, ReleaseTrackRow } from "@/repositories/releases.repo";
 import type { CreateMetadata, CreateTrack } from "./types";
-import { isAssetsComplete, isMetadataComplete, isTracksComplete, metadataSchema, tracksSchema } from "./schemas";
+import {
+  FIXED_RELEASE_LABEL,
+  isAssetsComplete,
+  isMetadataComplete,
+  isTracksComplete,
+  metadataSchema,
+  tracksSchema
+} from "./schemas";
 import { selectTracksWavFullySynced, useCreateReleaseDraftStore } from "./store";
-import { supabase } from "@/lib/supabase";
+import { createSupabaseBrowser, supabase } from "@/lib/supabase";
+import { stableNumericIdFromAuthUserId } from "@/lib/stable-web-user-id";
 import { parseArtistLinksFromJson } from "@/lib/artist-links";
 import { parseCollaboratorsFromDb } from "@/lib/collaborators";
 import { parsePerformanceLanguage } from "@/lib/performance-language";
@@ -76,6 +85,66 @@ function parseStoreUserId(raw: string | null): number | null {
   return Number.isFinite(n) && n > 0 ? Math.trunc(n) : null;
 }
 
+/**
+ * Веб-сессия (email): подставляем `telegram_id` из `public.users` в стор и RLS,
+ * чтобы совпадать с мастером в Mini App (тот же числовой user_id в releases/tracks).
+ */
+async function syncWebUserIntoStore(): Promise<void> {
+  if (typeof window === "undefined") return;
+  if (getTelegramUserId()) return;
+
+  const sb = createSupabaseBrowser();
+  const {
+    data: { session }
+  } = await sb.auth.getSession();
+  if (!session?.user) return;
+
+  const { data: row } = await sb
+    .from("users")
+    .select("telegram_id")
+    .eq("id", session.user.id)
+    .maybeSingle();
+
+  if (row?.telegram_id) {
+    const raw = row.telegram_id as unknown;
+    const tid =
+      typeof raw === "bigint"
+        ? Number(raw)
+        : typeof raw === "number"
+          ? raw
+          : Number(raw);
+    if (!Number.isFinite(tid) || tid <= 0) return;
+
+    const n = Math.trunc(tid);
+    initTelegramWebApp();
+    const st = useCreateReleaseDraftStore.getState();
+    const prev = st.userId;
+    if (prev != null && prev !== String(n)) {
+      st.resetDraft();
+    }
+    st.setUserContext({
+      userId: String(n),
+      telegramName: st.telegramName,
+      telegramUsername: st.telegramUsername
+    });
+    setRlsTelegramUserIdOverride(n);
+    return;
+  }
+
+  const syn = stableNumericIdFromAuthUserId(session.user.id);
+  setRlsTelegramUserIdOverride(null);
+  const st = useCreateReleaseDraftStore.getState();
+  const prev = st.userId;
+  if (prev != null && prev !== String(syn)) {
+    st.resetDraft();
+  }
+  st.setUserContext({
+    userId: String(syn),
+    telegramName: st.telegramName,
+    telegramUsername: st.telegramUsername
+  });
+}
+
 function isPostgrestNoSuchRowError(e: unknown): boolean {
   const code =
     typeof e === "object" && e !== null && "code" in e
@@ -105,6 +174,20 @@ async function verifyStoredReleaseExistsOrClearReleaseId(): Promise<void> {
 /** Как в `ensureDraftRelease`: telegram_id строки tracks = WebApp user id или стор. */
 function getTrackRowTelegramId(userId: number): number {
   return getTelegramUser()?.id ?? userId;
+}
+
+/** JWT-строка для `tracks.user_uuid` при веб-черновике без Telegram (RLS по `auth.uid()`). */
+async function getWebOnlySupabaseUserUuid(): Promise<string | undefined> {
+  if (typeof window === "undefined") return undefined;
+  if (getTelegramUser()?.id) return undefined;
+  const {
+    data: { session }
+  } = await createSupabaseBrowser().auth.getSession();
+  if (!session?.user) return undefined;
+  const storeUid = parseStoreUserId(useCreateReleaseDraftStore.getState().userId);
+  const syn = stableNumericIdFromAuthUserId(session.user.id);
+  if (storeUid === syn) return session.user.id;
+  return undefined;
 }
 
 /** Заголовки Telegram / dev для API мастера создания релиза (user_id должен совпадать с владельцем в БД). */
@@ -386,7 +469,7 @@ export function createMetadataFromReleaseRecord(existing: ReleaseRecord): Create
     genre: existing.genre,
     subgenre: "",
     language: parsePerformanceLanguage(existing.performance_language),
-    label: "",
+    label: FIXED_RELEASE_LABEL,
     releaseDate: existing.release_date,
     explicit: Boolean(existing.explicit)
   };
@@ -547,9 +630,10 @@ export async function hydrateFromReleaseId(releaseId: string): Promise<void> {
 }
 
 export async function ensureDraftRelease(): Promise<ReleaseRecord | null> {
-  const store = useCreateReleaseDraftStore.getState();
   initUserContextInStore();
+  await syncWebUserIntoStore();
 
+  let store = useCreateReleaseDraftStore.getState();
   const parsed = metadataSchema.safeParse(store.metadata);
   if (!parsed.success) {
     const msg =
@@ -573,42 +657,95 @@ export async function ensureDraftRelease(): Promise<ReleaseRecord | null> {
   }
 
   const mainArtistName = parsed.data.primaryArtist ?? "";
+  store = useCreateReleaseDraftStore.getState();
   const tgUser = getTelegramUser();
+  const storeUid = parseStoreUserId(store.userId);
+
+  const {
+    data: { session }
+  } = await createSupabaseBrowser().auth.getSession();
+  const webSyntheticId =
+    session?.user != null ? stableNumericIdFromAuthUserId(session.user.id) : null;
+  const isWebOnlyDraft =
+    Boolean(session?.user) &&
+    !tgUser?.id &&
+    webSyntheticId != null &&
+    storeUid === webSyntheticId;
+
   if (process.env.NODE_ENV === "production") {
-    if (!tgUser?.id) {
-      store.setSubmitError("Ошибка авторизации Telegram");
+    const hasIdentity =
+      Boolean(tgUser?.id) ||
+      (storeUid != null && storeUid > 0) ||
+      Boolean(session?.user);
+    if (!hasIdentity) {
+      store.setSubmitError(
+        "Не удалось определить аккаунт. Откройте приложение из Telegram или войдите на сайте."
+      );
       return null;
     }
   }
 
-  const effectiveUserId = parseStoreUserId(store.userId) ?? tgUser?.id ?? 0;
-  if (!Number.isFinite(effectiveUserId) || effectiveUserId <= 0) {
-    store.setSubmitError("Ошибка авторизации Telegram");
-    return null;
-  }
-
-  const telegramId = tgUser?.id ?? effectiveUserId;
-  const rawUsername = getTelegramUsername();
-  const telegramUsername = rawUsername && rawUsername.length > 0 ? rawUsername : null;
-
   const clientRequestId = createClientRequestId(store.clientRequestId);
-
-  const payload: ReleaseStep1Payload = {
-    user_id: effectiveUserId,
-    telegram_id: telegramId,
-    telegram_username: telegramUsername,
-    client_request_id: clientRequestId,
-    artist_name: mainArtistName,
-    track_name: parsed.data.releaseTitle,
-    release_type: parsed.data.releaseType,
-    genre: parsed.data.genre,
-    release_date: parsed.data.releaseDate,
-    explicit: Boolean(parsed.data.explicit)
-  };
 
   try {
     store.setSubmitError(null);
-    const draft = await createDraftRelease(payload);
+    let draft: ReleaseRecord;
+
+    if (isWebOnlyDraft && session?.user && webSyntheticId != null) {
+      draft = await createDraftReleaseWeb({
+        syntheticUserId: webSyntheticId,
+        authUserUuid: session.user.id,
+        client_request_id: clientRequestId,
+        artist_name: mainArtistName,
+        track_name: parsed.data.releaseTitle,
+        release_type: parsed.data.releaseType,
+        genre: parsed.data.genre,
+        release_date: parsed.data.releaseDate,
+        explicit: Boolean(parsed.data.explicit)
+      });
+    } else if (tgUser?.id) {
+      const effectiveUserId = storeUid ?? tgUser.id;
+      if (!Number.isFinite(effectiveUserId) || effectiveUserId <= 0) {
+        store.setSubmitError("Ошибка авторизации Telegram");
+        return null;
+      }
+      const telegramId = tgUser.id;
+      const rawUsername = getTelegramUsername();
+      const telegramUsername = rawUsername && rawUsername.length > 0 ? rawUsername : null;
+
+      const payload: ReleaseStep1Payload = {
+        user_id: effectiveUserId,
+        telegram_id: telegramId,
+        telegram_username: telegramUsername,
+        client_request_id: clientRequestId,
+        artist_name: mainArtistName,
+        track_name: parsed.data.releaseTitle,
+        release_type: parsed.data.releaseType,
+        genre: parsed.data.genre,
+        release_date: parsed.data.releaseDate,
+        explicit: Boolean(parsed.data.explicit)
+      };
+      draft = await createDraftRelease(payload);
+    } else if (storeUid != null && storeUid > 0) {
+      const effectiveUserId = storeUid;
+      const payload: ReleaseStep1Payload = {
+        user_id: effectiveUserId,
+        telegram_id: effectiveUserId,
+        telegram_username: null,
+        client_request_id: clientRequestId,
+        artist_name: mainArtistName,
+        track_name: parsed.data.releaseTitle,
+        release_type: parsed.data.releaseType,
+        genre: parsed.data.genre,
+        release_date: parsed.data.releaseDate,
+        explicit: Boolean(parsed.data.explicit)
+      };
+      draft = await createDraftRelease(payload);
+    } else {
+      store.setSubmitError("Ошибка авторизации Telegram");
+      return null;
+    }
+
     store.setReleaseId(draft.id);
     store.setClientRequestId(clientRequestId);
     try {
@@ -630,8 +767,12 @@ export async function ensureDraftRelease(): Promise<ReleaseRecord | null> {
 export async function uploadArtworkForDraft(file: File): Promise<string | null> {
   let store = useCreateReleaseDraftStore.getState();
   initUserContextInStore();
+  await syncWebUserIntoStore();
+  store = useCreateReleaseDraftStore.getState();
   if (!store.userId) {
-    store.setSubmitError("Откройте приложение из Telegram.");
+    store.setSubmitError(
+      "Не удалось определить пользователя. Откройте приложение из Telegram или войдите на сайте."
+    );
     return null;
   }
   await verifyStoredReleaseExistsOrClearReleaseId();
@@ -678,6 +819,7 @@ export async function uploadArtworkForDraft(file: File): Promise<string | null> 
  */
 export async function saveDraftAction(): Promise<{ ok: true } | { ok: false; message: string }> {
   initUserContextInStore();
+  await syncWebUserIntoStore();
   const store = useCreateReleaseDraftStore.getState();
   const parsed = metadataSchema.safeParse(store.metadata);
   if (!parsed.success) {
@@ -687,7 +829,10 @@ export async function saveDraftAction(): Promise<{ ok: true } | { ok: false; mes
     };
   }
   if (!store.userId) {
-    return { ok: false, message: "Откройте приложение из Telegram." };
+    return {
+      ok: false,
+      message: "Войдите на сайте или откройте приложение из Telegram."
+    };
   }
   try {
     store.setSubmitError(null);
@@ -856,9 +1001,12 @@ export async function uploadTrackWavAtIndex(options: {
   onProgress?: (percent: number) => void;
 }): Promise<boolean> {
   initUserContextInStore();
+  await syncWebUserIntoStore();
   let store = useCreateReleaseDraftStore.getState();
   if (!store.userId) {
-    store.setSubmitError("Откройте приложение из Telegram.");
+    store.setSubmitError(
+      "Не удалось определить пользователя. Откройте приложение из Telegram или войдите на сайте."
+    );
     return false;
   }
   const userId = parseStoreUserId(store.userId);
@@ -931,11 +1079,13 @@ export async function uploadTrackWavAtIndex(options: {
     }
 
     try {
+      const webOnlyUuid = await getWebOnlySupabaseUserUuid();
       await withRequestTimeout(
         addReleaseTrack({
           releaseId,
           userId,
           telegramId,
+          supabaseUserUuid: webOnlyUuid,
           index: options.index,
           title: track.title,
           explicit: Boolean(track.explicit),
@@ -978,9 +1128,12 @@ export async function uploadTracksForDraftStep(options: {
   onTrackProgress: (index: number, percent: number) => void;
 }): Promise<boolean> {
   initUserContextInStore();
+  await syncWebUserIntoStore();
   let store = useCreateReleaseDraftStore.getState();
   if (!store.userId) {
-    store.setSubmitError("Откройте приложение из Telegram.");
+    store.setSubmitError(
+      "Не удалось определить пользователя. Откройте приложение из Telegram или войдите на сайте."
+    );
     return false;
   }
   await verifyStoredReleaseExistsOrClearReleaseId();
@@ -1022,6 +1175,8 @@ export async function uploadTracksForDraftStep(options: {
   try {
     store.setSubmitError(null);
     await postDraftUploadState(releaseId, "start");
+
+    const webOnlyUuid = await getWebOnlySupabaseUserUuid();
 
     try {
       for (let index = 0; index < tracks.length; index += 1) {
@@ -1080,6 +1235,7 @@ export async function uploadTracksForDraftStep(options: {
               releaseId,
               userId,
               telegramId,
+              supabaseUserUuid: webOnlyUuid,
               index,
               title: track.title,
               explicit: Boolean(track.explicit),
@@ -1127,8 +1283,9 @@ export async function uploadTracksForDraftStep(options: {
 }
 
 export async function submitTracksAndFinalize(args: { files: File[] }): Promise<boolean> {
-  const store = useCreateReleaseDraftStore.getState();
   initUserContextInStore();
+  await syncWebUserIntoStore();
+  const store = useCreateReleaseDraftStore.getState();
 
   if (submitTracksInFlight) {
     store.setSubmitError("Отправка уже выполняется. Дождитесь завершения.");
@@ -1175,6 +1332,7 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
   const clientRequestId = store.clientRequestId;
   const submitUserId = parseStoreUserId(store.userId)!;
   const submitTelegramId = getTrackRowTelegramId(submitUserId);
+  const webOnlyUuid = await getWebOnlySupabaseUserUuid();
 
   const setTrackUploadProgress = (trackIndex: number, filePercent: number) => {
     const segment = (trackIndex + filePercent / 100) / Math.max(totalTracks, 1);
@@ -1229,6 +1387,7 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
               releaseId,
               userId: submitUserId,
               telegramId: submitTelegramId,
+              supabaseUserUuid: webOnlyUuid,
               index,
               title: track.title,
               explicit: Boolean(track.explicit),

@@ -9,6 +9,7 @@ import type {
   ReleaseStatus,
   ReleaseStep1Payload,
   ReleaseStep2Payload,
+  ReleaseType,
   SubmitReleaseParams
 } from "./types";
 
@@ -139,7 +140,8 @@ export async function createDraftRelease(
       .upsert(
         {
           ...rest,
-          telegram_id,
+          user_id: String(rest.user_id),
+          telegram_id: String(telegram_id),
           telegram_username,
           title: track_name,
           status: "pending" as ReleaseStatus
@@ -152,6 +154,90 @@ export async function createDraftRelease(
 
   if (error) {
     logSupabaseUpdateError("createDraftRelease.upsert", error);
+    throw error;
+  }
+
+  const rows = data as ReleaseRecord[] | null;
+  if (!rows || rows.length === 0) {
+    throw new Error("Upsert вернул 0 строк — проверьте RLS-политики таблицы releases");
+  }
+
+  const record = rows[0];
+  await logReleaseEvent({
+    releaseId: record.id,
+    stage: "create",
+    status: record.status
+  }).catch(() => {});
+
+  return record;
+}
+
+const createDraftWebSchema = z.object({
+  syntheticUserId: z.number().int().positive(),
+  authUserUuid: z.string().uuid(),
+  client_request_id: z.string().uuid(),
+  artist_name: z.string().min(1).max(256).trim(),
+  track_name: z.string().min(1).max(256).trim(),
+  release_type: z.enum(RELEASE_TYPE_VALUES),
+  genre: z.string().min(1).max(128).trim(),
+  release_date: z.string().min(1),
+  explicit: z.boolean()
+});
+
+/**
+ * Черновик для веб-сессии (email) без Telegram: владелец по `user_uuid` (RLS), пути Storage — synthetic id.
+ */
+export async function createDraftReleaseWeb(
+  input: z.infer<typeof createDraftWebSchema>
+): Promise<ReleaseRecord> {
+  const v = createDraftWebSchema.parse(input);
+
+  const { data: existingRow, error: loadError } = await withRetry(async () => {
+    return await supabase
+      .from("releases")
+      .select("*")
+      .eq("client_request_id", v.client_request_id)
+      .maybeSingle();
+  });
+
+  if (loadError) {
+    logSupabaseUpdateError("createDraftReleaseWeb.load", loadError);
+    throw loadError;
+  }
+
+  const existing = existingRow as ReleaseRecord | null;
+  if (existing && (existing.status === "processing" || existing.status === "ready")) {
+    throw new Error(
+      "Релиз с этим идентификатором уже на проверке или опубликован — нельзя снова сохранить как черновик."
+    );
+  }
+
+  const { data, error } = await withRetry(async () => {
+    const response = await supabase
+      .from("releases")
+      .upsert(
+        {
+          user_id: String(v.syntheticUserId),
+          telegram_id: null,
+          user_uuid: v.authUserUuid,
+          client_request_id: v.client_request_id,
+          artist_name: v.artist_name,
+          title: v.track_name,
+          release_type: v.release_type as ReleaseType,
+          genre: v.genre,
+          release_date: v.release_date,
+          explicit: v.explicit,
+          telegram_username: null,
+          status: "pending" as ReleaseStatus
+        },
+        { onConflict: "client_request_id" }
+      )
+      .select("*");
+    return response;
+  });
+
+  if (error) {
+    logSupabaseUpdateError("createDraftReleaseWeb.upsert", error);
     throw error;
   }
 
@@ -214,7 +300,8 @@ export async function updateRelease(
   const { data, error } = await withRetry(async () => {
     const response = await supabase
       .from("releases")
-      .update(sanitized)
+      // Json / Partial доменного типа шире, чем Insert — приводим для PostgREST.
+      .update(sanitized as never)
       .eq("id", id)
       .select("*");
     return response;

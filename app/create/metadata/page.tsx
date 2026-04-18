@@ -11,7 +11,10 @@ import { FormFieldError } from "@/components/FormFieldError";
 import { ArtistProfileLinksSection } from "@/features/release/createRelease/components/ArtistProfileLinksSection";
 import { MetadataSelectField } from "@/features/release/createRelease/components/MetadataSelectField";
 import { CreateShell } from "@/features/release/createRelease/components/CreateShell";
-import { metadataSchema } from "@/features/release/createRelease/schemas";
+import {
+  FIXED_RELEASE_LABEL,
+  metadataSchema
+} from "@/features/release/createRelease/schemas";
 import type { CreateMetadata } from "@/features/release/createRelease/types";
 import { useCreateReleaseDraftStore } from "@/features/release/createRelease/store";
 import {
@@ -26,7 +29,6 @@ import { MagneticButton } from "@/components/MagneticButton";
 import { hapticMap } from "@/lib/haptic-map";
 import { toast } from "sonner";
 import { getTelegramUserId } from "@/lib/telegram";
-import { useTelegramMainButton } from "@/lib/hooks/useTelegramMainButton";
 import {
   getMetadataFieldWarningFlags,
   validateMetadata,
@@ -157,7 +159,10 @@ function CreateMetadataPageInner() {
     if (draftOfferId) setIsDraftBannerVisible(true);
   }, [draftOfferId]);
 
-  const defaultValues: CreateMetadata = useMemo(() => storeMetadata, [storeMetadata]);
+  const defaultValues: CreateMetadata = useMemo(
+    () => ({ ...storeMetadata, label: FIXED_RELEASE_LABEL }),
+    [storeMetadata]
+  );
 
   const {
     register,
@@ -180,7 +185,7 @@ function CreateMetadataPageInner() {
     if (didHydrateRef.current) return;
     didHydrateRef.current = true;
     const fresh = useCreateReleaseDraftStore.getState().metadata;
-    reset(fresh, { keepDirty: false });
+    reset({ ...fresh, label: FIXED_RELEASE_LABEL }, { keepDirty: false });
   }, [reset, releaseIdParam]);
 
   const values = watch();
@@ -200,8 +205,9 @@ function CreateMetadataPageInner() {
   useEffect(() => {
     if (!releaseIdParam || isHydrating || hydrateError) return;
     const meta = useCreateReleaseDraftStore.getState().metadata;
-    reset(meta, { keepDirty: false });
-    lastSyncedValuesRef.current = JSON.stringify(meta);
+    const normalized = { ...meta, label: FIXED_RELEASE_LABEL };
+    reset(normalized, { keepDirty: false });
+    lastSyncedValuesRef.current = JSON.stringify(normalized);
   }, [releaseIdParam, isHydrating, hydrateError, reset]);
 
   const metaForGuidelines = useMemo<ReleaseMetadata>(() => {
@@ -294,14 +300,6 @@ function CreateMetadataPageInner() {
     Boolean(values.releaseTitle?.trim()) &&
     Boolean(values.genre?.trim()) &&
     Boolean(values.language);
-
-  // Telegram native MainButton — triggers form submit.
-  useTelegramMainButton({
-    text: isSubmitting ? "Сохраняем…" : "Далее",
-    onClick: () => void handleSubmit(onSubmit, onInvalid)(),
-    disabled: !canProceed || isSubmitting,
-    loading: isSubmitting
-  });
 
   return (
     <CreateShell title="Релиз · Паспорт">
@@ -582,16 +580,16 @@ function CreateMetadataPageInner() {
                 <label className={`mb-2.5 block ${WIZARD_FIELD_LABEL_CLASS}`}>
                   Лейбл
                 </label>
-                <input
-                  {...register("label")}
-                  className={`${WIZARD_INPUT_CLASS} ${borderForField(
-                    Boolean(errors.label),
-                    touchedFields.label,
-                    dirtyFields.label
-                  )}`}
-                  placeholder="Название лейбла"
-                />
-                <FormFieldError message={errors.label?.message} />
+                <div
+                  className={`${WIZARD_INPUT_CLASS} cursor-not-allowed border-white/10 bg-white/[0.03] text-white/75`}
+                  aria-readonly="true"
+                >
+                  {FIXED_RELEASE_LABEL}
+                </div>
+                <input type="hidden" {...register("label")} />
+                <p className="text-[11px] leading-relaxed text-white/40">
+                  Значение лейбла задано сервисом и не редактируется.
+                </p>
               </div>
             </div>
 

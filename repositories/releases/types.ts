@@ -48,7 +48,8 @@ export type ReleaseStep2Payload = {
 
 export type ReleaseRecord = {
   id: string;
-  user_id: number;
+  /** В PostgREST типы могут быть string (bigint / text в схеме). */
+  user_id: number | string;
   client_request_id: string;
   artist_name: string;
   /** Название релиза (актуальная колонка в БД). */
@@ -76,7 +77,7 @@ export type ReleaseRecord = {
   performance_language?: string | null;
   /** Участники релиза с ролями и ссылками (JSON). */
   collaborators?: unknown;
-  telegram_id?: number | null;
+  telegram_id?: number | string | null;
   telegram_username?: string | null;
   /** Вебхук: короткое «релиз получен» уже отправлено (дедуп при pending + tracks). */
   telegram_pending_ack_sent_at?: string | null;

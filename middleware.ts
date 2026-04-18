@@ -27,6 +27,18 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  /** Playwright / локальный dev: тот же `devUserId`, что и для API-заголовков (см. e2e/release-wizard.spec.ts). */
+  const allowDevE2e = process.env.NEXT_PUBLIC_ALLOW_DEV_API_AUTH === "true";
+  const devUserIdParam = request.nextUrl.searchParams.get("devUserId");
+  if (
+    allowDevE2e &&
+    devUserIdParam != null &&
+    Number.isFinite(Number(devUserIdParam)) &&
+    Number(devUserIdParam) > 0
+  ) {
+    return NextResponse.next();
+  }
+
   /**
    * Раньше любой запрос с «telegram» в User-Agent обходил проверку web-сессии — это позволяло
    * подделать UA и зайти на /library без логина. Mini App работает по известным префиксам;

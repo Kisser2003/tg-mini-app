@@ -34,21 +34,28 @@ function createTelegramAwareFetch(): typeof fetch {
   };
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+const supabaseClientOptions = {
   global: {
     fetch: createTelegramAwareFetch()
   }
-  // Realtime при необходимости настраивается отдельно; для REST и Storage достаточно global.fetch.
-});
+};
+
+/**
+ * Один клиент для REST/Storage в браузере: сессия в cookies (как у логина) + заголовок
+ * `x-telegram-user-id` в Mini App. Раньше был только `createClient` (localStorage) —
+ * JWT после email-входа не совпадал с `createSupabaseBrowser`, RLS ломался на вебе.
+ */
+export const supabase =
+  typeof window !== "undefined"
+    ? createBrowserClient<Database>(supabaseUrl, supabaseAnonKey, supabaseClientOptions)
+    : createClient<Database>(supabaseUrl, supabaseAnonKey, supabaseClientOptions);
 
 /**
  * Supabase client для браузера (веб-логин).
- * Важно: @supabase/ssr createBrowserClient хранит сессию в cookies, чтобы
- * middleware (createServerClient) видел пользователя после signIn — иначе
- * только localStorage и редирект на /library снова упрётся в /login.
+ * Совпадает по настройкам с `supabase` в клиенте (cookies + telegram fetch).
  */
 export function createSupabaseBrowser() {
-  return createBrowserClient<Database>(supabaseUrl, supabaseAnonKey);
+  return createBrowserClient<Database>(supabaseUrl, supabaseAnonKey, supabaseClientOptions);
 }
 
 /**

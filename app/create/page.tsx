@@ -14,7 +14,8 @@ export default function CreateEntryPage() {
   const router = useRouter();
 
   useLayoutEffect(() => {
-    router.replace("/create/metadata");
+    const q = typeof window !== "undefined" ? window.location.search : "";
+    router.replace(q ? `/create/metadata${q}` : "/create/metadata");
   }, [router]);
 
   return (

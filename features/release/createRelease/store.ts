@@ -7,7 +7,12 @@ import type {
   SubmissionStage,
   SubmissionStatus
 } from "./types";
-import { isAssetsComplete, isMetadataComplete, isTracksComplete } from "./schemas";
+import {
+  FIXED_RELEASE_LABEL,
+  isAssetsComplete,
+  isMetadataComplete,
+  isTracksComplete
+} from "./schemas";
 import { parsePerformanceLanguage } from "@/lib/performance-language";
 import { EMPTY_ARTIST_LINKS, type ArtistLinksState } from "@/lib/artist-links";
 
@@ -138,7 +143,7 @@ const EMPTY_METADATA: CreateMetadata = {
   genre: "",
   subgenre: "",
   language: "RU",
-  label: "",
+  label: FIXED_RELEASE_LABEL,
   primaryArtist: "",
   releaseDate: "",
   explicit: false
@@ -270,7 +275,7 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
 
         setMetadata: (patch) =>
           set((state) => {
-            const nextMetadata = { ...state.metadata, ...patch };
+            const nextMetadata = { ...state.metadata, ...patch, label: FIXED_RELEASE_LABEL };
 
             let nextTracks = state.tracks;
             let nextTrackFiles = state.trackFiles;
@@ -470,7 +475,7 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
             return {
               releaseId: payload.releaseId,
               clientRequestId: payload.clientRequestId,
-              metadata: payload.metadata,
+              metadata: { ...payload.metadata, label: FIXED_RELEASE_LABEL },
               artworkUrl: payload.artworkUrl,
               tracks,
               artworkFile: null,
@@ -530,6 +535,7 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
             primaryArtist: legacyName
           };
         }
+        mergedMeta = { ...mergedMeta, label: FIXED_RELEASE_LABEL };
         const mergedLinks =
           p.releaseArtistLinks != null
             ? { ...EMPTY_ARTIST_LINKS, ...p.releaseArtistLinks }

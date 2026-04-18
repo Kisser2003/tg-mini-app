@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowLeft } from "lucide-react";
@@ -12,6 +12,7 @@ import {
 import { CreateStepTransition } from "@/features/release/createRelease/components/CreateStepTransition";
 import { useHaptics } from "@/lib/hooks/useHaptics";
 import { useTelegramBackButton } from "@/lib/hooks/useTelegramBackButton";
+import { getTelegramWebApp } from "@/lib/telegram";
 
 export function CreateShell({
   children,
@@ -25,6 +26,26 @@ export function CreateShell({
   const haptics = useHaptics();
 
   const activeIndex = useMemo(() => getCreateStepIndexFromPath(pathname), [pathname]);
+
+  /** Нативная MainButton Telegram скрыта — в мастере используются только кнопки в интерфейсе. */
+  useEffect(() => {
+    const btn = getTelegramWebApp()?.MainButton;
+    if (!btn) return;
+    try {
+      btn.hide();
+      btn.hideProgress?.();
+    } catch {
+      /* ignore */
+    }
+    return () => {
+      try {
+        btn.hide();
+        btn.hideProgress?.();
+      } catch {
+        /* ignore */
+      }
+    };
+  }, []);
 
   useTelegramBackButton(
     () => {

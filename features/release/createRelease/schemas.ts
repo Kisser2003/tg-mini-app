@@ -2,6 +2,9 @@ import { z } from "zod";
 import { RELEASE_TYPE_VALUES } from "@/lib/db-enums";
 import { PERFORMANCE_LANGUAGE_VALUES } from "@/lib/performance-language";
 
+/** Единственный допустимый лейбл в мастере (поле только для отображения). */
+export const FIXED_RELEASE_LABEL = "OMF" as const;
+
 export const metadataSchema = z.object({
   releaseTitle: z.string().min(1, "Укажите название релиза"),
   releaseType: z.enum(RELEASE_TYPE_VALUES),
@@ -10,7 +13,7 @@ export const metadataSchema = z.object({
   language: z.enum(PERFORMANCE_LANGUAGE_VALUES, {
     message: "Выберите язык исполнения"
   }),
-  label: z.string().default(""),
+  label: z.literal(FIXED_RELEASE_LABEL),
   primaryArtist: z.string().min(1, "Укажите имя артиста"),
   releaseDate: z
     .string()

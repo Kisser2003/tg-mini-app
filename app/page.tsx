@@ -2,7 +2,10 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useIsTelegramMiniApp } from "@/lib/hooks/useIsTelegramMiniApp";
+import {
+  useIsTelegramMiniApp,
+  checkIsTelegramMiniApp
+} from "@/lib/hooks/useIsTelegramMiniApp";
 import { useWebAuth } from "@/lib/hooks/useWebAuth";
 import { LoadingScreen } from "@/components/LoadingScreen";
 
@@ -17,7 +20,10 @@ export default function HomePage() {
   const webUser = useWebAuth({ redirectToLogin: false });
 
   useEffect(() => {
-    // Telegram users: always go to library
+    if (typeof window !== "undefined" && checkIsTelegramMiniApp()) {
+      router.replace("/library");
+      return;
+    }
     if (isTelegram) {
       router.replace("/library");
       return;

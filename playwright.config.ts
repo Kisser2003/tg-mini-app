@@ -28,12 +28,14 @@ export default defineConfig({
         command: "npm run start",
         port: 3000,
         reuseExistingServer: false,
-        timeout: 120_000
+        timeout: 120_000,
+        env: { NEXT_PUBLIC_ALLOW_DEV_API_AUTH: "true" }
       }
     : {
         command: "npm run dev",
         port: 3000,
         reuseExistingServer: true,
-        timeout: 60_000
+        timeout: 60_000,
+        env: { NEXT_PUBLIC_ALLOW_DEV_API_AUTH: "true" }
       }
 });

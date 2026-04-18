@@ -28,7 +28,6 @@ import {
   releaseTelegramClosingConfirmation,
   triggerHaptic
 } from "@/lib/telegram";
-import { useTelegramMainButton } from "@/lib/hooks/useTelegramMainButton";
 import {
   PERFORMANCE_LANGUAGE_LABELS,
   type PerformanceLanguage
@@ -279,18 +278,6 @@ export default function CreateReviewPage() {
     }
     router.replace("/create/success");
   }, [missingFiles, setSubmitError, trackFiles, router]);
-
-  // Telegram native MainButton for the submit action.
-  useTelegramMainButton({
-    text:
-      submitStatus === "submitting" || isSubmitting
-        ? "Отправляем…"
-        : "Отправить на модерацию",
-    onClick: handleSubmit,
-    disabled: submitBlocked,
-    loading: submitStatus === "submitting" || isSubmitting,
-    enabled: guard.allowed && submitStatus !== "success"
-  });
 
   if (submitStatus === "success" && successSummary) {
     return (

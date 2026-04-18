@@ -249,10 +249,41 @@ export function getTelegramApiAuthHeaders(options?: { userId?: number | null }):
   return headers;
 }
 
+/**
+ * Достаёт пользователя из подписанной строки `initData`, если `initDataUnsafe.user`
+ * ещё не заполнен (встречается в Mini App на части клиентов Telegram).
+ */
+function parseTelegramUserFromInitDataString(initDataRaw: string): TelegramUser | null {
+  try {
+    const params = new URLSearchParams(initDataRaw.trim());
+    const userRaw = params.get("user");
+    if (!userRaw) return null;
+    const parsed = JSON.parse(userRaw) as {
+      id?: unknown;
+      username?: string;
+      first_name?: string;
+      last_name?: string;
+    };
+    if (typeof parsed?.id !== "number" || !Number.isFinite(parsed.id)) return null;
+    return {
+      id: Math.trunc(parsed.id),
+      username: parsed.username,
+      first_name: parsed.first_name,
+      last_name: parsed.last_name
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function getTelegramUser(): TelegramUser | null {
   const webApp = getTelegramWebApp();
   if (!webApp) return null;
-  return webApp.initDataUnsafe?.user ?? null;
+  const unsafe = webApp.initDataUnsafe?.user;
+  if (unsafe) return unsafe;
+  const raw = webApp.initData?.trim();
+  if (!raw) return null;
+  return parseTelegramUserFromInitDataString(raw);
 }
 
 export function getTelegramUserId(): number | null {

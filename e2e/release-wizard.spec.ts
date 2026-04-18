@@ -37,8 +37,8 @@ test.describe("Create release wizard — metadata step", () => {
     // Attempt to advance without filling required fields
     const nextButton = page.getByRole("button", { name: /далее|next|продолжить/i });
     if (await nextButton.isVisible()) {
-      await nextButton.click();
-      // At least one error message should appear
+      // Кнопка может быть disabled до валидного минимума полей — force для проверки отображения ошибок.
+      await nextButton.click({ force: true });
       await expect(page.locator("[data-error], [role='alert'], .text-red")).toBeVisible({
         timeout: 5_000
       });
@@ -103,7 +103,7 @@ test.describe("Library page", () => {
   test("shows the create release button", async ({ page }) => {
     await navigateTo(page, "/library");
     await page.waitForLoadState("networkidle");
-    const createButton = page.getByRole("button", { name: /создать|загрузить|new release|create/i });
+    const createButton = page.getByRole("button", { name: /новый релиз|создать|загрузить|new release|create/i });
     await expect(createButton).toBeVisible({ timeout: 10_000 });
   });
 });

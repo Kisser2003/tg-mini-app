@@ -67,7 +67,7 @@ export default function ReleaseDetailsClient() {
             "id, user_id, artist_name, track_name, artwork_url, audio_url, release_type, genre, status, error_message, created_at"
           )
           .eq("id", params.id);
-        const filtered = isAdminView ? base : base.eq("user_id", userId!);
+        const filtered = isAdminView ? base : base.eq("user_id", String(userId!));
         const queryPromise = Promise.resolve(filtered.maybeSingle());
         queryPromise.catch(() => {});
         const timeoutPromise = new Promise<Awaited<typeof queryPromise>>((_, reject) => {

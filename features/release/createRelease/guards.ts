@@ -1,14 +1,15 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { CreateStep } from "./types";
-import { getTelegramUser } from "@/lib/telegram";
+import { getTelegramUser, initTelegramWebApp } from "@/lib/telegram";
 import {
   useCreateReleaseDraftStore,
   selectIsMetadataComplete,
   selectIsAssetsComplete,
   selectIsTracksComplete
 } from "./store";
+import { useWebAuth } from "@/lib/hooks/useWebAuth";
 
 export type GuardResult =
   | { allowed: true }
@@ -21,6 +22,13 @@ export type GuardResult =
     };
 
 export function useStepGuard(step: CreateStep): GuardResult {
+  /** После `initTelegramWebApp()` пересчитываем guard (initData / unsafe user могут дозаполниться). */
+  const [telegramReadyTick, setTelegramReadyTick] = useState(0);
+  useEffect(() => {
+    initTelegramWebApp();
+    setTelegramReadyTick((n) => n + 1);
+  }, []);
+
   const hasHydrated = useCreateReleaseDraftStore((s) => s.hasHydrated);
   const releaseId = useCreateReleaseDraftStore((s) => s.releaseId);
   const successSummary = useCreateReleaseDraftStore((s) => s.successSummary);
@@ -30,6 +38,7 @@ export function useStepGuard(step: CreateStep): GuardResult {
   const isAssetsComplete = useCreateReleaseDraftStore(selectIsAssetsComplete);
   // selectIsTracksComplete already forwards releaseType internally via store selector
   const isTracksComplete = useCreateReleaseDraftStore(selectIsTracksComplete);
+  const webUser = useWebAuth({ redirectToLogin: false });
 
   return useMemo(() => {
     if (!hasHydrated) {
@@ -45,16 +54,29 @@ export function useStepGuard(step: CreateStep): GuardResult {
 
     if (
       process.env.NODE_ENV === "production" &&
-      !getTelegramUser() &&
       (step === "assets" || step === "tracks" || step === "review")
     ) {
-      return {
-        allowed: false,
-        title: "Ошибка авторизации Telegram",
-        description: "Ошибка авторизации Telegram",
-        redirectTo: "metadata",
-        actionLabel: "К паспорту"
-      };
+      if (webUser === null) {
+        return {
+          allowed: false,
+          title: "Загрузка…",
+          description: "Проверяем сессию…",
+          redirectTo: "metadata",
+          actionLabel: "Ок"
+        };
+      }
+      const hasTelegram = Boolean(getTelegramUser());
+      const hasWeb = Boolean(webUser);
+      if (!hasTelegram && !hasWeb) {
+        return {
+          allowed: false,
+          title: "Нужна авторизация",
+          description:
+            "Войдите на сайте или откройте мини-приложение из Telegram. Для веб-входа нужен привязанный Telegram в профиле.",
+          redirectTo: "metadata",
+          actionLabel: "К паспорту"
+        };
+      }
     }
 
     // Экран «Готово» после сабмита: метаданные в сторе могут быть уже очищены, но summary есть.
@@ -135,6 +157,8 @@ export function useStepGuard(step: CreateStep): GuardResult {
     releaseType,
     step,
     submitStatus,
-    successSummary
+    successSummary,
+    telegramReadyTick,
+    webUser
   ]);
 }
