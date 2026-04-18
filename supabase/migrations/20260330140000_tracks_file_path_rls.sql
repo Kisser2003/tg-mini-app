@@ -31,47 +31,38 @@ DROP POLICY IF EXISTS "tracks_update_own" ON public.tracks;
 DROP POLICY IF EXISTS "tracks_delete_own" ON public.tracks;
 DROP POLICY IF EXISTS "Admin full access to ALL tracks" ON public.tracks;
 
+-- Сравнение через text (bigint и text user_id; см. 20260331180000).
 CREATE POLICY "tracks_select_own" ON public.tracks FOR SELECT USING (
-  user_id = (
-    nullif(
-      trim(coalesce(current_setting('request.headers', true)::jsonb->>'x-telegram-user-id', '')),
-      ''
-    )
-  )::bigint
+  trim(user_id::text) = nullif(
+    trim(coalesce(current_setting('request.headers', true)::jsonb->>'x-telegram-user-id', '')),
+    ''
+  )
 );
 
 CREATE POLICY "tracks_insert_own" ON public.tracks FOR INSERT WITH CHECK (
-  user_id = (
-    nullif(
-      trim(coalesce(current_setting('request.headers', true)::jsonb->>'x-telegram-user-id', '')),
-      ''
-    )
-  )::bigint
+  trim(user_id::text) = nullif(
+    trim(coalesce(current_setting('request.headers', true)::jsonb->>'x-telegram-user-id', '')),
+    ''
+  )
 );
 
 CREATE POLICY "tracks_update_own" ON public.tracks FOR UPDATE USING (
-  user_id = (
-    nullif(
-      trim(coalesce(current_setting('request.headers', true)::jsonb->>'x-telegram-user-id', '')),
-      ''
-    )
-  )::bigint
+  trim(user_id::text) = nullif(
+    trim(coalesce(current_setting('request.headers', true)::jsonb->>'x-telegram-user-id', '')),
+    ''
+  )
 ) WITH CHECK (
-  user_id = (
-    nullif(
-      trim(coalesce(current_setting('request.headers', true)::jsonb->>'x-telegram-user-id', '')),
-      ''
-    )
-  )::bigint
+  trim(user_id::text) = nullif(
+    trim(coalesce(current_setting('request.headers', true)::jsonb->>'x-telegram-user-id', '')),
+    ''
+  )
 );
 
 CREATE POLICY "tracks_delete_own" ON public.tracks FOR DELETE USING (
-  user_id = (
-    nullif(
-      trim(coalesce(current_setting('request.headers', true)::jsonb->>'x-telegram-user-id', '')),
-      ''
-    )
-  )::bigint
+  trim(user_id::text) = nullif(
+    trim(coalesce(current_setting('request.headers', true)::jsonb->>'x-telegram-user-id', '')),
+    ''
+  )
 );
 
 CREATE POLICY "Admin full access to ALL tracks" ON public.tracks FOR ALL USING (
