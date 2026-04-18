@@ -87,8 +87,8 @@ export function useReleases() {
     initTelegramWebApp();
     initUserContextInStore();
 
-    const tid = getTelegramUserIdForSupabaseRequests();
-    if (tid != null) {
+    const applyTelegramMode = (tid: number) => {
+      if (cancelled) return;
       setUser(getTelegramWebApp()?.initDataUnsafe?.user ?? null);
       setUserId(String(tid));
       setAuthMode("telegram");
@@ -99,6 +99,11 @@ export function useReleases() {
         "Артист";
       setGreetingName(name);
       setAuthReady(true);
+    };
+
+    const tidNow = getTelegramUserIdForSupabaseRequests();
+    if (tidNow != null) {
+      applyTelegramMode(tidNow);
       return () => {
         cancelled = true;
       };
@@ -108,6 +113,11 @@ export function useReleases() {
 
     const applySession = (session: Session | null) => {
       if (cancelled) return;
+      const tid = getTelegramUserIdForSupabaseRequests();
+      if (tid != null) {
+        applyTelegramMode(tid);
+        return;
+      }
       if (session?.user) {
         setUserId(session.user.id);
         setAuthMode("web");
@@ -136,8 +146,22 @@ export function useReleases() {
       applySession(session);
     });
 
+    const poll = window.setInterval(() => {
+      if (cancelled) return;
+      const tid = getTelegramUserIdForSupabaseRequests();
+      if (tid != null) {
+        window.clearInterval(poll);
+        applyTelegramMode(tid);
+      }
+    }, 50);
+    const pollStop = window.setTimeout(() => {
+      window.clearInterval(poll);
+    }, 8000);
+
     return () => {
       cancelled = true;
+      window.clearInterval(poll);
+      window.clearTimeout(pollStop);
       subscription.unsubscribe();
     };
   }, []);

@@ -40,36 +40,43 @@ function toCacheRow(r: ReleaseRecord): ReleasesListCacheRow {
 export async function refreshReleasesListAfterSubmit(updated: ReleaseRecord): Promise<void> {
   if (typeof window === "undefined") return;
 
-  const tid = getTelegramUserIdForSupabaseRequests();
-  let key: readonly [string, string, string] | null = null;
-  if (tid != null) {
-    key = ["releases", "telegram", String(tid)];
-  } else {
-    const {
-      data: { session }
-    } = await createSupabaseBrowser().auth.getSession();
-    if (session?.user?.id) {
-      key = ["releases", "web", session.user.id];
-    }
-  }
-  if (!key) return;
-
   const row = toCacheRow(updated);
 
-  await mutate(
-    key,
-    (current: ReleasesListCacheRow[] | undefined) => {
-      if (current === undefined || current.length === 0) {
-        return [row];
-      }
-      const i = current.findIndex((r) => r.id === row.id);
-      if (i === -1) {
-        return [row, ...current];
-      }
-      const next = [...current];
-      next[i] = { ...next[i], ...row };
-      return next;
-    },
-    { revalidate: true }
-  );
+  /** Один пользователь Mini App может успеть попасть в web-кэш до появления initData — обновляем оба ключа. */
+  const keys: [string, string, string][] = [];
+  const tid = getTelegramUserIdForSupabaseRequests();
+  if (tid != null) {
+    keys.push(["releases", "telegram", String(tid)]);
+  }
+  const {
+    data: { session }
+  } = await createSupabaseBrowser().auth.getSession();
+  if (session?.user?.id) {
+    keys.push(["releases", "web", session.user.id]);
+  }
+  if (keys.length === 0) return;
+
+  const seen = new Set<string>();
+  for (const key of keys) {
+    const sig = key.join("\0");
+    if (seen.has(sig)) continue;
+    seen.add(sig);
+
+    await mutate(
+      key,
+      (current: ReleasesListCacheRow[] | undefined) => {
+        if (current === undefined || current.length === 0) {
+          return [row];
+        }
+        const i = current.findIndex((r) => r.id === row.id);
+        if (i === -1) {
+          return [row, ...current];
+        }
+        const next = [...current];
+        next[i] = { ...next[i], ...row };
+        return next;
+      },
+      { revalidate: true }
+    );
+  }
 }
