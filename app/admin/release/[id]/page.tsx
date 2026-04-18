@@ -8,19 +8,18 @@ import { motion } from "framer-motion";
 import { ArrowLeft, CheckCircle2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { AudioPlayerLazy } from "@/components/AudioPlayerLazy";
+import { AdminReleaseDownloads } from "@/components/admin/AdminReleaseDownloads";
+import { AdminReleaseMetadataCard } from "@/components/admin/AdminReleaseMetadataCard";
 import { GlassCard } from "@/components/GlassCard";
 import { approveRelease, rejectRelease } from "@/features/admin/actions";
+import { fetchAdminReleaseDetail } from "@/features/admin/release-detail";
 import { isAdminUi } from "@/lib/admin";
 import { getReleaseStatusMeta, normalizeReleaseStatus } from "@/lib/release-status";
-import {
-  getReleaseById,
-  getReleaseTracksByReleaseId,
-  type ReleaseRecord,
-  type ReleaseTrackRow
-} from "@/repositories/releases.repo";
+import type { ReleaseRecord, ReleaseTrackRow } from "@/repositories/releases.repo";
+import { getReleaseDisplayTitle } from "@/repositories/releases/types";
 import { getTelegramUserId, initTelegramWebApp, triggerHaptic } from "@/lib/telegram";
 
-const ARTWORK_SIZES = "(max-width: 768px) 100vw, 33vw";
+const ARTWORK_PREVIEW_SIZES = "(max-width: 768px) 100vw, min(480px, 45vw)";
 
 function buildAudioItems(release: ReleaseRecord, tracks: ReleaseTrackRow[]) {
   if (tracks.length > 0) {
@@ -70,8 +69,7 @@ export default function AdminReleaseDetailPage() {
     setLoading(true);
     setLoadError(null);
     try {
-      const row = await getReleaseById(releaseId);
-      const tr = await getReleaseTracksByReleaseId(releaseId);
+      const { release: row, tracks: tr } = await fetchAdminReleaseDetail(releaseId);
       setRelease(row);
       setTracks(tr);
     } catch (e: unknown) {
@@ -164,6 +162,7 @@ export default function AdminReleaseDetailPage() {
   const statusMeta = getReleaseStatusMeta(release.status);
   const audioItems = buildAudioItems(release, tracks);
   const canModerate = normalizeReleaseStatus(release.status) === "processing";
+  const displayTitle = getReleaseDisplayTitle(release);
 
   return (
     <div className="flex flex-col gap-4 pb-10">
@@ -175,24 +174,27 @@ export default function AdminReleaseDetailPage() {
           <ArrowLeft className="h-4 w-4" />
           К очереди
         </Link>
-        <div className="flex gap-3">
-          <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-white/5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+          <div className="relative mx-auto aspect-square w-full max-w-sm shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-white/5 sm:mx-0">
             {release.artwork_url ? (
               <Image
                 src={release.artwork_url}
                 alt=""
                 fill
-                sizes={ARTWORK_SIZES}
-                className="object-cover"
+                sizes={ARTWORK_PREVIEW_SIZES}
+                className="object-contain"
+                priority
               />
             ) : (
-              <div className="flex h-full items-center justify-center text-[10px] text-white/40">
-                —
+              <div className="flex h-full min-h-[200px] items-center justify-center text-sm text-white/40">
+                Нет обложки
               </div>
             )}
           </div>
-          <div className="min-w-0">
-            <h1 className="break-words text-xl font-semibold tracking-tight">{release.track_name}</h1>
+          <div className="min-w-0 flex-1">
+            <h1 className="break-words text-xl font-semibold tracking-tight">
+              {displayTitle || release.track_name || "Релиз"}
+            </h1>
             <p className="break-words text-sm text-white/60">{release.artist_name}</p>
             <span
               className={`mt-2 inline-flex rounded-full border px-2 py-0.5 text-[10px] ${statusMeta.badgeClassName} ${statusMeta.badgeGlowClassName ?? ""} ${statusMeta.badgeShimmerClassName ?? ""}`}
@@ -201,6 +203,22 @@ export default function AdminReleaseDetailPage() {
             </span>
           </div>
         </div>
+      </GlassCard>
+
+      <GlassCard className="p-5">
+        <AdminReleaseDownloads
+          releaseId={release.id}
+          hasArtwork={Boolean(release.artwork_url?.trim())}
+          tracks={tracks}
+          legacyAudioUrl={release.audio_url}
+        />
+      </GlassCard>
+
+      <GlassCard className="p-5">
+        <p className="mb-4 text-[11px] font-medium uppercase tracking-[0.14em] text-white/45">
+          Метаданные релиза
+        </p>
+        <AdminReleaseMetadataCard release={release} tracks={tracks} />
       </GlassCard>
 
       <GlassCard className="p-5">

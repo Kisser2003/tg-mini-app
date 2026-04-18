@@ -1,0 +1,22 @@
+-- =============================================================================
+-- НЕ РЕКОМЕНДУЕТСЯ для управляемого Supabase (Hosted)
+-- =============================================================================
+-- Supabase/GoTrue рассчитывает на согласованность таблиц auth.*. Прямой DELETE/TRUNCATE
+-- может оставить проект в неконсистентном состоянии. Предпочтительно:
+--   node scripts/delete-all-auth-users.mjs
+--
+-- Если вы всё же используете самостоятельный Postgres и знаете схему, типовой порядок
+-- (имена таблиц могут отличаться по версии — проверьте \dt auth.*):
+--
+-- BEGIN;
+-- DELETE FROM auth.sessions;
+-- DELETE FROM auth.refresh_tokens;
+-- DELETE FROM auth.mfa_amr_claims;
+-- DELETE FROM auth.mfa_challenges;
+-- DELETE FROM auth.mfa_factors;
+-- DELETE FROM auth.one_time_tokens;
+-- DELETE FROM auth.identities;
+-- DELETE FROM auth.users;
+-- COMMIT;
+--
+-- На Hosted Supabase выполняйте удаление пользователей только через Dashboard или Admin API.

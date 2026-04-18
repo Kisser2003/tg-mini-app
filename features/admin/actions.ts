@@ -1,8 +1,12 @@
 "use client";
 
 import type { ReleaseRecord } from "@/repositories/releases.repo";
-import { getTelegramApiAuthHeaders, getTelegramUserId } from "@/lib/telegram";
-import { getAdminTelegramIdForUi, telegramIdsEqual } from "@/lib/admin";
+import {
+  getAdminTelegramIdForUi,
+  getTelegramApiAuthHeadersForAdminApi,
+  telegramIdsEqual
+} from "@/lib/admin";
+import { getTelegramUserId } from "@/lib/telegram";
 
 function assertAdmin(): void {
   if (process.env.NODE_ENV === "development") {
@@ -24,7 +28,7 @@ async function postModeration(
     headers: {
       Accept: "application/json",
       "Content-Type": "application/json",
-      ...getTelegramApiAuthHeaders()
+      ...getTelegramApiAuthHeadersForAdminApi()
     },
     body: JSON.stringify(body),
     cache: "no-store"

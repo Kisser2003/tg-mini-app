@@ -4,6 +4,7 @@ import type { NextRequest } from "next/server";
 import type { TelegramAuthContext } from "@/lib/api/with-telegram-auth";
 import { withTelegramAuth } from "@/lib/api/with-telegram-auth";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
+import { isTelegramReleaseOwner } from "@/lib/release-ownership.server";
 import { RELEASE_TYPE_VALUES, type ReleaseType } from "@/lib/db-enums";
 import {
   collectReleaseArtistLinkErrors,
@@ -64,7 +65,7 @@ async function handleSubmitPrecheck(
   const { data: releaseRow, error: relErr } = await admin
     .from("releases")
     .select(
-      "id, user_id, client_request_id, release_type, artist_name, title, track_name, collaborators, performance_language, artist_links, explicit, is_explicit, lyrics"
+      "id, user_id, telegram_id, user_uuid, client_request_id, release_type, artist_name, title, track_name, collaborators, performance_language, artist_links, explicit, is_explicit, lyrics"
     )
     .eq("id", releaseId)
     .maybeSingle();
@@ -78,8 +79,7 @@ async function handleSubmitPrecheck(
     return NextResponse.json({ ok: false, error: "Релиз не найден." }, { status: 404 });
   }
 
-  const ownerId = Number(releaseRow.user_id);
-  if (!Number.isFinite(ownerId) || ownerId !== telegramUserId) {
+  if (!(await isTelegramReleaseOwner(admin, releaseRow as Record<string, unknown>, telegramUserId))) {
     return NextResponse.json({ ok: false, error: "Нет доступа к этому релизу." }, { status: 403 });
   }
 

@@ -5,6 +5,7 @@ import type { TelegramAuthContext } from "@/lib/api/with-telegram-auth";
 import { withTelegramAuth } from "@/lib/api/with-telegram-auth";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
 import { formatErrorMessage } from "@/lib/errors";
+import { isTelegramReleaseOwner } from "@/lib/release-ownership.server";
 
 const bodySchema = z.object({
   releaseId: z.string().uuid(),
@@ -41,7 +42,7 @@ async function handleSaveDraftPatch(
 
   const { data: row, error: loadErr } = await admin
     .from("releases")
-    .select("id, user_id")
+    .select("id, user_id, telegram_id, user_uuid")
     .eq("id", releaseId)
     .maybeSingle();
 
@@ -54,8 +55,8 @@ async function handleSaveDraftPatch(
     return NextResponse.json({ ok: false, error: "Релиз не найден." }, { status: 404 });
   }
 
-  const ownerId = Number(row.user_id);
-  if (!Number.isFinite(ownerId) || ownerId !== telegramUserId) {
+  const rowObj = row as Record<string, unknown>;
+  if (!(await isTelegramReleaseOwner(admin, rowObj, telegramUserId))) {
     return NextResponse.json({ ok: false, error: "Нет доступа к этому релизу." }, { status: 403 });
   }
 

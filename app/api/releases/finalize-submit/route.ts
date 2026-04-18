@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { TelegramAuthContext } from "@/lib/api/with-telegram-auth";
 import { withTelegramAuth } from "@/lib/api/with-telegram-auth";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
+import { isTelegramReleaseOwner } from "@/lib/release-ownership.server";
 import { formatErrorMessage } from "@/lib/errors";
 import { escapeHtml } from "@/lib/telegram-bot.server";
 import { sendTelegramNotification } from "@/lib/telegram-notifications";
@@ -76,8 +77,7 @@ async function handleFinalizeSubmit(
     return NextResponse.json({ ok: false, error: "Релиз не найден." }, { status: 404 });
   }
 
-  const ownerId = Number(currentRow.user_id);
-  if (!Number.isFinite(ownerId) || ownerId !== telegramUserId) {
+  if (!(await isTelegramReleaseOwner(admin, currentRow as Record<string, unknown>, telegramUserId))) {
     return NextResponse.json({ ok: false, error: "Нет доступа к этому релизу." }, { status: 403 });
   }
 

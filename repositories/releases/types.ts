@@ -80,6 +80,22 @@ export type ReleaseRecord = {
   telegram_username?: string | null;
   /** Вебхук: короткое «релиз получен» уже отправлено (дедуп при pending + tracks). */
   telegram_pending_ack_sent_at?: string | null;
+  /** Доп. поля из БД (метаданные дистрибуции). */
+  lyrics?: string | null;
+  sub_genre?: string | null;
+  planned_release_date?: string | null;
+  language?: string | null;
+  license_type?: string | null;
+  mood?: string | null;
+  music_author?: string | null;
+  author_full_name?: string | null;
+  c_line?: string | null;
+  p_line?: string | null;
+  upc?: string | null;
+  user_uuid?: string | null;
+  moderator_notes?: string | null;
+  /** Дубль explicit в БД (если отличается от `explicit`). */
+  is_explicit?: boolean | null;
 } & ReleaseStep2Payload;
 
 export type UploadAssetOptions = {
@@ -109,6 +125,8 @@ export type ReleaseTrackRow = {
   explicit: boolean;
   /** Публичный URL аудио (в SQL колонка `file_path`). */
   file_path: string | null;
+  duration?: number | null;
+  position?: number | null;
 };
 
 /** Публичное название релиза: `title`, иначе legacy `track_name`. */

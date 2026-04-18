@@ -27,14 +27,21 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Проверяем Telegram Mini App по заголовкам
-  // Telegram WebApp добавляет специфичные заголовки или tgWebAppData
+  /**
+   * Раньше любой запрос с «telegram» в User-Agent обходил проверку web-сессии — это позволяло
+   * подделать UA и зайти на /library без логина. Mini App работает по известным префиксам;
+   * остальные пути требуют cookie-сессии Supabase как у обычного web.
+   */
+  function isTelegramMiniAppShellPath(p: string): boolean {
+    if (p === "/" || p === "") return true;
+    const roots = ["library", "release", "create", "settings", "dashboard", "onboarding", "admin"];
+    return roots.some((r) => p === `/${r}` || p.startsWith(`/${r}/`));
+  }
+
   const userAgent = request.headers.get("user-agent") || "";
   const isTelegramUserAgent = userAgent.toLowerCase().includes("telegram");
-  
-  // Если это похоже на Telegram - пропускаем
-  // (дополнительная проверка будет на клиенте в AuthGuard)
-  if (isTelegramUserAgent) {
+
+  if (isTelegramUserAgent && (pathname.startsWith("/api/") || isTelegramMiniAppShellPath(pathname))) {
     return NextResponse.next();
   }
 

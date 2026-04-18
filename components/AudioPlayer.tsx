@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { AlertCircle, Gauge, Pause, Play } from "lucide-react";
 import { toast } from "sonner";
 
@@ -8,7 +8,7 @@ type Props = {
   src: string;
   label: string;
   className?: string;
-  /** Режим модерации: декоративная «волна» + переключение 1× / 1.5× */
+  /** Режим модерации: компактный плеер + 1× / 1.5× */
   variant?: "default" | "admin";
 };
 
@@ -55,17 +55,6 @@ function useBufferedAndProgress(audioRef: RefObject<HTMLAudioElement | null>, sr
   return { bufferedRatio, currentRatio };
 }
 
-function seededHeights(seed: string, count: number): number[] {
-  let h = 0;
-  for (let i = 0; i < seed.length; i += 1) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
-  const out: number[] = [];
-  for (let i = 0; i < count; i += 1) {
-    h = (h * 1664525 + 1013904223) >>> 0;
-    out.push(0.25 + (h % 1000) / 1000);
-  }
-  return out;
-}
-
 /**
  * Плеер для WAV/аудио из Supabase Storage: стрим через <audio>, ошибки сети/декодера — тост + иконка.
  * preload=auto + буфер в SeekBar для экономии трафика при повторном прослушивании (совместно с SW).
@@ -76,7 +65,6 @@ export function AudioPlayer({ src, label, className = "", variant = "default" }:
   const [playing, setPlaying] = useState(false);
   const [speed15, setSpeed15] = useState(false);
   const { bufferedRatio, currentRatio } = useBufferedAndProgress(audioRef, src);
-  const waveBars = useMemo(() => seededHeights(src, 48), [src]);
   const isAdmin = variant === "admin";
 
   const onError = useCallback(() => {
@@ -139,42 +127,13 @@ export function AudioPlayer({ src, label, className = "", variant = "default" }:
 
   return (
     <div
-      className={`rounded-xl border border-white/10 bg-white/[0.04] p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl ${className}`}
+      className={`rounded-xl border border-white/10 bg-white/[0.04] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl ${
+        isAdmin ? "rounded-lg p-1.5" : "p-2"
+      } ${className}`}
     >
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <p className="truncate text-[11px] text-white/55">{label}</p>
-        {isAdmin && (
-          <button
-            type="button"
-            onClick={toggleSpeed}
-            disabled={loadError}
-            title={speed15 ? "Скорость 1.5×" : "Скорость 1×"}
-            className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-cyan-400/25 bg-cyan-500/10 px-2 py-0.5 text-[10px] font-medium text-cyan-100/90 disabled:opacity-50"
-          >
-            <Gauge className="h-3 w-3" />
-            {speed15 ? "1.5×" : "1×"}
-          </button>
-        )}
-      </div>
-      {isAdmin && (
-        <div
-          className="mb-2 flex h-10 w-full items-end justify-between gap-px rounded-lg border border-white/[0.06] bg-black/30 px-1 py-1"
-          aria-hidden
-          title="Схематичная «волна» (громкие/тихие участки условно)"
-        >
-          {waveBars.map((h, i) => {
-            const lit = currentRatio > 0 && i / waveBars.length <= currentRatio;
-            return (
-              <div
-                // eslint-disable-next-line react/no-array-index-key
-                key={i}
-                className={`min-w-[2px] flex-1 rounded-sm transition-colors duration-150 ${
-                  lit ? "bg-gradient-to-t from-violet-500/90 to-cyan-300/80" : "bg-white/15"
-                }`}
-                style={{ height: `${Math.round(12 + h * 22)}px` }}
-              />
-            );
-          })}
+      {!isAdmin && (
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <p className="truncate text-[11px] text-white/55">{label}</p>
         </div>
       )}
       <div className="flex items-center gap-2">
@@ -183,14 +142,16 @@ export function AudioPlayer({ src, label, className = "", variant = "default" }:
           onClick={toggle}
           disabled={loadError}
           aria-label={loadError ? "Ошибка загрузки аудио" : playing ? "Пауза" : "Воспроизвести"}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/15 bg-black/40 text-white/90 disabled:opacity-50"
+          className={`flex shrink-0 items-center justify-center rounded-lg border border-white/15 bg-black/40 text-white/90 disabled:opacity-50 ${
+            isAdmin ? "h-8 w-8" : "h-10 w-10"
+          }`}
         >
           {loadError ? (
-            <AlertCircle className="h-5 w-5 text-rose-400" />
+            <AlertCircle className={`text-rose-400 ${isAdmin ? "h-4 w-4" : "h-5 w-5"}`} />
           ) : playing ? (
-            <Pause className="h-5 w-5" />
+            <Pause className={isAdmin ? "h-4 w-4" : "h-5 w-5"} />
           ) : (
-            <Play className="h-5 w-5 pl-0.5" />
+            <Play className={`pl-0.5 ${isAdmin ? "h-4 w-4" : "h-5 w-5"}`} />
           )}
         </button>
         <div className="min-w-0 flex-1">
@@ -205,10 +166,17 @@ export function AudioPlayer({ src, label, className = "", variant = "default" }:
             src={src}
             onError={onError}
           />
+          {isAdmin && (
+            <p className="mb-1 truncate text-[10px] leading-tight text-white/50" title={label}>
+              {label}
+            </p>
+          )}
           <div
-            className="relative h-1.5 w-full overflow-hidden rounded-full bg-white/10"
+            className={`relative w-full overflow-hidden rounded-full bg-white/10 ${
+              isAdmin ? "h-1" : "h-1.5"
+            }`}
             aria-hidden
-            title="Серый — дорожка; светлый — загружено в буфер; акцент — текущая позиция"
+            title="Светлая зона — буфер; фиолетовый — позиция"
           >
             <div
               className="absolute inset-y-0 left-0 rounded-full bg-white/20 transition-[width] duration-150 ease-out"
@@ -219,14 +187,27 @@ export function AudioPlayer({ src, label, className = "", variant = "default" }:
               style={{ width: `${currentRatio * 100}%` }}
             />
           </div>
-          <p className="mt-1.5 text-[11px] text-white/40">
-            {loadError
-              ? "Ошибка загрузки"
-              : isAdmin
-                ? "Волна — ориентир; полоска — буфер и позиция"
-                : "Нажмите Play для прослушивания"}
-          </p>
+          {!isAdmin && (
+            <p className="mt-1.5 text-[11px] text-white/40">
+              {loadError ? "Ошибка загрузки" : "Нажмите Play для прослушивания"}
+            </p>
+          )}
+          {isAdmin && loadError && (
+            <p className="mt-1 text-[10px] text-rose-300/90">Ошибка загрузки</p>
+          )}
         </div>
+        {isAdmin && (
+          <button
+            type="button"
+            onClick={toggleSpeed}
+            disabled={loadError}
+            title={speed15 ? "Скорость 1.5×" : "Скорость 1×"}
+            className="inline-flex shrink-0 items-center gap-0.5 rounded-md border border-white/15 bg-white/[0.06] px-1.5 py-1 text-[9px] font-medium text-white/75 hover:bg-white/10 disabled:opacity-50"
+          >
+            <Gauge className="h-2.5 w-2.5" />
+            {speed15 ? "1.5×" : "1×"}
+          </button>
+        )}
       </div>
     </div>
   );

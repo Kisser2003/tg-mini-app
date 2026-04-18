@@ -12,15 +12,11 @@ import { PullRefreshBrand } from "@/components/PullRefreshBrand";
 import { StatsTile } from "@/components/StatsTile";
 import { AdminModerationQueueSkeleton } from "@/components/ui/LibrarySkeleton";
 import { approveRelease, rejectRelease } from "@/features/admin/actions";
+import { fetchAdminModerationQueue } from "@/features/admin/moderation-queue";
 import { isAdminUi } from "@/lib/admin";
 import { debugInit } from "@/lib/debug";
 import { fetchAdminStats } from "@/lib/fetch-admin-stats";
-import {
-  getPendingReleases,
-  getReleaseTracksByReleaseId,
-  type ReleaseRecord,
-  type ReleaseTrackRow
-} from "@/repositories/releases.repo";
+import type { ReleaseRecord, ReleaseTrackRow } from "@/repositories/releases.repo";
 import { hapticMap } from "@/lib/haptic-map";
 import { getTelegramUserId, initTelegramWebApp, triggerHaptic } from "@/lib/telegram";
 import { errorToUserString, USER_REQUEST_TIMEOUT_MESSAGE } from "@/lib/errors";
@@ -76,14 +72,7 @@ export default function AdminPage() {
   const statsKey = isAdmin ? (["admin-stats"] as const) : null;
 
   const loadQueueCore = useCallback(async (): Promise<ModerationQueueRow[]> => {
-    const releases = await getPendingReleases();
-    const rows = await Promise.all(
-      releases.map(async (release) => ({
-        release,
-        tracks: await getReleaseTracksByReleaseId(release.id)
-      }))
-    );
-    return rows;
+    return fetchAdminModerationQueue();
   }, []);
 
   const { data, error, isLoading, isValidating, mutate } = useSWR(

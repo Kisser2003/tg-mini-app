@@ -9,6 +9,7 @@ import {
   isMissingReleasesColumnError,
   logSupabaseUpdateError
 } from "@/lib/errors";
+import { isTelegramReleaseOwner } from "@/lib/release-ownership.server";
 
 const bodySchema = z.object({
   releaseId: z.string().uuid(),
@@ -42,7 +43,7 @@ async function handleDraftUploadState(
 
   const { data: row, error: loadErr } = await admin
     .from("releases")
-    .select("id, user_id, status")
+    .select("id, user_id, telegram_id, user_uuid, status")
     .eq("id", releaseId)
     .maybeSingle();
 
@@ -55,8 +56,7 @@ async function handleDraftUploadState(
     return NextResponse.json({ ok: false, error: "Релиз не найден." }, { status: 404 });
   }
 
-  const ownerId = Number(row.user_id);
-  if (!Number.isFinite(ownerId) || ownerId !== telegramUserId) {
+  if (!(await isTelegramReleaseOwner(admin, row as Record<string, unknown>, telegramUserId))) {
     return NextResponse.json({ ok: false, error: "Нет доступа к этому релизу." }, { status: 403 });
   }
 
@@ -73,7 +73,6 @@ async function handleDraftUploadState(
       .from("releases")
       .update({ draft_upload_started: true })
       .eq("id", releaseId)
-      .eq("user_id", telegramUserId)
       .in("status", ["draft", "pending"]);
 
     if (error) {
@@ -109,7 +108,6 @@ async function handleDraftUploadState(
         status: "pending"
       })
       .eq("id", releaseId)
-      .eq("user_id", telegramUserId)
       .in("status", ["draft", "pending"]);
 
     if (error) {
@@ -119,7 +117,6 @@ async function handleDraftUploadState(
           .from("releases")
           .update({ status: "pending" })
           .eq("id", releaseId)
-          .eq("user_id", telegramUserId)
           .in("status", ["draft", "pending"]);
         if (err2) {
           logSupabaseUpdateError("releases/draft-upload-state complete (fallback status only)", err2);
@@ -149,7 +146,6 @@ async function handleDraftUploadState(
       status: "draft"
     })
     .eq("id", releaseId)
-    .eq("user_id", telegramUserId)
     .in("status", ["draft", "pending"]);
 
   if (error) {
@@ -159,7 +155,6 @@ async function handleDraftUploadState(
         .from("releases")
         .update({ status: "draft" })
         .eq("id", releaseId)
-        .eq("user_id", telegramUserId)
         .in("status", ["draft", "pending"]);
       if (err2) {
         logSupabaseUpdateError("releases/draft-upload-state failed (fallback status only)", err2);

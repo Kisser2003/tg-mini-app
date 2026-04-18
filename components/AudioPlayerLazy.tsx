@@ -9,7 +9,7 @@ export const AudioPlayerLazy = dynamic(
     ssr: false,
     loading: () => (
       <div
-        className="h-12 w-full animate-pulse rounded-xl bg-white/5"
+        className="h-9 w-full animate-pulse rounded-lg bg-white/5"
         aria-hidden
       />
     )

@@ -496,6 +496,8 @@ export async function getMyReleasesForWebUser(
 
 /**
  * Очередь модерации: релизы на проверке (`processing` или `pending`).
+ * Для UI админки используйте GET `/api/admin/moderation-queue` (service role), а не этот метод —
+ * иначе доступ зависит от RLS с заголовком `x-telegram-user-id`.
  */
 export async function getPendingReleases(): Promise<ReleaseRecord[]> {
   const { data, error } = await withRetry(async () => {

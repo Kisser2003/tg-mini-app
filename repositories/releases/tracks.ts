@@ -71,7 +71,7 @@ export async function getReleaseTracksByReleaseId(releaseId: string): Promise<Re
   const { data, error } = await withRetry(async () => {
     const response = await supabase
       .from("tracks")
-      .select("id, release_id, user_id, index, title, explicit, file_path")
+      .select("id, release_id, user_id, index, position, title, explicit, file_path, duration")
       .eq("release_id", releaseId)
       .order("index", { ascending: true });
     return response;

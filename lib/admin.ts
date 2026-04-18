@@ -1,4 +1,4 @@
-import { getTelegramUserId } from "./telegram";
+import { getTelegramApiAuthHeaders, getTelegramUserId } from "./telegram";
 
 function parsePositiveTelegramId(raw: string): number | null {
   const trimmed = raw.trim();
@@ -77,4 +77,21 @@ export function isAdminUi(): boolean {
   const adminId = getAdminTelegramIdForUi();
   if (adminId === null) return false;
   return telegramIdsEqual(uid, adminId);
+}
+
+/**
+ * Заголовки для админских API (`withTelegramAuth` + проверка admin ID).
+ * В `next dev` в обычном браузере без Mini App подставляется `X-Dev-Telegram-User-Id`
+ * из `NEXT_PUBLIC_ADMIN_TELEGRAM_ID`, иначе по умолчанию уходит `1` и сервер отвечает 403.
+ */
+export function getTelegramApiAuthHeadersForAdminApi(): Record<string, string> {
+  const uid = getTelegramUserId();
+  if (uid != null) {
+    return getTelegramApiAuthHeaders();
+  }
+  const adminId = getAdminTelegramIdForUi();
+  if (process.env.NODE_ENV === "development" && adminId != null) {
+    return getTelegramApiAuthHeaders({ userId: adminId });
+  }
+  return getTelegramApiAuthHeaders();
 }

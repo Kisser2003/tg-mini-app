@@ -5,7 +5,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { motion, type Variants } from "framer-motion";
 import { CheckCircle2, ExternalLink, Headphones, XCircle } from "lucide-react";
-import { ArtworkCoverGlow } from "@/components/ArtworkCoverGlow";
 import { AudioPlayerLazy } from "@/components/AudioPlayerLazy";
 import {
   getReleaseDisplayTitle,
@@ -80,11 +79,6 @@ function AdminReleaseCardInner({
   const audioItems = buildAudioItems(release, tracks);
 
   return (
-    <ArtworkCoverGlow
-      artworkUrl={release.artwork_url}
-      priority={artworkPriority}
-      className="rounded-[22px]"
-    >
     <motion.div
       {...(listVariants
         ? { variants: listVariants }
@@ -154,17 +148,17 @@ function AdminReleaseCardInner({
         </div>
       </div>
 
-      <div className="mt-4 space-y-2">
-        <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.14em] text-white/45">
-          <Headphones className="h-3.5 w-3.5" />
+      <div className="mt-3 space-y-1.5">
+        <div className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-[0.12em] text-white/40">
+          <Headphones className="h-3 w-3" />
           Прослушать
         </div>
         {audioItems.length === 0 ? (
-          <p className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-[12px] text-white/50">
+          <p className="rounded-lg border border-white/10 bg-black/20 px-2.5 py-1.5 text-[11px] text-white/50">
             Аудио пока недоступно для прослушивания.
           </p>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             {audioItems.map((item) => (
               <AudioPlayerLazy key={item.key} src={item.src} label={item.label} variant="admin" />
             ))}
@@ -205,7 +199,6 @@ function AdminReleaseCardInner({
         </motion.button>
       </div>
     </motion.div>
-    </ArtworkCoverGlow>
   );
 }
 
