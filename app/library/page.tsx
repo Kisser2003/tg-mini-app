@@ -7,7 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { HeroWave } from "@/components/HeroWave";
 import { PullRefreshBrand } from "@/components/PullRefreshBrand";
 import { ReleaseCard, type ReleaseStatus } from "@/components/ReleaseCard";
-import { SoundwaveVisualizer } from "@/components/SoundwaveVisualizer";
+import { EmptyStateNeonWaveform } from "@/components/EmptyStateNeonWaveform";
 import { StatsTile } from "@/components/StatsTile";
 import { LibraryReleaseSkeletonGrid, LibraryStatsSkeletonRow } from "@/components/ui/LibrarySkeleton";
 import { resumeDraftFromRelease } from "@/features/release/createRelease/actions";
@@ -388,19 +388,7 @@ function LibraryPageInner() {
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.4 }}
           >
-            <motion.div
-              className="mb-8 flex h-32 w-32 items-center justify-center overflow-hidden rounded-full"
-              style={{
-                background:
-                  "radial-gradient(circle at 35% 35%, rgba(129,140,248,0.15), rgba(76,29,149,0.08) 50%, rgba(3,3,3,0.6))",
-                boxShadow: "0 0 60px rgba(129,140,248,0.1), inset 0 0 40px rgba(0,0,0,0.3)",
-                border: "0.5px solid rgba(129,140,248,0.15)"
-              }}
-              animate={{ scale: [1, 1.04, 1], opacity: [0.7, 1, 0.7] }}
-              transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-            >
-              <SoundwaveVisualizer className="h-[4.5rem] w-[5.75rem] max-w-[90%] scale-95" />
-            </motion.div>
+            <EmptyStateNeonWaveform />
             <p className="mb-2 font-display text-xl font-bold tracking-tight text-white/80">
               Пока нет релизов
             </p>
