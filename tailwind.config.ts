@@ -90,11 +90,6 @@ export default {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: "0" }
         },
-        /** Пустое состояние библиотеки: столбики эквалайзера */
-        "empty-bar": {
-          "0%, 100%": { transform: "scaleY(0.1)" },
-          "50%": { transform: "scaleY(var(--peak, 0.75))" }
-        },
         /** Лёгкое «дыхание» всей SVG-группы с волнами */
         "empty-wave-breathe": {
           "0%, 100%": { transform: "translateY(0)" },
@@ -109,7 +104,6 @@ export default {
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
-        "empty-bar": "empty-bar var(--bar-dur, 1.15s) ease-in-out infinite",
         "empty-wave-breathe": "empty-wave-breathe 3.2s ease-in-out infinite",
         "empty-wave-glow": "empty-wave-glow 2.4s ease-in-out infinite"
       }
