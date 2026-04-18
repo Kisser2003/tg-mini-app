@@ -46,7 +46,10 @@ function LoginPageContent() {
         if (data.user && data.session) {
           // Email confirmed automatically (для разработки)
           setSuccess("Аккаунт создан! Перенаправляем...");
-          setTimeout(() => router.push(redirectTo), 1500);
+          setTimeout(() => {
+            router.refresh();
+            router.push(redirectTo);
+          }, 1500);
         } else if (data.user) {
           // Email требует подтверждения
           setSuccess("Проверьте email для подтверждения аккаунта. Письмо отправлено на " + email);
@@ -61,7 +64,10 @@ function LoginPageContent() {
 
         if (data.session) {
           setSuccess("Вход выполнен! Перенаправляем...");
-          setTimeout(() => router.push(redirectTo), 1000);
+          setTimeout(() => {
+            router.refresh();
+            router.push(redirectTo);
+          }, 800);
         }
       }
     } catch (err: any) {

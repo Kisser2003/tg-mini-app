@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { createServerClient } from "@supabase/ssr";
+import { createBrowserClient, createServerClient } from "@supabase/ssr";
 import type { Database } from "@/types/database.types";
 import { getTelegramUserIdForSupabaseRequests } from "./telegram";
 import type { NextRequest, NextResponse } from "next/server";
@@ -42,17 +42,13 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 });
 
 /**
- * Supabase client для браузера с поддержкой Auth (для веб-логина)
- * Использует localStorage для хранения сессии
+ * Supabase client для браузера (веб-логин).
+ * Важно: @supabase/ssr createBrowserClient хранит сессию в cookies, чтобы
+ * middleware (createServerClient) видел пользователя после signIn — иначе
+ * только localStorage и редирект на /library снова упрётся в /login.
  */
 export function createSupabaseBrowser() {
-  return createClient<Database>(supabaseUrl, supabaseAnonKey, {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: true
-    }
-  });
+  return createBrowserClient<Database>(supabaseUrl, supabaseAnonKey);
 }
 
 /**
