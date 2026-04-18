@@ -79,7 +79,11 @@ html {
     radial-gradient(ellipse 50% 60% at 75% 85%, rgba(76, 29, 149, 0.35) 0%, transparent 55%),
     radial-gradient(ellipse 45% 40% at 60% 30%, rgba(17, 94, 89, 0.2) 0%, transparent 50%),
     radial-gradient(ellipse 30% 35% at 40% 70%, rgba(76, 29, 149, 0.15) 0%, transparent 50%);
-  background-attachment: fixed;
+  /*
+   * iOS Safari: background-attachment: fixed даёт артефакты/полосы у safe-area;
+   * scroll — как на простых лендингах, без «ломаных» слоёв.
+   */
+  background-attachment: scroll;
   background-repeat: no-repeat;
   min-height: 100%;
   min-height: 100dvh;

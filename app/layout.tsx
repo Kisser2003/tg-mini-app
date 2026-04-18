@@ -38,12 +38,13 @@ export const metadata: Metadata = {
   description: "Премиальный Telegram Mini App для музыкальной дистрибуции",
   appleWebApp: {
     capable: true,
-    statusBarStyle: "black-translucent"
+    /** Opaque bar — без «затемняющих» полос как у black-translucent под вырезом / снизу */
+    statusBarStyle: "black"
   }
 };
 
 /**
- * Viewport + theme-color: верхний край градиента (--theme-color-status) для стыка со статус-баром Safari.
+ * theme-color = базовый фон (--ss-black), чтобы Safari/PWA не накладывал отличающуюся маску на системные полосы.
  */
 export const viewport: Viewport = {
   width: "device-width",
@@ -52,8 +53,8 @@ export const viewport: Viewport = {
   userScalable: false,
   viewportFit: "cover",
   themeColor: [
-    { media: "(prefers-color-scheme: dark)", color: "#0a0a0f" },
-    { color: "#0a0a0f" }
+    { media: "(prefers-color-scheme: dark)", color: "#030303" },
+    { color: "#030303" }
   ]
 };
 
