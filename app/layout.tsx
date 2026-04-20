@@ -68,9 +68,12 @@ export default function RootLayout({
   return (
     <html lang="ru" className="dark">
       <head>
-        {supabaseOrigin ? (
-          <link rel="preconnect" href={supabaseOrigin} crossOrigin="anonymous" />
-        ) : null}
+        {/**
+         * Было preconnect+TLS к Supabase: в части сетей (РФ, Safari) ранний preconnect
+         * к внешнему origin иногда конкурирует с критичным `/_next/*` и тянет тайминги.
+         * dns-prefetch — только подсказка резолву, без раннего TCP/TLS.
+         */}
+        {supabaseOrigin ? <link rel="dns-prefetch" href={supabaseOrigin} /> : null}
       </head>
       <body
         className={`${inter.variable} ${spaceGrotesk.variable} font-sans text-foreground antialiased`}
