@@ -11,6 +11,11 @@ import { createSupabaseMiddleware } from "@/lib/supabase";
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  /** `public/sw-audio.js` — иначе без сессии приходит 307 на /login и SW регистрируется битым (ломает веб/Safari). */
+  if (pathname === "/sw-audio.js") {
+    return NextResponse.next();
+  }
+
   // Публичные роуты - доступны всем
   const publicPaths = [
     "/login",
