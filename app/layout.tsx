@@ -1,6 +1,5 @@
 import "./globals.css";
 import type { Metadata, Viewport } from "next";
-import Script from "next/script";
 import { Toaster } from "sonner";
 import { Inter, Space_Grotesk } from "next/font/google";
 import { AppProviders } from "@/components/AppProviders";
@@ -8,6 +7,7 @@ import { AppErrorBoundary } from "@/components/ErrorBoundary";
 import { PageTransition } from "@/components/PageTransition";
 import { InputFocusScroll } from "@/components/InputFocusScroll";
 import { TelegramBootstrap } from "@/components/TelegramBootstrap";
+import { TelegramWebAppScript } from "@/components/TelegramWebAppScript";
 import { AdaptiveLayout } from "@/components/AdaptiveLayout";
 import { NoiseOverlay } from "@/components/NoiseOverlay";
 function supabasePreconnectOrigin(): string | null {
@@ -78,14 +78,10 @@ export default function RootLayout({
           ["--bottom-nav-height" as string]: "4.5rem"
         }}
       >
+        <TelegramWebAppScript />
         <TelegramBootstrap />
         <InputFocusScroll />
         <Toaster richColors expand position="top-center" />
-        {/* afterInteractive: не блокировать гидрацию/первый кадр, если telegram.org медленный или недоступен (веб Safari). Mini App подхватывает WebApp в useEffect. */}
-        <Script
-          src="https://telegram.org/js/telegram-web-app.js"
-          strategy="afterInteractive"
-        />
         <div className="mesh-bg" aria-hidden>
           <div className="light-hero" />
           <div className="light-fab" />
