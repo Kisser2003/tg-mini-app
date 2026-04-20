@@ -81,9 +81,10 @@ export default function RootLayout({
         <TelegramBootstrap />
         <InputFocusScroll />
         <Toaster richColors expand position="top-center" />
+        {/* afterInteractive: не блокировать гидрацию/первый кадр, если telegram.org медленный или недоступен (веб Safari). Mini App подхватывает WebApp в useEffect. */}
         <Script
           src="https://telegram.org/js/telegram-web-app.js"
-          strategy="beforeInteractive"
+          strategy="afterInteractive"
         />
         <div className="mesh-bg" aria-hidden>
           <div className="light-hero" />

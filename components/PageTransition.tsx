@@ -6,6 +6,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 /**
  * Глобальный fade между разделами (библиотека, релиз, админ…).
  * Маршруты `/create/*` без глобального fade — слайд шагов в `CreateShell` / `CreateStepTransition`.
+ * `motion.div` с `initial={false}` — не начинать кадр с opacity 0 (Safari мог показывать «пустой» экран).
  */
 export function PageTransition({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -25,7 +26,7 @@ export function PageTransition({ children }: { children: React.ReactNode }) {
       <motion.div
         key={pathname}
         className="relative min-h-app w-full min-w-0 overflow-x-hidden will-change-[opacity]"
-        initial={{ opacity: instant ? 1 : 0 }}
+        initial={false}
         animate={{ opacity: 1 }}
         exit={{ opacity: instant ? 1 : 0 }}
         transition={transition}
