@@ -8,6 +8,7 @@ import {
   getTelegramStartParam,
   getTelegramUserId,
   initTelegramWebApp,
+  isTelegramClientShell,
   releaseTelegramClosingConfirmation
 } from "@/lib/telegram";
 
@@ -23,12 +24,24 @@ export function TelegramBootstrap() {
 
   useEffect(() => {
     if (typeof window !== "undefined" && "serviceWorker" in navigator) {
-      navigator.serviceWorker
-        .register("/sw-audio.js")
-        .then(() => {})
-        .catch((err) => {
-          console.error("[SW-AUDIO] registration failed", err);
-        });
+      if (!isTelegramClientShell()) {
+        void navigator.serviceWorker
+          .getRegistrations()
+          .then((regs) => {
+            for (const reg of regs) {
+              const script = reg.active?.scriptURL ?? "";
+              if (script.includes("sw-audio")) void reg.unregister();
+            }
+          })
+          .catch(() => {});
+      } else {
+        navigator.serviceWorker
+          .register("/sw-audio.js")
+          .then(() => {})
+          .catch((err) => {
+            console.error("[SW-AUDIO] registration failed", err);
+          });
+      }
     }
 
     const startParam = getTelegramStartParam();
