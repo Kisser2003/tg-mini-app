@@ -11,8 +11,18 @@ import { createSupabaseMiddleware } from "@/lib/supabase";
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  /** `public/sw-audio.js` — иначе без сессии приходит 307 на /login и SW регистрируется битым (ломает веб/Safari). */
-  if (pathname === "/sw-audio.js") {
+  /**
+   * Не проверять auth для статики и внутренних маршрутов Next.
+   * Matcher с regex может на части деплоев/версий Next давать ложное совпадение — явный префикс надёжнее.
+   */
+  if (
+    pathname.startsWith("/_next/") ||
+    pathname.startsWith("/_vercel") ||
+    pathname === "/favicon.ico" ||
+    pathname === "/robots.txt" ||
+    pathname === "/manifest.webmanifest" ||
+    pathname === "/sw-audio.js"
+  ) {
     return NextResponse.next();
   }
 
@@ -90,13 +100,7 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public folder
-     */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"
+    /* Весь `/_next/*` исключаем через префикс — проще чем несколько альтернатив в lookahead. */
+    "/((?!_next/|_vercel|favicon\\.ico|robots\\.txt|manifest\\.webmanifest|sw-audio\\.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)"
   ]
 };

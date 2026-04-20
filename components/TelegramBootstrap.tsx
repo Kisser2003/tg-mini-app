@@ -29,8 +29,7 @@ export function TelegramBootstrap() {
           .getRegistrations()
           .then((regs) => {
             for (const reg of regs) {
-              const script = reg.active?.scriptURL ?? "";
-              if (script.includes("sw-audio")) void reg.unregister();
+              void reg.unregister();
             }
           })
           .catch(() => {});
