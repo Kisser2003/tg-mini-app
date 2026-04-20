@@ -100,7 +100,11 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    /* Весь `/_next/*` исключаем через префикс — проще чем несколько альтернатив в lookahead. */
-    "/((?!_next/|_vercel|favicon\\.ico|robots\\.txt|manifest\\.webmanifest|sw-audio\\.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)"
+    /**
+     * Не запускать middleware для API, статики Next (`/_next/*` шире, чем только static/image),
+     * системных путей и типичных файлов — иначе на части доменов/edge возможны лишние проходы.
+     * Рекомендуемый минимум в доках: api, _next/static, _next/image, favicon — здесь также весь `/_next/`.
+     */
+    "/((?!api(?:/|$)|_next/|_vercel|favicon\\.ico|robots\\.txt|manifest\\.webmanifest|sw-audio\\.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)"
   ]
 };
