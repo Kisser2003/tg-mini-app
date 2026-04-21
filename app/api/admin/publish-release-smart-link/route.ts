@@ -27,7 +27,7 @@ async function notifyArtistSmartLink(record: ReleaseRecord, smartLink: string): 
 
   await sendTelegramNotification(
     tid,
-    `✅ <b>Релиз «${title}» вышел!</b>\n\n🔗 <a href="${linkEsc}">Слушать / Smart Link</a>`
+    `✅ <b>Релиз «${title}» одобрен модерацией.</b>\n\n🔗 Вот ваша Smart Link: <a href="${linkEsc}">открыть</a>`
   );
 }
 
