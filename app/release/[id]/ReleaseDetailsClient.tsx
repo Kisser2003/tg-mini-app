@@ -4,10 +4,12 @@ import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowLeft, Check, Link2, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Check, ExternalLink, Link2, ShieldCheck } from "lucide-react";
 import { GlassCard } from "@/components/GlassCard";
 import { debugInit } from "@/lib/debug";
+import { openSmartLink } from "@/lib/open-smart-link";
 import { getReleaseStatusMeta, normalizeReleaseStatus } from "@/lib/release-status";
+import { shouldShowSmartLinkCta } from "@/lib/smart-link-cta";
 import { isAdminUi } from "@/lib/admin";
 import { USER_REQUEST_TIMEOUT_MESSAGE } from "@/lib/errors";
 import { supabase } from "@/lib/supabase";
@@ -25,6 +27,7 @@ type ReleaseDetailsRow = {
   status: string;
   error_message: string | null;
   created_at: string;
+  smart_link: string | null;
 };
 
 const RELEASE_DETAILS_TIMEOUT_MS = 12000;
@@ -76,7 +79,7 @@ export default function ReleaseDetailsClient() {
         const base = supabase
           .from("releases")
           .select(
-            "id, user_id, artist_name, track_name, artwork_url, audio_url, release_type, genre, status, error_message, created_at"
+            "id, user_id, artist_name, track_name, artwork_url, audio_url, release_type, genre, status, error_message, created_at, smart_link"
           )
           .eq("id", params.id);
         const filtered = isAdminView
@@ -273,6 +276,20 @@ export default function ReleaseDetailsClient() {
             </motion.div>
           ))}
         </div>
+
+        {shouldShowSmartLinkCta(release.status, release.smart_link) && release.smart_link?.trim() ? (
+          <motion.button
+            type="button"
+            whileHover={{ scale: 0.99 }}
+            whileTap={{ scale: 0.98 }}
+            transition={{ type: "spring", stiffness: 320, damping: 22 }}
+            onClick={() => openSmartLink(release.smart_link!)}
+            className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-violet-400/35 bg-gradient-to-r from-violet-500/20 to-fuchsia-500/15 py-2.5 text-sm font-semibold text-violet-100 shadow-[0_0_18px_rgba(139,92,246,0.2)]"
+          >
+            <ExternalLink className="h-4 w-4 shrink-0" aria-hidden />
+            Слушать / Smart Link
+          </motion.button>
+        ) : null}
 
         {release.audio_url && (
           <motion.a

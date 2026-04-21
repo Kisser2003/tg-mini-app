@@ -74,3 +74,57 @@ export async function rejectRelease(releaseId: string, comment: string): Promise
   assertAdmin();
   return postModeration({ releaseId, action: "reject", comment });
 }
+
+async function postPublishSmartLink(body: {
+  releaseId: string;
+  newStatus: string;
+  smartLink: string;
+}): Promise<ReleaseRecord> {
+  const authHeaders = await getAdminApiAuthHeaders();
+  const res = await fetch("/api/admin/publish-release-smart-link", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      ...authHeaders
+    },
+    body: JSON.stringify(body),
+    cache: "no-store"
+  });
+
+  let json: unknown;
+  try {
+    json = await res.json();
+  } catch {
+    throw new Error("Не удалось выпустить релиз со ссылкой.");
+  }
+
+  if (!res.ok) {
+    const err =
+      typeof json === "object" && json !== null && "error" in json && typeof (json as { error: unknown }).error === "string"
+        ? (json as { error: string }).error
+        : "Не удалось выпустить релиз со ссылкой.";
+    throw new Error(err);
+  }
+
+  const parsed = json as { ok?: boolean; record?: ReleaseRecord };
+  if (parsed.ok !== true || !parsed.record) {
+    throw new Error("Не удалось выпустить релиз со ссылкой.");
+  }
+
+  return parsed.record;
+}
+
+/**
+ * Выпуск релиза из модерации: статус `ready` в БД + `smart_link`.
+ * `newStatus` с клиента обычно `RELEASED`; сервер нормализует под enum.
+ */
+export async function publishReleaseWithSmartLink(
+  releaseId: string,
+  newStatus: string,
+  smartLink: string
+): Promise<ReleaseRecord> {
+  assertAdmin();
+  return postPublishSmartLink({ releaseId, newStatus, smartLink });
+}

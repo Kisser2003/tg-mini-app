@@ -70,12 +70,7 @@ export function CreateShell({
         isTelegram ? "px-5 pb-10 pt-14" : "w-full px-5 pb-16 pt-8 md:pb-20 md:pt-10"
       )}
     >
-      <div
-        className={cn(
-          "mx-auto flex w-full flex-col gap-5 font-sans",
-          isTelegram ? "max-w-[440px]" : "max-w-[min(100%,920px)]"
-        )}
-      >
+      <div className="mx-auto flex w-full max-w-2xl flex-col gap-5 font-sans">
         <header className={cn("space-y-8", !isTelegram && "md:space-y-10")}>
           <div className="flex items-center gap-3 md:gap-4">
             <motion.button

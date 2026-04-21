@@ -59,7 +59,9 @@ export function normalizeReleaseStatus(status: string | null | undefined): Canon
   if (value === "processing" || value === "under_review" || value === "review") {
     return "processing";
   }
-  if (value === "ready" || value === "approved" || value === "live") return "ready";
+  if (value === "ready" || value === "approved" || value === "live" || value === "released") {
+    return "ready";
+  }
   if (value === "failed" || value === "rejected" || value === "error") return "failed";
   if (!value) return "unknown";
   return "unknown";

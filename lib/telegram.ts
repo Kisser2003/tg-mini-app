@@ -55,6 +55,8 @@ type TelegramWebApp = {
   setBackgroundColor?: (color: string) => void;
   enableClosingConfirmation?: () => void;
   disableClosingConfirmation?: () => void;
+  /** Открыть ссылку во внешнем браузере (TMA). */
+  openLink?: (url: string, options?: { try_instant_view?: boolean }) => void;
 };
 
 declare global {

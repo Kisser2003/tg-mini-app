@@ -34,6 +34,7 @@ export type ReleaseListRow = Pick<
   | "isrc"
   | "upc"
   | "release_type"
+  | "smart_link"
 >;
 
 const RELEASES_LIST_TIMEOUT_MS = 15000;

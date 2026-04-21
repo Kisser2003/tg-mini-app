@@ -11,7 +11,8 @@ import { AudioPlayerLazy } from "@/components/AudioPlayerLazy";
 import { AdminReleaseDownloads } from "@/components/admin/AdminReleaseDownloads";
 import { AdminReleaseMetadataCard } from "@/components/admin/AdminReleaseMetadataCard";
 import { GlassCard } from "@/components/GlassCard";
-import { approveRelease, rejectRelease } from "@/features/admin/actions";
+import { AdminApproveSmartLinkModal } from "@/components/AdminApproveSmartLinkModal";
+import { publishReleaseWithSmartLink, rejectRelease } from "@/features/admin/actions";
 import { fetchAdminReleaseDetail } from "@/features/admin/release-detail";
 import { isAdminUi, isAdminUiByWebSession } from "@/lib/admin";
 import { getReleaseStatusMeta, normalizeReleaseStatus } from "@/lib/release-status";
@@ -56,6 +57,7 @@ export default function AdminReleaseDetailPage() {
   const [busy, setBusy] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
+  const [approveModalReleaseId, setApproveModalReleaseId] = useState<string | null>(null);
 
   const [isAdmin, setIsAdmin] = useState(false);
 
@@ -90,21 +92,24 @@ export default function AdminReleaseDetailPage() {
     void load();
   }, [load]);
 
-  const handleApprove = useCallback(async () => {
-    if (!release) return;
-    setBusy(true);
-    try {
-      await approveRelease(release.id);
-      triggerHaptic("success");
-      toast.success("Релиз одобрен");
-      router.push("/admin");
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Не удалось одобрить.";
-      toast.error(msg);
-    } finally {
-      setBusy(false);
-    }
-  }, [release, router]);
+  const handlePublishSmartLink = useCallback(
+    async (releaseId: string, newStatus: string, smartLink: string) => {
+      setBusy(true);
+      try {
+        await publishReleaseWithSmartLink(releaseId, newStatus, smartLink);
+        triggerHaptic("success");
+        setApproveModalReleaseId(null);
+        toast.success("Релиз выпущен, smart link сохранён");
+        router.push("/admin");
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "Не удалось выпустить релиз.";
+        toast.error(msg);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [router]
+  );
 
   const handleReject = useCallback(async () => {
     if (!release) return;
@@ -171,6 +176,13 @@ export default function AdminReleaseDetailPage() {
 
   return (
     <div className="flex flex-col gap-4 pb-10">
+      <AdminApproveSmartLinkModal
+        releaseId={approveModalReleaseId}
+        busy={approveModalReleaseId != null && busy}
+        onClose={() => setApproveModalReleaseId(null)}
+        onSubmit={(id, newStatus, smartLink) => void handlePublishSmartLink(id, newStatus, smartLink)}
+      />
+
       <GlassCard className="p-5">
         <Link
           href="/admin"
@@ -250,7 +262,7 @@ export default function AdminReleaseDetailPage() {
               disabled={busy}
               onClick={() => {
                 triggerHaptic("light");
-                void handleApprove();
+                setApproveModalReleaseId(release.id);
               }}
               whileHover={{ scale: 0.99 }}
               whileTap={{ scale: 0.98 }}

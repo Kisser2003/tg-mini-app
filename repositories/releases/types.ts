@@ -97,6 +97,8 @@ export type ReleaseRecord = {
   moderator_notes?: string | null;
   /** Дубль explicit в БД (если отличается от `explicit`). */
   is_explicit?: boolean | null;
+  /** Публичная smart-link страница / DSP после выпуска (задаётся модерацией). */
+  smart_link?: string | null;
 } & ReleaseStep2Payload;
 
 export type UploadAssetOptions = {

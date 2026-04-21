@@ -12,6 +12,7 @@ import { LibraryReleaseSkeletonGrid, LibraryStatsSkeletonRow } from "@/component
 import { resumeDraftFromRelease } from "@/features/release/createRelease/actions";
 import { useCreateReleaseDraftStore } from "@/features/release/createRelease/store";
 import { getReleaseStatusMeta, normalizeReleaseStatus } from "@/lib/release-status";
+import { shouldShowSmartLinkCta } from "@/lib/smart-link-cta";
 import { getReleaseDisplayTitle } from "@/repositories/releases.repo";
 import { useReleases, type ReleaseListRow } from "@/lib/hooks/useReleases";
 import { hapticMap } from "@/lib/haptic-map";
@@ -312,6 +313,10 @@ function LibraryPageInner() {
       formatReleaseTypeLabel(release.release_type ?? null)
     ].filter((item): item is string => Boolean(item));
 
+    const smartLinkUrl = shouldShowSmartLinkCta(release.status, release.smart_link)
+      ? release.smart_link?.trim() || null
+      : null;
+
     const hasErrorText = Boolean(release.error_message?.trim());
     const effectiveErrorText = hasErrorText
       ? release.error_message!
@@ -345,6 +350,7 @@ function LibraryPageInner() {
               coverUrl={release.artwork_url ?? undefined}
               index={listIndex}
               onClick={onCardClick}
+              smartLinkUrl={smartLinkUrl}
             />
           </div>
           <AnimatePresence>
@@ -408,6 +414,7 @@ function LibraryPageInner() {
           coverUrl={release.artwork_url ?? undefined}
           index={listIndex}
           onClick={onCardClick}
+          smartLinkUrl={smartLinkUrl}
         />
       </div>
     );

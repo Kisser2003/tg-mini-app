@@ -307,46 +307,48 @@ export default function CreateReviewPage() {
               exit={{ opacity: 0, y: -12 }}
               transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
             >
-              <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:gap-8">
-                <div className="mx-auto w-full max-w-[168px] shrink-0 sm:mx-0">
-                  <div className="relative aspect-square overflow-hidden rounded-md border border-white/10 bg-black/30 shadow-lg">
-                    {artworkUrl ? (
-                      <Image
-                        src={artworkUrl}
-                        alt="Обложка релиза"
-                        fill
-                        sizes="168px"
-                        className="object-cover"
-                        unoptimized
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-[11px] font-medium uppercase tracking-[0.18em] text-white/55">
-                        No cover
-                      </div>
-                    )}
+              <div className="glass-glow glass-glow-charged p-6">
+                <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:gap-8">
+                  <div className="mx-auto w-full max-w-[168px] shrink-0 sm:mx-0">
+                    <div className="relative aspect-square overflow-hidden rounded-md border border-white/10 shadow-md">
+                      {artworkUrl ? (
+                        <Image
+                          src={artworkUrl}
+                          alt="Обложка релиза"
+                          fill
+                          sizes="168px"
+                          className="object-cover"
+                          unoptimized
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-[11px] font-medium uppercase tracking-[0.18em] text-white/55">
+                          No cover
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="min-w-0 flex-1 text-center sm:text-left">
+                    <motion.h2
+                      className="text-[clamp(1.35rem,4.5vw,1.85rem)] font-semibold leading-[1.15] tracking-[0.02em] text-white"
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.08, duration: 0.4 }}
+                    >
+                      {releaseTitle}
+                    </motion.h2>
+                    <motion.p
+                      className="mt-2 text-[15px] font-medium text-white/75"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: 0.16, duration: 0.35 }}
+                    >
+                      {artistName}
+                    </motion.p>
                   </div>
                 </div>
-                <div className="min-w-0 flex-1 text-center sm:text-left">
-                  <motion.h2
-                    className="text-[clamp(1.35rem,4.5vw,1.85rem)] font-semibold leading-[1.15] tracking-[0.02em] text-white"
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.08, duration: 0.4 }}
-                  >
-                    {releaseTitle}
-                  </motion.h2>
-                  <motion.p
-                    className="mt-2 text-[15px] font-medium text-white/75"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.16, duration: 0.35 }}
-                  >
-                    {artistName}
-                  </motion.p>
-                </div>
-              </div>
 
-              <div className="glass-glow glass-glow-charged p-5 sm:p-6">
+                <SectionDivider />
+
                 <p className="text-[13px] leading-relaxed text-white/80">
                   Проверьте данные перед отправкой.
                   {tracksWavSyncedToDb
@@ -457,7 +459,7 @@ export default function CreateReviewPage() {
                 </motion.div>
               )}
 
-              <div className="relative w-full pb-6 pt-1">
+              <div className="relative mt-6 w-full pb-6 pt-1">
                 {/* Мягкий подсвет без «прямоугольника» от box-shadow */}
                 <div
                   className={`pointer-events-none absolute left-1/2 top-[calc(100%-0.5rem)] h-14 w-[min(100%,420px)] -translate-x-1/2 -translate-y-1/2 rounded-[100px] bg-gradient-to-r from-[#6366f1] via-[#c084fc] to-[#ec4899] blur-[28px] sm:blur-[36px] ${submitBlocked ? "opacity-20" : "opacity-[0.55]"}`}

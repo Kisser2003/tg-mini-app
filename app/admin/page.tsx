@@ -6,12 +6,13 @@ import { motion, type Variants } from "framer-motion";
 import { BarChart3, RefreshCcw, TrendingUp } from "lucide-react";
 import useSWR from "swr";
 import { toast } from "sonner";
+import { AdminApproveSmartLinkModal } from "@/components/AdminApproveSmartLinkModal";
 import { AdminRejectModal } from "@/components/AdminRejectModal";
 import { AdminReleaseCard } from "@/components/AdminReleaseCard";
 import { PullRefreshBrand } from "@/components/PullRefreshBrand";
 import { StatsTile } from "@/components/StatsTile";
 import { AdminModerationQueueSkeleton } from "@/components/ui/LibrarySkeleton";
-import { approveRelease, rejectRelease } from "@/features/admin/actions";
+import { publishReleaseWithSmartLink, rejectRelease } from "@/features/admin/actions";
 import { fetchAdminModerationQueue } from "@/features/admin/moderation-queue";
 import { isAdminUi, isAdminUiByWebSession } from "@/lib/admin";
 import { debugInit } from "@/lib/debug";
@@ -53,6 +54,7 @@ export default function AdminPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [rejectModalReleaseId, setRejectModalReleaseId] = useState<string | null>(null);
+  const [approveModalReleaseId, setApproveModalReleaseId] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminResolved, setAdminResolved] = useState(false);
 
@@ -114,19 +116,20 @@ export default function AdminPage() {
     await Promise.all([mutate(undefined, { revalidate: true }), mutateStats(undefined, { revalidate: true })]);
   }, [mutate, mutateStats]);
 
-  const handleApprove = useCallback(
-    async (release: ReleaseRecord) => {
-      setBusyId(release.id);
+  const handlePublishSmartLink = useCallback(
+    async (releaseId: string, newStatus: string, smartLink: string) => {
+      setBusyId(releaseId);
       setActionError(null);
       try {
-        await approveRelease(release.id);
+        await publishReleaseWithSmartLink(releaseId, newStatus, smartLink);
         triggerHaptic("success");
         setRejectModalReleaseId(null);
+        setApproveModalReleaseId(null);
         await refreshAll();
-        toast.success("Релиз одобрен");
+        toast.success("Релиз выпущен, smart link сохранён");
         router.replace("/admin");
       } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : "Не удалось обновить статус релиза.";
+        const msg = e instanceof Error ? e.message : "Не удалось выпустить релиз.";
         setActionError(msg);
         toast.error(msg);
       } finally {
@@ -223,6 +226,13 @@ export default function AdminPage() {
         </div>
       )}
 
+      <AdminApproveSmartLinkModal
+        releaseId={approveModalReleaseId}
+        busy={approveModalReleaseId != null && busyId === approveModalReleaseId}
+        onClose={() => setApproveModalReleaseId(null)}
+        onSubmit={(id, newStatus, smartLink) => void handlePublishSmartLink(id, newStatus, smartLink)}
+      />
+
       <AdminRejectModal
         releaseId={rejectModalReleaseId}
         busy={busyId === rejectModalReleaseId}
@@ -266,7 +276,7 @@ export default function AdminPage() {
                 index={index}
                 listVariants={undefined}
                 busy={busyId === row.release.id}
-                onApprove={() => void handleApprove(row.release)}
+                onOpenApprove={() => setApproveModalReleaseId(row.release.id)}
                 onOpenReject={() => setRejectModalReleaseId(row.release.id)}
                 detailHref={`/admin/release/${row.release.id}`}
                 artworkPriority={index < 3}

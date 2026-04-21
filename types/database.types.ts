@@ -166,6 +166,7 @@ export type Database = {
           release_type: string | null
           status: Database["public"]["Enums"]["release_status"] | null
           sub_genre: string | null
+          smart_link: string | null
           telegram_id: string | null
           telegram_pending_ack_sent_at: string | null
           telegram_username: string | null
@@ -206,6 +207,7 @@ export type Database = {
           release_type?: string | null
           status?: Database["public"]["Enums"]["release_status"] | null
           sub_genre?: string | null
+          smart_link?: string | null
           telegram_id?: string | null
           telegram_pending_ack_sent_at?: string | null
           telegram_username?: string | null
@@ -246,6 +248,7 @@ export type Database = {
           release_type?: string | null
           status?: Database["public"]["Enums"]["release_status"] | null
           sub_genre?: string | null
+          smart_link?: string | null
           telegram_id?: string | null
           telegram_pending_ack_sent_at?: string | null
           telegram_username?: string | null

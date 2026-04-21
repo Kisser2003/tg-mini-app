@@ -52,7 +52,7 @@ type AdminReleaseCardProps = {
   /** Варианты для stagger-анимации очереди (родитель задаёт staggerChildren). */
   listVariants?: Variants;
   busy: boolean;
-  onApprove: () => void;
+  onOpenApprove: () => void;
   /** Открыть модальное окно выбора причины отклонения */
   onOpenReject: () => void;
   /** Ссылка на страницу детали модерации */
@@ -69,7 +69,7 @@ function AdminReleaseCardInner({
   index: _index,
   listVariants,
   busy,
-  onApprove,
+  onOpenApprove,
   onOpenReject,
   detailHref,
   artworkPriority = false
@@ -172,7 +172,7 @@ function AdminReleaseCardInner({
           disabled={busy}
           onClick={() => {
             triggerHaptic("light");
-            onApprove();
+            onOpenApprove();
           }}
           whileHover={{ scale: 0.99 }}
           whileTap={{ scale: 0.98 }}
