@@ -26,6 +26,10 @@ export function FAB() {
   if (pathname === "/" || pathname === "/library") {
     return null;
   }
+  /* FAQ / мультиссылки: на телефоне FAB перекрывает контент и нижнюю навигацию */
+  if (pathname === "/requirements" || pathname === "/multi-links") {
+    return null;
+  }
   /* Hide on auth pages */
   if (pathname === "/login") {
     return null;
