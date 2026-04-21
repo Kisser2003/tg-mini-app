@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { House, Shield, LogOut, CircleHelp } from "lucide-react";
+import { Shield, LogOut, CircleHelp, FileMusic, List, FileText, Clock3 } from "lucide-react";
 import { useLogout } from "@/lib/hooks/useWebAuth";
 import { motion } from "framer-motion";
 import { isAdminUi, isAdminUiByWebSession } from "@/lib/admin";
@@ -16,6 +16,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const { logout } = useLogout();
   const [showAdminTab, setShowAdminTab] = useState(false);
+  const [releaseView, setReleaseView] = useState<"all" | "drafts" | "moderation">("all");
 
   useEffect(() => {
     initTelegramWebApp();
@@ -26,14 +27,33 @@ export function Sidebar() {
     })();
   }, []);
 
+  useEffect(() => {
+    if (pathname !== "/library") {
+      setReleaseView("all");
+      return;
+    }
+    const params = new URLSearchParams(window.location.search);
+    const view = params.get("view");
+    if (view === "drafts" || view === "moderation") {
+      setReleaseView(view);
+      return;
+    }
+    setReleaseView("all");
+  }, [pathname]);
+
   const navItems = useMemo(
     () => [
-      { path: "/library", icon: House, label: "Главная" },
       { path: "/requirements", icon: CircleHelp, label: "FAQ" },
       ...(showAdminTab ? [{ path: "/admin", icon: Shield, label: "Админка" }] : [])
     ],
     [showAdminTab]
   );
+
+  const releaseViews = [
+    { path: "/library?view=all", icon: List, label: "Все релизы", view: "all" },
+    { path: "/library?view=drafts", icon: FileText, label: "Черновики", view: "drafts" },
+    { path: "/library?view=moderation", icon: Clock3, label: "Модерация", view: "moderation" }
+  ] as const;
 
   // Скрываем на странице логина
   if (pathname === "/login") {
@@ -51,7 +71,47 @@ export function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-4 space-y-2">
+      <nav className="flex-1 space-y-4 p-4">
+        <div className="space-y-2">
+          <div className="flex items-center gap-3 px-4 py-2 text-white/85">
+            <FileMusic className="h-5 w-5" />
+            <span className="font-medium">Ваши релизы</span>
+          </div>
+          <div className="ml-3 border-l border-white/10 pl-3">
+            {releaseViews.map((item) => {
+              const Icon = item.icon;
+              const isActive = pathname === "/library" && releaseView === item.view;
+
+              return (
+                <Link
+                  key={item.path}
+                  href={item.path}
+                  onClick={() => setReleaseView(item.view)}
+                >
+                  <motion.div
+                    className={`
+                      relative mt-1.5 flex items-center gap-2.5 rounded-lg px-3 py-2.5 transition-all duration-200
+                      ${isActive ? "bg-white/10 text-white" : "text-white/55 hover:bg-white/5 hover:text-white"}
+                    `}
+                    whileHover={{ scale: 1.01 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    {isActive && (
+                      <motion.div
+                        layoutId="sidebar-active-sub"
+                        className="absolute inset-0 rounded-lg border border-white/10 bg-gradient-to-r from-purple-500/20 to-pink-500/20"
+                        transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                      />
+                    )}
+                    <Icon className="relative h-4 w-4" />
+                    <span className="relative text-[14px] font-medium">{item.label}</span>
+                  </motion.div>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+
         {navItems.map((item) => {
           const isActive = pathname === item.path;
           const Icon = item.icon;

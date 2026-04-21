@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 import { getTelegramInitDataForApiHeader, getTelegramUserIdForSupabaseRequests } from "@/lib/telegram";
 
 type LibraryStatusFilter = "all" | "processing" | "ready" | "failed";
+type LibraryView = "all" | "drafts" | "moderation";
 
 const STATUS_FILTER_CHIPS: { id: LibraryStatusFilter; label: string }[] = [
   { id: "all", label: "Все" },
@@ -54,6 +55,11 @@ function formatReleaseTypeLabel(value: string | null | undefined): string | null
   if (normalized === "ep") return "Type: EP";
   if (normalized === "album") return "Type: Album";
   return `Type: ${value}`;
+}
+
+function parseLibraryView(value: string | null): LibraryView {
+  if (value === "drafts" || value === "moderation") return value;
+  return "all";
 }
 
 function LibraryPageInner() {
@@ -91,6 +97,7 @@ function LibraryPageInner() {
   const [adminNotesModal, setAdminNotesModal] = useState<{ title: string; body: string } | null>(
     null
   );
+  const selectedView = parseLibraryView(searchParams.get("view"));
 
   useEffect(() => {
     if (searchParams.get("fromCreate") !== "1") return;
@@ -207,10 +214,24 @@ function LibraryPageInner() {
     };
   }, [isTelegram, authReady, userId, authMode, data, error, isLoading, isValidating]);
 
+  const viewFilteredReleases = useMemo(() => {
+    if (selectedView === "drafts") {
+      return releases.filter((r) => {
+        const status = normalizeReleaseStatus(r.status);
+        return status === "draft" || status === "pending";
+      });
+    }
+    if (selectedView === "moderation") {
+      return releases.filter((r) => normalizeReleaseStatus(r.status) === "processing");
+    }
+    return releases;
+  }, [releases, selectedView]);
+
   const filteredReleases = useMemo(() => {
-    if (statusFilter === "all") return releases;
-    return releases.filter((r) => normalizeReleaseStatus(r.status) === statusFilter);
-  }, [releases, statusFilter]);
+    if (selectedView !== "all") return viewFilteredReleases;
+    if (statusFilter === "all") return viewFilteredReleases;
+    return viewFilteredReleases.filter((r) => normalizeReleaseStatus(r.status) === statusFilter);
+  }, [viewFilteredReleases, selectedView, statusFilter]);
 
   const handleCreate = useCallback(() => {
     hapticMap.impactLight();
@@ -238,6 +259,7 @@ function LibraryPageInner() {
   );
 
   const hasReleases = releases.length > 0;
+  const hasReleasesInView = viewFilteredReleases.length > 0;
   const telegramIdentityReady =
     !isTelegram ||
     authMode !== "telegram" ||
@@ -508,14 +530,18 @@ function LibraryPageInner() {
           <>
             <div className="mb-6 flex items-center justify-between">
               <h2 className="font-display text-sm font-bold tracking-tight text-white/70">
-                Ваши релизы
+                {selectedView === "drafts"
+                  ? "Ваши релизы · Черновики"
+                  : selectedView === "moderation"
+                    ? "Ваши релизы · Модерация"
+                    : "Ваши релизы"}
               </h2>
               <span className="text-[10px] font-medium tracking-wider text-white/20">
-                {filteredReleases.length} из {releases.length}
+                {filteredReleases.length} из {viewFilteredReleases.length}
               </span>
             </div>
 
-            {hasReleases && error == null && (
+            {hasReleasesInView && error == null && selectedView === "all" && (
               <div className="mb-4 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {STATUS_FILTER_CHIPS.map((chip) => {
                   const active = statusFilter === chip.id;
@@ -540,9 +566,15 @@ function LibraryPageInner() {
               </div>
             )}
 
-            {hasReleases && filteredReleases.length === 0 && (
+            {hasReleasesInView && filteredReleases.length === 0 && (
               <p className="mb-6 text-center text-[13px] text-white/45">
                 Нет релизов с выбранным статусом.
+              </p>
+            )}
+
+            {!hasReleasesInView && hasReleases && selectedView !== "all" && (
+              <p className="mb-6 text-center text-[13px] text-white/45">
+                В этом разделе пока нет релизов.
               </p>
             )}
 
