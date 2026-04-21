@@ -1,8 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ExternalLink, Music } from "lucide-react";
-import { openSmartLink } from "@/lib/open-smart-link";
+import { Music } from "lucide-react";
 
 export type ReleaseStatus = "draft" | "processing" | "ready" | "error";
 
@@ -14,15 +13,13 @@ export type ReleaseCardProps = {
   coverUrl?: string;
   index?: number;
   onClick?: () => void;
-  /** Публичная ссылка после выпуска (показ кнопки на карточке). */
-  smartLinkUrl?: string | null;
 };
 
 const statusConfig: Record<ReleaseStatus, { label: string; ledClass: string }> = {
-  draft: { label: "Draft", ledClass: "led-gray" },
-  processing: { label: "In Review", ledClass: "led-amber" },
-  ready: { label: "Ready", ledClass: "led-green" },
-  error: { label: "Error", ledClass: "led-red" }
+  draft: { label: "Черновик", ledClass: "led-gray" },
+  processing: { label: "На проверке", ledClass: "led-amber" },
+  ready: { label: "Одобрено", ledClass: "led-green" },
+  error: { label: "Отклонено", ledClass: "led-red" }
 };
 
 /** Lovable ReleaseCard — glass row + LED status; optional onClick for navigation. */
@@ -33,8 +30,7 @@ export function ReleaseCard({
   meta = [],
   coverUrl,
   index = 0,
-  onClick,
-  smartLinkUrl
+  onClick
 }: ReleaseCardProps) {
   const cfg = statusConfig[status];
 
@@ -85,19 +81,6 @@ export function ReleaseCard({
               </span>
             ))}
           </div>
-        ) : null}
-        {smartLinkUrl?.trim() ? (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              openSmartLink(smartLinkUrl);
-            }}
-            className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-violet-400/35 bg-gradient-to-r from-violet-500/20 to-fuchsia-500/15 py-2.5 text-[12px] font-semibold tracking-tight text-violet-100 shadow-[0_0_18px_rgba(139,92,246,0.2)] transition-colors hover:border-violet-400/50 hover:from-violet-500/30"
-          >
-            <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-90" aria-hidden />
-            Слушать / Smart Link
-          </button>
         ) : null}
       </div>
 
