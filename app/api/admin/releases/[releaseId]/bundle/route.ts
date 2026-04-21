@@ -4,9 +4,9 @@ import JSZip from "jszip";
 import { z } from "zod";
 import { buildReleaseExportPayload, type AdminReleaseRow } from "@/lib/admin-release-metadata";
 import { requireAdminSupabaseClient } from "@/lib/admin-release-api-guard";
-import type { TelegramAuthContext } from "@/lib/api/with-telegram-auth";
-import { withTelegramAuth } from "@/lib/api/with-telegram-auth";
+import { getTelegramAuthContextFromRequest } from "@/lib/api/with-telegram-auth";
 import type { ReleaseTrackRow } from "@/repositories/releases/types";
+import { buildAdminLyricsTxtFilename } from "@/lib/admin-track-lyrics";
 import {
   contentDispositionAttachment,
   downloadStorageObjectBytes,
@@ -21,11 +21,13 @@ const paramsSchema = z.object({
 });
 
 async function handleBundle(
-  _request: NextRequest,
-  ctx: TelegramAuthContext,
+  request: NextRequest,
   routeContext: { params: { releaseId: string } }
 ): Promise<Response> {
-  const guard = requireAdminSupabaseClient(ctx);
+  const guard = await requireAdminSupabaseClient(
+    request,
+    getTelegramAuthContextFromRequest(request)
+  );
   if (!guard.ok) return guard.response;
 
   const parsedParams = paramsSchema.safeParse(routeContext.params);
@@ -66,6 +68,36 @@ async function handleBundle(
 
   const zip = new JSZip();
   zip.file("metadata.json", `${JSON.stringify(exportDoc, null, 2)}\n`);
+
+  type LyricsZipFile = { path: string; content: string };
+  const lyricsParts: LyricsZipFile[] = [];
+  for (const t of tracks) {
+    const raw = typeof t.lyrics === "string" ? t.lyrics.trim() : "";
+    if (!raw) continue;
+    const idx = typeof t.index === "number" ? t.index : 0;
+    lyricsParts.push({
+      path: buildAdminLyricsTxtFilename({
+        trackIndex: idx,
+        title: String(t.title ?? "")
+      }),
+      content: raw
+    });
+  }
+  const agg =
+    row && typeof (row as { lyrics?: string }).lyrics === "string"
+      ? (row as { lyrics: string }).lyrics.trim()
+      : "";
+  if (agg.length > 0) {
+    lyricsParts.push({ path: "release-aggregated.txt", content: agg });
+  }
+  if (lyricsParts.length > 0) {
+    const lyricsFolder = zip.folder("lyrics");
+    if (lyricsFolder) {
+      for (const f of lyricsParts) {
+        lyricsFolder.file(f.path, f.content);
+      }
+    }
+  }
 
   const audioFolder = zip.folder("audio");
   if (!audioFolder) {
@@ -124,6 +156,5 @@ export async function GET(
   request: NextRequest,
   routeContext: { params: { releaseId: string } }
 ): Promise<Response> {
-  const run = withTelegramAuth((req, ctx) => handleBundle(req, ctx, routeContext));
-  return run(request);
+  return handleBundle(request, routeContext);
 }

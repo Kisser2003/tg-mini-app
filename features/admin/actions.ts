@@ -3,7 +3,7 @@
 import type { ReleaseRecord } from "@/repositories/releases.repo";
 import {
   getAdminTelegramIdForUi,
-  getTelegramApiAuthHeadersForAdminApi,
+  getAdminApiAuthHeaders,
   telegramIdsEqual
 } from "@/lib/admin";
 import { getTelegramUserId } from "@/lib/telegram";
@@ -22,13 +22,14 @@ function assertAdmin(): void {
 async function postModeration(
   body: { releaseId: string; action: "approve" | "reject"; comment?: string }
 ): Promise<ReleaseRecord> {
+  const authHeaders = await getAdminApiAuthHeaders();
   const res = await fetch("/api/admin/update-release-status", {
     method: "POST",
     credentials: "same-origin",
     headers: {
       Accept: "application/json",
       "Content-Type": "application/json",
-      ...getTelegramApiAuthHeadersForAdminApi()
+      ...authHeaders
     },
     body: JSON.stringify(body),
     cache: "no-store"

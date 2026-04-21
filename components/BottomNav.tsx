@@ -1,12 +1,12 @@
 "use client";
 
-import { memo, useMemo } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import type { LucideIcon } from "lucide-react";
-import { LayoutDashboard, Shield } from "lucide-react";
-import { isAdminUi } from "@/lib/admin";
+import { LayoutDashboard, Shield, CircleHelp } from "lucide-react";
+import { isAdminUi, isAdminUiByWebSession } from "@/lib/admin";
 import { hapticMap } from "@/lib/haptic-map";
 import { useHideOnScrollDown } from "@/lib/hooks/useHideOnScrollDown";
 import { initTelegramWebApp } from "@/lib/telegram";
@@ -27,16 +27,22 @@ function isTabActive(pathname: string, path: string): boolean {
 const BottomNavInner = memo(function BottomNavInner() {
   const pathname = usePathname();
   const barVisible = useHideOnScrollDown();
+  const [showAdminTab, setShowAdminTab] = useState(false);
   
   // Hooks must be called before any conditional returns
-  const showAdminTab = useMemo(() => {
+  useEffect(() => {
     initTelegramWebApp();
-    return isAdminUi();
+    setShowAdminTab(isAdminUi());
+    void (async () => {
+      const webAdmin = await isAdminUiByWebSession();
+      if (webAdmin) setShowAdminTab(true);
+    })();
   }, []);
 
   const tabs = useMemo<NavTab[]>(
     () => [
       { path: "/library", icon: LayoutDashboard, label: "Мои релизы" },
+      { path: "/requirements", icon: CircleHelp, label: "FAQ" },
       ...(showAdminTab ? [{ path: "/admin", icon: Shield, label: "Админ" }] : [])
     ],
     [showAdminTab]

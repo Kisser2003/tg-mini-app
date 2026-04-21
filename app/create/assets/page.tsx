@@ -133,9 +133,6 @@ export default function CreateAssetsPage() {
       ) : (
         <div className="space-y-6">
           <div className="glass-glow glass-glow-charged flex flex-col gap-6 px-5 py-6">
-            <p className="text-[13px] leading-relaxed text-muted-foreground">
-              Загрузите обложку релиза. Минимальное разрешение: 3000×3000.
-            </p>
             <div>
               <FileUploader
                 label="Artwork (JPG/PNG)"
@@ -147,12 +144,6 @@ export default function CreateAssetsPage() {
                 onFileChange={setArtworkFile}
               />
             </div>
-
-            {artworkUrl && !artworkFile && (
-              <p className="mt-3 text-[11px] text-white/45">
-                Обложка уже загружена. Можно перейти дальше без повторной загрузки.
-              </p>
-            )}
           </div>
 
           <MagneticButton

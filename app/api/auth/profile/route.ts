@@ -14,6 +14,9 @@ import { verifyTelegramInitData, parseTelegramInitDataWithoutVerification } from
 import { getUserProfile, getUserProfileByTelegramId, getOrCreateTelegramUser } from "@/lib/auth/hybrid-auth";
 import type { UserProfile } from "@/lib/auth/hybrid-auth";
 
+/** Не пытаться статически прогонять хендлер при `next build` — `request.headers` тянет dynamic `headers()`. */
+export const dynamic = "force-dynamic";
+
 /** Bigint из PostgREST нельзя сериализовать в JSON — иначе 500 и пустой профиль на клиенте. */
 function profileToJsonSafe(profile: UserProfile): Record<string, unknown> {
   return {
@@ -37,29 +40,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Try Supabase Auth first (web)
-    const authHeader = request.headers.get("authorization");
-    const token = authHeader?.replace("Bearer ", "");
-
-    if (token) {
-      const {
-        data: { user },
-        error: authError
-      } = await admin.auth.getUser(token);
-
-      if (user && !authError) {
-        const profile = await getUserProfile(user.id);
-        if (profile) {
-          return NextResponse.json({
-            ok: true,
-            user: profileToJsonSafe(profile),
-            auth_method: "supabase"
-          });
-        }
-      }
-    }
-
-    // Try Telegram Auth (Mini App)
+    // Try Telegram Auth first (Mini App): if initData is present, it should win over stale web tokens.
     const initDataRaw = getTelegramInitDataFromRequest(request);
     if (initDataRaw) {
       const botToken = process.env.TELEGRAM_BOT_TOKEN;
@@ -92,6 +73,28 @@ export async function GET(request: NextRequest) {
             ok: true,
             user: profileToJsonSafe(profile),
             auth_method: "telegram"
+          });
+        }
+      }
+    }
+
+    // Fallback to Supabase Auth (web)
+    const authHeader = request.headers.get("authorization");
+    const token = authHeader?.replace("Bearer ", "");
+
+    if (token) {
+      const {
+        data: { user },
+        error: authError
+      } = await admin.auth.getUser(token);
+
+      if (user && !authError) {
+        const profile = await getUserProfile(user.id);
+        if (profile) {
+          return NextResponse.json({
+            ok: true,
+            user: profileToJsonSafe(profile),
+            auth_method: "supabase"
           });
         }
       }

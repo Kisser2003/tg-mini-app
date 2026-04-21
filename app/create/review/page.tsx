@@ -80,45 +80,6 @@ function PulsingTrackIcon() {
   );
 }
 
-function VinylWithArtwork({ artworkUrl }: { artworkUrl: string | null }) {
-  return (
-    <div className="relative mx-auto h-[168px] w-[168px] shrink-0 sm:mx-0">
-      <motion.div
-        className="absolute inset-0 rounded-full bg-gradient-to-br from-zinc-800 via-zinc-950 to-black shadow-[inset_0_0_48px_rgba(0,0,0,0.85),0_12px_40px_rgba(0,0,0,0.5)]"
-        animate={{ rotate: 360 }}
-        transition={{ repeat: Infinity, duration: 10, ease: "linear" }}
-      >
-        <div
-          className="absolute inset-0 rounded-full opacity-[0.45]"
-          style={{
-            backgroundImage: `repeating-radial-gradient(circle at center, transparent 0, transparent 4px, rgba(255,255,255,0.045) 4px, rgba(255,255,255,0.045) 5px)`
-          }}
-        />
-        <div className="absolute inset-[12%] rounded-full border border-white/[0.06]" />
-        <div className="absolute inset-[22%] rounded-full border border-white/[0.04]" />
-      </motion.div>
-      <div className="absolute inset-0 flex items-center justify-center">
-        <div className="relative z-10 h-[76px] w-[76px] overflow-hidden rounded-full border-2 border-white/25 shadow-[0_8px_32px_rgba(0,0,0,0.55)] ring-2 ring-black/40">
-          {artworkUrl ? (
-            <Image
-              src={artworkUrl}
-              alt=""
-              fill
-              sizes="76px"
-              className="object-cover"
-              unoptimized
-            />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-white/[0.07] to-black/40 text-[10px] font-medium uppercase tracking-wider text-white/35">
-              OMF
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function CreateReviewPage() {
   const router = useRouter();
   const guard = useStepGuard("review");
@@ -347,7 +308,24 @@ export default function CreateReviewPage() {
               transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
             >
               <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:gap-8">
-                <VinylWithArtwork artworkUrl={artworkUrl} />
+                <div className="mx-auto w-full max-w-[168px] shrink-0 sm:mx-0">
+                  <div className="relative aspect-square overflow-hidden rounded-md border border-white/10 bg-black/30 shadow-lg">
+                    {artworkUrl ? (
+                      <Image
+                        src={artworkUrl}
+                        alt="Обложка релиза"
+                        fill
+                        sizes="168px"
+                        className="object-cover"
+                        unoptimized
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-[11px] font-medium uppercase tracking-[0.18em] text-white/55">
+                        No cover
+                      </div>
+                    )}
+                  </div>
+                </div>
                 <div className="min-w-0 flex-1 text-center sm:text-left">
                   <motion.h2
                     className="text-[clamp(1.35rem,4.5vw,1.85rem)] font-semibold leading-[1.15] tracking-[0.02em] text-white"
@@ -358,7 +336,7 @@ export default function CreateReviewPage() {
                     {releaseTitle}
                   </motion.h2>
                   <motion.p
-                    className="mt-2 text-[15px] font-medium text-white/45"
+                    className="mt-2 text-[15px] font-medium text-white/75"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: 0.16, duration: 0.35 }}
@@ -369,7 +347,7 @@ export default function CreateReviewPage() {
               </div>
 
               <div className="glass-glow glass-glow-charged p-5 sm:p-6">
-                <p className="text-[13px] leading-relaxed text-text-muted">
+                <p className="text-[13px] leading-relaxed text-white/80">
                   Проверьте данные перед отправкой.
                   {tracksWavSyncedToDb
                     ? " Аудиофайлы уже на сервере — осталось отправить релиз в модерацию."
@@ -379,7 +357,7 @@ export default function CreateReviewPage() {
                 <SectionDivider />
 
                 <section>
-                  <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-white/40">
+                  <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-white/55">
                     Паспорт
                   </p>
                   <p className="mt-2 break-words text-[15px] text-white/92">
@@ -410,10 +388,10 @@ export default function CreateReviewPage() {
                 <SectionDivider />
 
                 <section>
-                  <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-white/40">
+                  <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-white/55">
                     Обложка
                   </p>
-                  <p className="mt-2 text-[14px] text-white/78">
+                  <p className="mt-2 text-[14px] text-white/88">
                     {artworkUrl ? "Загружена" : "Не загружена"}
                   </p>
                 </section>
@@ -421,7 +399,7 @@ export default function CreateReviewPage() {
                 <SectionDivider />
 
                 <section>
-                  <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-white/40">
+                  <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-white/55">
                     Треки
                   </p>
                   <ul className="mt-3 space-y-3 text-white/85">
@@ -450,7 +428,7 @@ export default function CreateReviewPage() {
                               {i + 1}. {t.title || "Без названия"}
                             </span>
                           </div>
-                          <span className="line-clamp-2 max-w-[min(52%,168px)] shrink-0 text-right text-[10px] leading-tight text-white/38">
+                          <span className="line-clamp-2 max-w-[min(52%,168px)] shrink-0 text-right text-[10px] leading-tight text-white/65">
                             {wavLabel}
                           </span>
                         </motion.li>
@@ -479,43 +457,50 @@ export default function CreateReviewPage() {
                 </motion.div>
               )}
 
-              <motion.button
-                type="button"
-                disabled={submitBlocked}
-                onClick={() => void handleSubmit()}
-                whileTap={submitBlocked ? undefined : { scale: 0.98 }}
-                whileHover={submitBlocked ? undefined : { scale: 1.02 }}
-                transition={{ type: "spring", stiffness: 420, damping: 28 }}
-                className="group relative inline-flex h-[58px] w-full items-center justify-center overflow-hidden rounded-[22px] bg-gradient-to-r from-[#6366f1] via-[#a855f7] to-[#ec4899] text-[16px] font-semibold text-white shadow-[0_16px_44px_rgba(168,85,247,0.35)] transition-transform duration-200 hover:shadow-[0_18px_52px_rgba(168,85,247,0.45)] disabled:cursor-not-allowed disabled:opacity-55 disabled:shadow-none disabled:hover:scale-100"
-              >
-                <span
-                  className="pointer-events-none absolute inset-0 opacity-40 mix-blend-overlay"
-                  style={{
-                    background:
-                      "linear-gradient(110deg, transparent 0%, transparent 38%, rgba(255,255,255,0.12) 50%, transparent 62%, transparent 100%)",
-                    backgroundSize: "200% 100%",
-                    animation: submitBlocked ? "none" : "review-btn-shimmer 3.2s ease-in-out infinite"
-                  }}
+              <div className="relative w-full pb-6 pt-1">
+                {/* Мягкий подсвет без «прямоугольника» от box-shadow */}
+                <div
+                  className={`pointer-events-none absolute left-1/2 top-[calc(100%-0.5rem)] h-14 w-[min(100%,420px)] -translate-x-1/2 -translate-y-1/2 rounded-[100px] bg-gradient-to-r from-[#6366f1] via-[#c084fc] to-[#ec4899] blur-[28px] sm:blur-[36px] ${submitBlocked ? "opacity-20" : "opacity-[0.55]"}`}
                   aria-hidden
                 />
-                <motion.span
-                  className="pointer-events-none absolute inset-y-0 left-0 w-[38%] skew-x-[-16deg] bg-gradient-to-r from-transparent via-white/40 to-transparent opacity-60"
-                  animate={submitBlocked ? undefined : { x: ["-130%", "230%"] }}
-                  transition={{
-                    duration: 2.8,
-                    repeat: Infinity,
-                    ease: "linear",
-                    repeatDelay: 0.35
-                  }}
-                />
-                <span className="relative z-[1] drop-shadow-sm">
-                  {tracksUploadInProgress
-                    ? "Загрузка WAV…"
-                    : isSubmitting || submitStatus === "submitting"
-                      ? "Отправляем..."
-                      : "Отправить релиз"}
-                </span>
-              </motion.button>
+                <motion.button
+                  type="button"
+                  disabled={submitBlocked}
+                  onClick={() => void handleSubmit()}
+                  whileTap={submitBlocked ? undefined : { scale: 0.98 }}
+                  whileHover={submitBlocked ? undefined : { scale: 1.02 }}
+                  transition={{ type: "spring", stiffness: 420, damping: 28 }}
+                  className="group relative z-10 inline-flex h-[58px] w-full items-center justify-center overflow-hidden rounded-[22px] bg-gradient-to-r from-[#6366f1] via-[#a855f7] to-[#ec4899] text-[16px] font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.22)] ring-1 ring-white/10 transition-transform duration-200 disabled:cursor-not-allowed disabled:opacity-55 disabled:ring-white/5 disabled:hover:scale-100"
+                >
+                  <span
+                    className="pointer-events-none absolute inset-0 opacity-40 mix-blend-overlay"
+                    style={{
+                      background:
+                        "linear-gradient(110deg, transparent 0%, transparent 38%, rgba(255,255,255,0.12) 50%, transparent 62%, transparent 100%)",
+                      backgroundSize: "200% 100%",
+                      animation: submitBlocked ? "none" : "review-btn-shimmer 3.2s ease-in-out infinite"
+                    }}
+                    aria-hidden
+                  />
+                  <motion.span
+                    className="pointer-events-none absolute inset-y-0 left-0 w-[38%] skew-x-[-16deg] bg-gradient-to-r from-transparent via-white/40 to-transparent opacity-60"
+                    animate={submitBlocked ? undefined : { x: ["-130%", "230%"] }}
+                    transition={{
+                      duration: 2.8,
+                      repeat: Infinity,
+                      ease: "linear",
+                      repeatDelay: 0.35
+                    }}
+                  />
+                  <span className="relative z-[1] drop-shadow-sm">
+                    {tracksUploadInProgress
+                      ? "Загрузка WAV…"
+                      : isSubmitting || submitStatus === "submitting"
+                        ? "Отправляем..."
+                        : "Отправить релиз"}
+                  </span>
+                </motion.button>
+              </div>
 
               <AnimatePresence mode="wait">
                 {showProgressPanel && (

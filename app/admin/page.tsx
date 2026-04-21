@@ -13,7 +13,7 @@ import { StatsTile } from "@/components/StatsTile";
 import { AdminModerationQueueSkeleton } from "@/components/ui/LibrarySkeleton";
 import { approveRelease, rejectRelease } from "@/features/admin/actions";
 import { fetchAdminModerationQueue } from "@/features/admin/moderation-queue";
-import { isAdminUi } from "@/lib/admin";
+import { isAdminUi, isAdminUiByWebSession } from "@/lib/admin";
 import { debugInit } from "@/lib/debug";
 import { fetchAdminStats } from "@/lib/fetch-admin-stats";
 import type { ReleaseRecord, ReleaseTrackRow } from "@/repositories/releases.repo";
@@ -53,20 +53,27 @@ export default function AdminPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [rejectModalReleaseId, setRejectModalReleaseId] = useState<string | null>(null);
-  const isAdmin = isAdminUi();
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminResolved, setAdminResolved] = useState(false);
 
   useEffect(() => {
     debugInit("admin", "init start");
     initTelegramWebApp();
     setUserId(getTelegramUserId());
+    setIsAdmin(isAdminUi());
+    void (async () => {
+      const webAdmin = await isAdminUiByWebSession();
+      setIsAdmin((prev) => prev || webAdmin);
+      setAdminResolved(true);
+    })();
     debugInit("admin", "init done");
   }, []);
 
   useEffect(() => {
-    if (!isAdmin) {
+    if (adminResolved && !isAdmin) {
       router.replace("/");
     }
-  }, [isAdmin, router]);
+  }, [adminResolved, isAdmin, router]);
 
   const swrKey = isAdmin ? (["admin-moderation-queue"] as const) : null;
   const statsKey = isAdmin ? (["admin-stats"] as const) : null;
@@ -151,11 +158,11 @@ export default function AdminPage() {
     [refreshAll, router]
   );
 
-  if (!isAdmin) {
+  if (adminResolved && !isAdmin) {
     return null;
   }
 
-  if (userId == null && process.env.NODE_ENV === "production") {
+  if (userId == null && !isAdmin && process.env.NODE_ENV === "production") {
     return (
       <div className="glass-glow glass-glow-charged mx-5 mt-14 p-6">
         <h1 className="font-display text-xl font-bold text-white/85">Панель модерации</h1>

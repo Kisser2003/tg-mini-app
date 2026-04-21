@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { createSupabaseBrowser } from "@/lib/supabase";
+import { appendCurrentTelegramHash } from "@/lib/telegram";
 import type { User } from "@supabase/supabase-js";
 
 /**
@@ -25,7 +26,7 @@ export function useWebAuth(options?: { redirectToLogin?: boolean }) {
       } else {
         setUser(undefined);
         if (redirectToLogin && pathname !== "/login") {
-          router.replace("/login");
+          router.replace(appendCurrentTelegramHash("/login"));
         }
       }
     });
@@ -39,7 +40,7 @@ export function useWebAuth(options?: { redirectToLogin?: boolean }) {
       } else {
         setUser(undefined);
         if (redirectToLogin && pathname !== "/login") {
-          router.replace("/login");
+          router.replace(appendCurrentTelegramHash("/login"));
         }
       }
     });
@@ -61,7 +62,7 @@ export function useLogout() {
   const logout = async () => {
     const supabase = createSupabaseBrowser();
     await supabase.auth.signOut();
-    router.replace("/login");
+    router.replace(appendCurrentTelegramHash("/login"));
   };
 
   return { logout };

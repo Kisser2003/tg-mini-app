@@ -273,6 +273,7 @@ export type Database = {
           file_path: string | null
           id: string
           index: number | null
+          lyrics: string | null
           position: number | null
           release_id: string | null
           telegram_id: string | null
@@ -287,6 +288,7 @@ export type Database = {
           file_path?: string | null
           id?: string
           index?: number | null
+          lyrics?: string | null
           position?: number | null
           release_id?: string | null
           telegram_id?: string | null
@@ -301,6 +303,7 @@ export type Database = {
           file_path?: string | null
           id?: string
           index?: number | null
+          lyrics?: string | null
           position?: number | null
           release_id?: string | null
           telegram_id?: string | null

@@ -5,7 +5,7 @@ import { createSupabaseBrowser } from "@/lib/supabase";
 import type { UserProfile } from "@/lib/auth/hybrid-auth";
 
 const USERS_PROFILE_COLUMNS =
-  "id, telegram_id, telegram_username, telegram_first_name, telegram_last_name, email, display_name, account_linked_at, created_at, updated_at" as const;
+  "id, telegram_id, telegram_username, telegram_first_name, telegram_last_name, email, display_name, role, account_linked_at, created_at, updated_at" as const;
 
 /**
  * Прямое чтение своей строки в public.users (RLS: auth.uid() = id).

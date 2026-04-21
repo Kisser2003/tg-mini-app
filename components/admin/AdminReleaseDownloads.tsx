@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { Download, Loader2, Archive } from "lucide-react";
+import { Download, FileText, Loader2, Archive } from "lucide-react";
 import { toast } from "sonner";
 import { adminDownloadToDisk } from "@/features/admin/download";
 import { triggerHaptic } from "@/lib/telegram";
@@ -12,9 +12,17 @@ type Props = {
   hasArtwork: boolean;
   tracks: ReleaseTrackRow[];
   legacyAudioUrl: string | null;
+  /** Сводный текст в `releases.lyrics` (если есть). */
+  releaseLyrics?: string | null;
 };
 
-export function AdminReleaseDownloads({ releaseId, hasArtwork, tracks, legacyAudioUrl }: Props) {
+export function AdminReleaseDownloads({
+  releaseId,
+  hasArtwork,
+  tracks,
+  legacyAudioUrl,
+  releaseLyrics
+}: Props) {
   const [busyKey, setBusyKey] = useState<string | null>(null);
 
   const run = useCallback(
@@ -96,6 +104,58 @@ export function AdminReleaseDownloads({ releaseId, hasArtwork, tracks, legacyAud
           );
         })}
 
+        {tracks.map((t, i) => {
+          if (!t.lyrics?.trim()) return null;
+          const key = t.id ? `lyrics-${t.id}` : `lyrics-idx-${t.index}-${i}`;
+          const q = t.id
+            ? `kind=lyrics&trackId=${encodeURIComponent(t.id)}`
+            : `kind=lyrics&trackIndex=${encodeURIComponent(String(t.index))}`;
+          return (
+            <button
+              key={key}
+              type="button"
+              disabled={busyKey !== null}
+              onClick={() =>
+                void run(
+                  key,
+                  `/api/admin/releases/${releaseId}/download?${q}`,
+                  `track-${String(t.index + 1).padStart(2, "0")}-lyrics.txt`
+                )
+              }
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-teal-300/25 bg-teal-500/15 px-3 py-2.5 text-sm text-teal-100/95 hover:bg-teal-500/25 disabled:opacity-50"
+            >
+              {busyKey === key ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <FileText className="h-4 w-4" />
+              )}
+              Текст: {t.title.trim() || `Трек ${t.index + 1}`}
+            </button>
+          );
+        })}
+
+        {releaseLyrics?.trim() ? (
+          <button
+            type="button"
+            disabled={busyKey !== null}
+            onClick={() =>
+              void run(
+                "lyrics-release",
+                `/api/admin/releases/${releaseId}/download?kind=lyrics`,
+                `release-lyrics-${releaseId.slice(0, 8)}.txt`
+              )
+            }
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-teal-300/25 bg-teal-500/15 px-3 py-2.5 text-sm text-teal-100/95 hover:bg-teal-500/25 disabled:opacity-50"
+          >
+            {busyKey === "lyrics-release" ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <FileText className="h-4 w-4" />
+            )}
+            Текст релиза (сводный)
+          </button>
+        ) : null}
+
         {hasLegacyOnly && (
           <button
             type="button"
@@ -135,8 +195,10 @@ export function AdminReleaseDownloads({ releaseId, hasArtwork, tracks, legacyAud
         </button>
       </div>
       <p className="text-xs text-white/45">
-        ZIP: оригинальные аудио, обложка в папке{" "}
-        <span className="font-mono text-white/60">artwork/</span>, метаданные в{" "}
+        ZIP: аудио в <span className="font-mono text-white/60">audio/</span>, обложка в{" "}
+        <span className="font-mono text-white/60">artwork/</span>, тексты треков (если есть) в{" "}
+        <span className="font-mono text-white/60">lyrics/*.txt</span> плюс при необходимости{" "}
+        <span className="font-mono text-white/60">release-aggregated.txt</span>, метаданные в{" "}
         <span className="font-mono text-white/60">metadata.json</span>.
       </p>
     </div>

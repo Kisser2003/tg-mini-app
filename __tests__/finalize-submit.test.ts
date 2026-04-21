@@ -42,7 +42,7 @@ describe("handleFinalizeSubmit core logic", () => {
       "utf8"
     );
     expect(routeSource).toContain("status: 403");
-    expect(routeSource).toContain("telegramUserId");
+    expect(routeSource).toContain("isReleaseActorOwner");
   });
 
   it("returns 400 when clientRequestId does not match the stored release", async () => {

@@ -1,4 +1,4 @@
-/** Единые опции SWR для списков (библиотека, кошелёк, админ). */
+/** Единые опции SWR для списков (библиотека, админ). */
 export const SWR_LIST_OPTIONS = {
   revalidateOnFocus: false,
   revalidateOnMount: true,

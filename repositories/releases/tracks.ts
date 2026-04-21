@@ -14,7 +14,8 @@ const trackInsertSchema = z.object({
   title: z.string().min(1).max(256).trim(),
   explicit: z.boolean(),
   /** Публичный URL после загрузки в Storage — в БД пишется в колонку `file_path`. */
-  audioUrl: z.string().url()
+  audioUrl: z.string().url(),
+  lyrics: z.string().max(32000).nullable().optional()
 });
 
 export { RELEASE_TYPE_VALUES };
@@ -30,9 +31,14 @@ export async function addReleaseTrack(params: {
   title: string;
   explicit: boolean;
   audioUrl: string;
+  /** Текст песни; пустая строка → null в БД. */
+  lyrics?: string | null;
 }): Promise<void> {
-  const { supabaseUserUuid, ...schemaInput } = params;
-  const validated = trackInsertSchema.parse(schemaInput);
+  const { supabaseUserUuid, lyrics, ...schemaInput } = params;
+  const validated = trackInsertSchema.parse({
+    ...schemaInput,
+    lyrics: lyrics == null || String(lyrics).trim() === "" ? null : String(lyrics).trim()
+  });
   const telegramId = validated.telegramId ?? validated.userId;
 
   const { error } = await withRetry(async () => {
@@ -43,7 +49,8 @@ export async function addReleaseTrack(params: {
       index: validated.index,
       title: validated.title,
       explicit: validated.explicit,
-      file_path: validated.audioUrl
+      file_path: validated.audioUrl,
+      lyrics: validated.lyrics ?? null
     };
     if (supabaseUserUuid) {
       row.user_uuid = supabaseUserUuid;
@@ -77,7 +84,7 @@ export async function getReleaseTracksByReleaseId(releaseId: string): Promise<Re
   const { data, error } = await withRetry(async () => {
     const response = await supabase
       .from("tracks")
-      .select("id, release_id, user_id, index, position, title, explicit, file_path, duration")
+      .select("id, release_id, user_id, index, position, title, explicit, file_path, lyrics, duration")
       .eq("release_id", releaseId)
       .order("index", { ascending: true });
     return response;

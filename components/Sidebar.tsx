@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useMemo } from "react";
-import { LayoutDashboard, Shield, LogOut, Music } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { House, Shield, LogOut, CircleHelp } from "lucide-react";
 import { useLogout } from "@/lib/hooks/useWebAuth";
 import { motion } from "framer-motion";
-import { isAdminUi } from "@/lib/admin";
+import { isAdminUi, isAdminUiByWebSession } from "@/lib/admin";
 import { initTelegramWebApp } from "@/lib/telegram";
 
 /**
@@ -15,16 +15,21 @@ import { initTelegramWebApp } from "@/lib/telegram";
 export function Sidebar() {
   const pathname = usePathname();
   const { logout } = useLogout();
+  const [showAdminTab, setShowAdminTab] = useState(false);
 
-  const showAdminTab = useMemo(() => {
+  useEffect(() => {
     initTelegramWebApp();
-    return isAdminUi();
+    setShowAdminTab(isAdminUi());
+    void (async () => {
+      const webAdmin = await isAdminUiByWebSession();
+      if (webAdmin) setShowAdminTab(true);
+    })();
   }, []);
 
   const navItems = useMemo(
     () => [
-      { path: "/", icon: LayoutDashboard, label: "Релизы" },
-      { path: "/library", icon: Music, label: "Библиотека" },
+      { path: "/library", icon: House, label: "Главная" },
+      { path: "/requirements", icon: CircleHelp, label: "FAQ" },
       ...(showAdminTab ? [{ path: "/admin", icon: Shield, label: "Админка" }] : [])
     ],
     [showAdminTab]
@@ -40,7 +45,7 @@ export function Sidebar() {
       {/* Header */}
       <div className="p-6 border-b border-white/5">
         <h1 className="text-2xl font-display font-bold gradient-text">
-          omf
+          OMF
         </h1>
         <p className="text-sm text-white/40 mt-1">Music Distribution</p>
       </div>
@@ -52,7 +57,7 @@ export function Sidebar() {
           const Icon = item.icon;
 
           return (
-            <Link key={item.path} href={item.path}>
+            <Link key={`${item.path}-${item.label}`} href={item.path}>
               <motion.div
                 className={`
                   relative flex items-center gap-3 px-4 py-3 rounded-xl

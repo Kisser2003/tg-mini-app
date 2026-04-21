@@ -1,14 +1,13 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Clock, Disc3, Plus, RefreshCw, Wallet, X } from "lucide-react";
+import { Plus, RefreshCw, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { HeroWave } from "@/components/HeroWave";
 import { PullRefreshBrand } from "@/components/PullRefreshBrand";
 import { ReleaseCard, type ReleaseStatus } from "@/components/ReleaseCard";
 import { EmptyStateNeonWaveform } from "@/components/EmptyStateNeonWaveform";
-import { StatsTile } from "@/components/StatsTile";
 import { LibraryReleaseSkeletonGrid, LibraryStatsSkeletonRow } from "@/components/ui/LibrarySkeleton";
 import { resumeDraftFromRelease } from "@/features/release/createRelease/actions";
 import { useCreateReleaseDraftStore } from "@/features/release/createRelease/store";
@@ -20,8 +19,8 @@ import { toast } from "sonner";
 import { AuthGuard } from "@/components/AuthGuard";
 import { useIsTelegramMiniApp } from "@/lib/hooks/useIsTelegramMiniApp";
 import { pickProfileGreetingName, useAuthProfile } from "@/lib/hooks/useAuthProfile";
-import { LibraryWebAside } from "@/components/library/LibraryWebAside";
 import { cn } from "@/lib/utils";
+import { getTelegramInitDataForApiHeader, getTelegramUserIdForSupabaseRequests } from "@/lib/telegram";
 
 type LibraryStatusFilter = "all" | "processing" | "ready" | "failed";
 
@@ -48,6 +47,15 @@ function mapToReleaseCardStatus(canonical: ReturnType<typeof normalizeReleaseSta
   }
 }
 
+function formatReleaseTypeLabel(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const normalized = value.toLowerCase();
+  if (normalized === "single") return "Type: Single";
+  if (normalized === "ep") return "Type: EP";
+  if (normalized === "album") return "Type: Album";
+  return `Type: ${value}`;
+}
+
 function LibraryPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -59,7 +67,6 @@ function LibraryPageInner() {
     telegramUser: user,
     greetingName,
     releases,
-    releaseStats,
     data,
     error,
     isLoading,
@@ -72,11 +79,15 @@ function LibraryPageInner() {
     authMode === "web" ? userId : null
   );
 
-  const showWebAside = !isTelegram;
+  const isWeb = !isTelegram;
 
   const [expandedErrorId, setExpandedErrorId] = useState<string | null>(null);
   const [resumingId, setResumingId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<LibraryStatusFilter>("all");
+  const didRetryInitialEmptyRef = useRef(false);
+  const didRetryStuckInitialLoadRef = useRef(false);
+  const didHardReloadRef = useRef(false);
+  const [telegramInitialEmptyRetries, setTelegramInitialEmptyRetries] = useState(0);
   const [adminNotesModal, setAdminNotesModal] = useState<{ title: string; body: string } | null>(
     null
   );
@@ -89,9 +100,112 @@ function LibraryPageInner() {
 
   /** После отправки релиза / входа на экран — перезапрос списка (SWR + RLS user id из стора). */
   useEffect(() => {
-    if (userId == null) return;
+    if (!authReady || userId == null) return;
     void mutate(undefined, { revalidate: true });
-  }, [userId, mutate]);
+  }, [authReady, userId, mutate]);
+
+  /**
+   * На "холодном" заходе без кэша сессия/headers могут синхронизироваться
+   * чуть позже первого запроса. Делаем один безопасный автоповтор.
+   */
+  useEffect(() => {
+    if (!authReady || userId == null) return;
+    if (isLoading || isValidating) return;
+    if (error != null) return;
+    if (releases.length > 0) {
+      didRetryInitialEmptyRef.current = false;
+      return;
+    }
+    if (didRetryInitialEmptyRef.current) return;
+    didRetryInitialEmptyRef.current = true;
+    void mutate(undefined, { revalidate: true });
+  }, [authReady, userId, isLoading, isValidating, error, releases.length, mutate]);
+
+  /**
+   * Если первичная загрузка "залипла", делаем один автоматический повтор.
+   * Это покрывает кейс, когда первый запрос стартует слишком рано и не завершает SWR-цикл.
+   */
+  useEffect(() => {
+    if (!authReady || userId == null) return;
+    const waitingForFirstData = (data === undefined && error == null) || (isLoading || isValidating);
+    if (!waitingForFirstData) {
+      didRetryStuckInitialLoadRef.current = false;
+      return;
+    }
+    if (didRetryStuckInitialLoadRef.current) return;
+    didRetryStuckInitialLoadRef.current = true;
+    const t = window.setTimeout(() => {
+      void mutate(undefined, { revalidate: true });
+    }, 5000);
+    return () => {
+      window.clearTimeout(t);
+    };
+  }, [authReady, userId, data, error, isLoading, isValidating, mutate]);
+
+  /**
+   * На iOS Telegram иногда первый ответ приходит пустым, а следующий (как при ручном refresh) уже с релизами.
+   * Перед показом empty-state делаем до 3 быстрых авто-повторов только в Telegram.
+   */
+  useEffect(() => {
+    if (!isTelegram) return;
+    if (!authReady || userId == null || authMode !== "telegram") return;
+    if (isLoading || isValidating) return;
+    if (error != null) return;
+    if (releases.length > 0) {
+      if (telegramInitialEmptyRetries !== 0) setTelegramInitialEmptyRetries(0);
+      return;
+    }
+    if (telegramInitialEmptyRetries >= 10) return;
+
+    const t = window.setTimeout(() => {
+      setTelegramInitialEmptyRetries((n) => n + 1);
+      void mutate(undefined, { revalidate: true });
+    }, 1200);
+
+    return () => window.clearTimeout(t);
+  }, [
+    isTelegram,
+    authReady,
+    userId,
+    authMode,
+    isLoading,
+    isValidating,
+    error,
+    releases.length,
+    mutate,
+    telegramInitialEmptyRetries
+  ]);
+
+  /**
+   * Telegram WebView иногда "подвисает" на первом SWR-цикле, но обычный refresh сразу лечит экран.
+   * Делаем ровно один auto-refresh на холодном старте, чтобы не заставлять пользователя обновлять вручную.
+   */
+  useEffect(() => {
+    if (!isTelegram) return;
+    if (!authReady || userId == null || authMode !== "telegram") return;
+    if (didHardReloadRef.current) return;
+    const waitingForFirstData = (data === undefined && error == null) || isLoading || isValidating;
+    if (!waitingForFirstData) return;
+
+    let timer: number | null = window.setTimeout(() => {
+      if (didHardReloadRef.current) return;
+      try {
+        const key = "__library_first_load_hard_reload_done";
+        if (sessionStorage.getItem(key) === "1") return;
+        sessionStorage.setItem(key, "1");
+      } catch {
+        // ignore
+      }
+      didHardReloadRef.current = true;
+      window.location.reload();
+    }, 9000);
+
+    return () => {
+      if (timer != null) {
+        window.clearTimeout(timer);
+      }
+    };
+  }, [isTelegram, authReady, userId, authMode, data, error, isLoading, isValidating]);
 
   const filteredReleases = useMemo(() => {
     if (statusFilter === "all") return releases;
@@ -124,19 +238,35 @@ function LibraryPageInner() {
   );
 
   const hasReleases = releases.length > 0;
+  const telegramIdentityReady =
+    !isTelegram ||
+    authMode !== "telegram" ||
+    (userId != null && userId !== "__tg_shell__") ||
+    getTelegramUserIdForSupabaseRequests() != null ||
+    getTelegramInitDataForApiHeader().length > 0;
   /** Нет контекста пользователя (сессия / Telegram) или ещё не инициализировали */
-  const showAuthWait = !authReady || userId === null;
+  const showAuthWait = !authReady || userId === null || authMode === null || !telegramIdentityReady;
+  const telegramInitialSyncHold =
+    isTelegram &&
+    authReady &&
+    userId != null &&
+    authMode === "telegram" &&
+    error == null &&
+    releases.length === 0 &&
+    telegramInitialEmptyRetries < 10;
   const showListSkeleton =
-    authReady && userId != null && isLoading && data === undefined;
+    !hasReleases &&
+    (((!showAuthWait && data === undefined && error == null && (isLoading || isValidating)) ||
+      telegramInitialSyncHold));
   const showEmptyState =
     authReady &&
     userId != null &&
-    !isLoading &&
     !showListSkeleton &&
-    (error != null || releases.length === 0);
-
-  const displayStats =
-    error != null ? { ready: 0, processing: 0, failed: 0 } : releaseStats;
+    !isLoading &&
+    error == null &&
+    releases.length === 0 &&
+    telegramIdentityReady &&
+    (!isTelegram || telegramInitialEmptyRetries >= 10);
 
   const artistFirstName = pickProfileGreetingName(authProfile ?? undefined, greetingName);
 
@@ -154,6 +284,11 @@ function LibraryPageInner() {
       release.track_name?.trim() && release.track_name.trim() !== displayTitle
         ? release.track_name.trim()
         : new Date(release.created_at).toLocaleDateString("ru-RU");
+    const releaseMeta = [
+      release.upc?.trim() ? `UPC: ${release.upc.trim()}` : null,
+      release.isrc?.trim() ? `ISRC: ${release.isrc.trim()}` : null,
+      formatReleaseTypeLabel(release.release_type ?? null)
+    ].filter((item): item is string => Boolean(item));
 
     const hasErrorText = Boolean(release.error_message?.trim());
     const effectiveErrorText = hasErrorText
@@ -184,6 +319,7 @@ function LibraryPageInner() {
               title={displayTitle}
               artist={artistLine}
               status="error"
+              meta={releaseMeta}
               coverUrl={release.artwork_url ?? undefined}
               index={listIndex}
               onClick={onCardClick}
@@ -246,6 +382,7 @@ function LibraryPageInner() {
                 : `${artistLine} · ${statusMeta.label}`
           }
           status={cardStatus}
+          meta={releaseMeta}
           coverUrl={release.artwork_url ?? undefined}
           index={listIndex}
           onClick={onCardClick}
@@ -261,16 +398,11 @@ function LibraryPageInner() {
       <div
         className={cn(
           "mx-auto w-full px-5 pb-44 pt-14",
-          showWebAside ? "max-w-[1200px]" : "max-w-lg"
+          isWeb ? "max-w-[1320px]" : "max-w-lg"
         )}
       >
-        <div
-          className={cn(
-            showWebAside &&
-              "xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(280px,320px)] xl:items-start xl:gap-10"
-          )}
-        >
-          <div className={cn("min-w-0", showWebAside ? "xl:max-w-none" : "mx-auto w-full max-w-lg")}>
+        <div>
+          <div className={cn("min-w-0", isWeb ? "xl:max-w-none" : "mx-auto w-full max-w-lg")}>
         {/* Hero — действия в правом верхнем углу карточки */}
         <motion.div
           className="glass-glow glass-glow-charged relative mb-12 min-h-[140px] overflow-hidden p-8 pr-24 sm:pr-28"
@@ -314,54 +446,21 @@ function LibraryPageInner() {
             <h1 className="font-display text-4xl font-extrabold leading-none tracking-tighter gradient-text">
               Привет, {artistFirstName}
             </h1>
-            <p className="mt-3 max-w-[320px] text-sm font-light leading-relaxed text-white/30">
-              Твой хаб дистрибуции: релизы и роялти в одном месте.
-            </p>
           </div>
         </motion.div>
 
-        {showAuthWait || showListSkeleton ? (
-          <div className="glass-glow glass-glow-charged mb-12 px-4 py-5">
-            <LibraryStatsSkeletonRow />
-          </div>
-        ) : (
-          <div className="mb-12 flex gap-3">
-            <StatsTile
-              icon={Disc3}
-              label="Всего"
-              value={releases.length}
-              delay={0.15}
-              accentClass="gradient-text-blue"
-            />
-            <StatsTile
-              icon={Clock}
-              label="В проверке"
-              value={displayStats.processing}
-              delay={0.25}
-              accentClass="gradient-text-teal"
-            />
-            <StatsTile
-              icon={Wallet}
-              label="Отгружено"
-              value={displayStats.ready}
-              delay={0.35}
-              accentClass="gradient-text-gold"
-            />
-          </div>
-        )}
-
-        {showAuthWait || showListSkeleton ? (
+        {!hasReleases && (showAuthWait || showListSkeleton) ? (
           <div className="glass-glow glass-glow-charged space-y-4 px-4 py-5">
             <p className="text-[13px] text-white/45">
               {!authReady
                 ? "Загрузка…"
-                : userId === null
+                : userId === null || authMode === null
                   ? "Подключаем Telegram…"
                   : "Загружаем твои релизы…"}
             </p>
             <LibraryReleaseSkeletonGrid count={6} />
           </div>
-        ) : showEmptyState && error != null ? (
+        ) : !showListSkeleton && error != null ? (
           <motion.div
             className="glass-glow glass-glow-charged flex flex-col items-center p-10 text-center"
             initial={{ opacity: 0, scale: 0.96 }}
@@ -381,7 +480,7 @@ function LibraryPageInner() {
               Повторить
             </motion.button>
           </motion.div>
-        ) : isEmpty ? (
+        ) : showEmptyState && isEmpty ? (
           <motion.div
             className="glass-glow glass-glow-charged flex flex-col items-center p-12 text-center"
             initial={{ opacity: 0, scale: 0.9 }}
@@ -441,26 +540,19 @@ function LibraryPageInner() {
               </div>
             )}
 
-            {filteredReleases.length === 0 && (
+            {hasReleases && filteredReleases.length === 0 && (
               <p className="mb-6 text-center text-[13px] text-white/45">
                 Нет релизов с выбранным статусом.
               </p>
             )}
 
-            <div className="flex flex-col gap-3">
+            <div className={cn("flex flex-col gap-3", isWeb && "xl:grid xl:grid-cols-2 xl:gap-4")}>
               {filteredReleases.map((release, i) => renderReleaseBlock(release, i))}
             </div>
           </>
         )}
           </div>
 
-          {showWebAside ? (
-            <aside className="mt-10 min-w-0 xl:mt-0">
-              <div className="xl:sticky xl:top-24">
-                <LibraryWebAside />
-              </div>
-            </aside>
-          ) : null}
         </div>
       </div>
 

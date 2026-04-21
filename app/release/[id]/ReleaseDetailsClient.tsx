@@ -15,7 +15,7 @@ import { getTelegramUserId, initTelegramWebApp } from "@/lib/telegram";
 
 type ReleaseDetailsRow = {
   id: string;
-  user_id: number;
+  user_id: number | string;
   artist_name: string;
   track_name: string;
   artwork_url: string | null;
@@ -34,6 +34,8 @@ export default function ReleaseDetailsClient() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const [userId, setUserId] = useState<number | null>(null);
+  const [webUserId, setWebUserId] = useState<string | null>(null);
+  const [identityResolved, setIdentityResolved] = useState(false);
   const [release, setRelease] = useState<ReleaseDetailsRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -42,12 +44,23 @@ export default function ReleaseDetailsClient() {
     debugInit("release/details", "init start");
     initTelegramWebApp();
     setUserId(getTelegramUserId());
+    void supabase.auth
+      .getSession()
+      .then(({ data: { session } }) => {
+        setWebUserId(session?.user?.id ?? null);
+      })
+      .finally(() => {
+        setIdentityResolved(true);
+      });
     debugInit("release/details", "init done");
   }, []);
 
   useEffect(() => {
     if (!params.id) return;
-    if (userId == null && process.env.NODE_ENV === "production") {
+    if (!identityResolved) return;
+    const isAdminView = isAdminUi();
+    const hasIdentity = isAdminView || userId != null || webUserId != null;
+    if (!hasIdentity && process.env.NODE_ENV === "production") {
       setLoading(false);
       return;
     }
@@ -58,16 +71,19 @@ export default function ReleaseDetailsClient() {
       setLoading(true);
       setError(null);
       const startedAt = Date.now();
-      debugInit("release/details", "load start", { releaseId: params.id, userId });
+      debugInit("release/details", "load start", { releaseId: params.id, userId, webUserId });
       try {
-        const isAdminView = isAdminUi();
         const base = supabase
           .from("releases")
           .select(
             "id, user_id, artist_name, track_name, artwork_url, audio_url, release_type, genre, status, error_message, created_at"
           )
           .eq("id", params.id);
-        const filtered = isAdminView ? base : base.eq("user_id", String(userId!));
+        const filtered = isAdminView
+          ? base
+          : webUserId
+            ? base.eq("user_uuid", webUserId)
+            : base.or(`user_id.eq.${String(userId!)},telegram_id.eq.${String(userId!)}`);
         const queryPromise = Promise.resolve(filtered.maybeSingle());
         queryPromise.catch(() => {});
         const timeoutPromise = new Promise<Awaited<typeof queryPromise>>((_, reject) => {
@@ -119,7 +135,7 @@ export default function ReleaseDetailsClient() {
         window.clearTimeout(timeoutId);
       }
     };
-  }, [params.id, userId]);
+  }, [params.id, userId, webUserId, identityResolved]);
 
   const moderationChecklist = useMemo(
     () => [
@@ -130,11 +146,15 @@ export default function ReleaseDetailsClient() {
     [release]
   );
 
-  if (userId == null && process.env.NODE_ENV === "production") {
+  if (!identityResolved) {
+    return <GlassCard className="p-5 text-sm text-white/70">Проверяем доступ...</GlassCard>;
+  }
+
+  if (userId == null && webUserId == null && process.env.NODE_ENV === "production") {
     return (
       <GlassCard className="p-5">
         <h1 className="text-xl font-semibold tracking-tight">Карточка релиза</h1>
-        <p className="mt-2 text-sm text-white/65">Открой приложение из Telegram для доступа к релизу.</p>
+        <p className="mt-2 text-sm text-white/65">Войдите в веб-кабинет или откройте приложение из Telegram.</p>
       </GlassCard>
     );
   }

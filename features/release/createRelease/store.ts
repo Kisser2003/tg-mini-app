@@ -172,11 +172,16 @@ function areMetadataEqual(current: CreateMetadata, next: CreateMetadata) {
   );
 }
 
+function normLyrics(v: unknown): string {
+  return typeof v === "string" ? v.trim() : "";
+}
+
 function areTracksEqual(current: CreateTrack[], next: CreateTrack[]) {
   if (current.length !== next.length) return false;
   for (let i = 0; i < current.length; i += 1) {
     if (current[i]?.title !== next[i]?.title) return false;
     if (Boolean(current[i]?.explicit) !== Boolean(next[i]?.explicit)) return false;
+    if (normLyrics(current[i]?.lyrics) !== normLyrics(next[i]?.lyrics)) return false;
   }
   return true;
 }
@@ -205,7 +210,7 @@ function syncStateForSingleRelease(
   CreateReleaseDraftState,
   "tracks" | "trackFiles" | "trackAudioUrlsFromDb"
 > {
-  const prev0 = state.tracks[0] ?? { title: "", explicit: false };
+  const prev0 = state.tracks[0] ?? { title: "", explicit: false, lyrics: "" };
   const nextTracks: CreateTrack[] = [
     { ...prev0, title: nextMetadata.releaseTitle }
   ];
@@ -236,7 +241,7 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
         metadata: EMPTY_METADATA,
         artworkUrl: null,
         artworkFile: null,
-        tracks: [{ title: "", explicit: false }],
+        tracks: [{ title: "", explicit: false, lyrics: "" }],
         trackFiles: [null],
         trackAudioUrlsFromDb: [],
         tracksUploadInProgress: false,
@@ -384,7 +389,7 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
             metadata: EMPTY_METADATA,
             artworkUrl: null,
             artworkFile: null,
-            tracks: [{ title: "", explicit: false }],
+            tracks: [{ title: "", explicit: false, lyrics: "" }],
             trackFiles: [null],
             trackAudioUrlsFromDb: [],
             tracksUploadInProgress: false,
@@ -404,7 +409,7 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
             metadata: EMPTY_METADATA,
             artworkUrl: null,
             artworkFile: null,
-            tracks: [{ title: "", explicit: false }],
+            tracks: [{ title: "", explicit: false, lyrics: "" }],
             trackFiles: [null],
             trackAudioUrlsFromDb: [],
             tracksUploadInProgress: false,
@@ -423,7 +428,7 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
             metadata: EMPTY_METADATA,
             artworkUrl: null,
             artworkFile: null,
-            tracks: [{ title: "", explicit: false }],
+            tracks: [{ title: "", explicit: false, lyrics: "" }],
             trackFiles: [null],
             trackAudioUrlsFromDb: [],
             tracksUploadInProgress: false,
@@ -450,7 +455,7 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
             let len = tracks.length;
 
             if (isSingle) {
-              const first = tracks[0] ?? { title: "", explicit: false };
+              const first = tracks[0] ?? { title: "", explicit: false, lyrics: "" };
               tracks = [{ ...first, title: payload.metadata.releaseTitle }];
               len = 1;
             }
@@ -534,6 +539,16 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
             ...mergedMeta,
             primaryArtist: legacyName
           };
+        }
+        if (rawMeta && typeof rawMeta === "object") {
+          const rt = String(mergedMeta.releaseTitle ?? "").trim();
+          if (!rt) {
+            const legacyTitle =
+              (typeof rawMeta.title === "string" ? rawMeta.title : "") ||
+              (typeof rawMeta.track_name === "string" ? rawMeta.track_name : "");
+            const t = String(legacyTitle).trim();
+            if (t) mergedMeta = { ...mergedMeta, releaseTitle: t };
+          }
         }
         mergedMeta = { ...mergedMeta, label: FIXED_RELEASE_LABEL };
         const mergedLinks =

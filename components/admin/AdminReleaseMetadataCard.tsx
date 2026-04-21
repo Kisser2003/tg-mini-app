@@ -7,6 +7,7 @@ import {
   buildReleaseMetadataSections,
   type AdminReleaseRow
 } from "@/lib/admin-release-metadata";
+import { cn } from "@/lib/utils";
 import type { ReleaseRecord, ReleaseTrackRow } from "@/repositories/releases/types";
 
 function CopyValueButton({ value }: { value: string }) {
@@ -71,7 +72,12 @@ export function AdminReleaseMetadataCard({
                   {entry.label}
                 </dt>
                 <dd className="mt-1.5 flex gap-2">
-                  <pre className="max-h-64 min-w-0 flex-1 overflow-auto whitespace-pre-wrap break-words font-sans text-[13px] leading-relaxed text-white/90">
+                  <pre
+                    className={cn(
+                      "min-w-0 flex-1 overflow-auto whitespace-pre-wrap break-words font-sans text-[13px] leading-relaxed text-white/90",
+                      entry.label === "Текст песни" ? "max-h-[min(28rem,70vh)]" : "max-h-64"
+                    )}
+                  >
                     {entry.value}
                   </pre>
                   <CopyValueButton value={entry.value} />

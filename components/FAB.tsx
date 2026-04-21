@@ -18,6 +18,10 @@ export function FAB() {
   if (pathname?.startsWith("/create")) {
     return null;
   }
+  /* Admin routes should never show create FAB */
+  if (pathname?.startsWith("/admin")) {
+    return null;
+  }
   /* Library uses top icon-row + optional global FAB elsewhere */
   if (pathname === "/" || pathname === "/library") {
     return null;

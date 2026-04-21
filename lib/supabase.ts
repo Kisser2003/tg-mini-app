@@ -40,22 +40,60 @@ const supabaseClientOptions = {
   }
 };
 
+function hasSupabasePublicConfig(): boolean {
+  return Boolean(supabaseUrl && supabaseAnonKey);
+}
+
+function missingSupabasePublicConfigError(): Error {
+  return new Error(
+    "Supabase public config is missing. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in Vercel environment variables."
+  );
+}
+
+let browserSupabaseSingleton: ReturnType<typeof createBrowserClient<Database>> | null = null;
+
+function getOrCreateBrowserSupabaseClient() {
+  if (!hasSupabasePublicConfig()) {
+    throw missingSupabasePublicConfigError();
+  }
+  if (browserSupabaseSingleton) return browserSupabaseSingleton;
+  browserSupabaseSingleton = createBrowserClient<Database>(
+    supabaseUrl,
+    supabaseAnonKey,
+    supabaseClientOptions
+  );
+  return browserSupabaseSingleton;
+}
+
 /**
  * Один клиент для REST/Storage в браузере: сессия в cookies (как у логина) + заголовок
  * `x-telegram-user-id` в Mini App. Раньше был только `createClient` (localStorage) —
  * JWT после email-входа не совпадал с `createSupabaseBrowser`, RLS ломался на вебе.
  */
-export const supabase =
-  typeof window !== "undefined"
-    ? createBrowserClient<Database>(supabaseUrl, supabaseAnonKey, supabaseClientOptions)
-    : createClient<Database>(supabaseUrl, supabaseAnonKey, supabaseClientOptions);
+/**
+ * Backward-compatible exported client.
+ * IMPORTANT: lazy proxy prevents immediate crash on module import when env vars are missing.
+ */
+export const supabase = new Proxy({} as ReturnType<typeof createBrowserClient<Database>>, {
+  get(_target, prop) {
+    const client =
+      typeof window !== "undefined"
+        ? getOrCreateBrowserSupabaseClient()
+        : createClient<Database>(supabaseUrl, supabaseAnonKey, supabaseClientOptions);
+    const value = Reflect.get(client as object, prop);
+    if (typeof value === "function") {
+      return value.bind(client);
+    }
+    return value;
+  }
+});
 
 /**
  * Supabase client для браузера (веб-логин).
  * Совпадает по настройкам с `supabase` в клиенте (cookies + telegram fetch).
  */
 export function createSupabaseBrowser() {
-  return createBrowserClient<Database>(supabaseUrl, supabaseAnonKey, supabaseClientOptions);
+  return getOrCreateBrowserSupabaseClient();
 }
 
 /**
@@ -63,6 +101,9 @@ export function createSupabaseBrowser() {
  * Используется для серверной проверки авторизации
  */
 export function createSupabaseMiddleware(request: NextRequest, response: NextResponse) {
+  if (!hasSupabasePublicConfig()) {
+    throw missingSupabasePublicConfigError();
+  }
   return createServerClient<Database>(supabaseUrl, supabaseAnonKey, {
     cookies: {
       getAll() {

@@ -2,6 +2,22 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { createSupabaseMiddleware } from "@/lib/supabase";
 
+/** Документные префиксы Mini App (совпадают с клиентским `TelegramBootstrap` / guards). */
+function isTelegramMiniAppShellPath(p: string): boolean {
+  if (p === "/" || p === "") return true;
+  const roots = [
+    "library",
+    "release",
+    "create",
+    "settings",
+    "dashboard",
+    "onboarding",
+    "admin",
+    "requirements"
+  ];
+  return roots.some((r) => p === `/${r}` || p.startsWith(`/${r}/`));
+}
+
 /**
  * Middleware для защиты приватных роутов
  * - Telegram Mini App: пропускается (определяем по заголовкам или отсутствию web auth)
@@ -9,14 +25,14 @@ import { createSupabaseMiddleware } from "@/lib/supabase";
  * - Незалогиненные web пользователи → редирект на /login
  */
 export async function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+  const pathname = request.nextUrl.pathname;
 
   /**
-   * Не проверять auth для статики и внутренних маршрутов Next.
-   * Matcher с regex может на части деплоев/версий Next давать ложное совпадение — явный префикс надёжнее.
+   * Весь `/_next/*` (static, image, data, webpack-hmr в dev и т.д.) — без Supabase/cookies.
+   * Префикс `/_next` без завершающего `/` тоже отсекаем (редко, но иначе matcher мог бы пропустить).
    */
   if (
-    pathname.startsWith("/_next/") ||
+    pathname.startsWith("/_next") ||
     pathname.startsWith("/_vercel") ||
     pathname === "/favicon.ico" ||
     pathname === "/robots.txt" ||
@@ -55,24 +71,16 @@ export async function middleware(request: NextRequest) {
   }
 
   /**
-   * Раньше любой запрос с «telegram» в User-Agent обходил проверку web-сессии — это позволяло
-   * подделать UA и зайти на /library без логина. Mini App работает по известным префиксам;
-   * остальные пути требуют cookie-сессии Supabase как у обычного web.
+   * Shell маршруты приложения отдаём без проверки Supabase cookie.
+   * Иначе Telegram Desktop / часть WebView даёт UA без слова «telegram», а `#tgWebApp…` на сервер
+   * не передаётся → 307 на /login до гидрации и initData.
+   * Доступ к данным: AuthGuard (веб), API — initData / сессия.
    */
-  function isTelegramMiniAppShellPath(p: string): boolean {
-    if (p === "/" || p === "") return true;
-    const roots = ["library", "release", "create", "settings", "dashboard", "onboarding", "admin"];
-    return roots.some((r) => p === `/${r}` || p.startsWith(`/${r}/`));
-  }
-
-  const userAgent = request.headers.get("user-agent") || "";
-  const isTelegramUserAgent = userAgent.toLowerCase().includes("telegram");
-
-  if (isTelegramUserAgent && (pathname.startsWith("/api/") || isTelegramMiniAppShellPath(pathname))) {
+  if (isTelegramMiniAppShellPath(pathname)) {
     return NextResponse.next();
   }
 
-  // Для обычных веб-пользователей проверяем auth через cookies
+  // Для остальных веб-маршрутов проверяем auth через cookies
   const response = NextResponse.next();
   const supabase = createSupabaseMiddleware(request, response);
 
@@ -101,10 +109,9 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     /**
-     * Не запускать middleware для API, статики Next (`/_next/*` шире, чем только static/image),
-     * системных путей и типичных файлов — иначе на части доменов/edge возможны лишние проходы.
-     * Рекомендуемый минимум в доках: api, _next/static, _next/image, favicon — здесь также весь `/_next/`.
+     * Синхронно с телом middleware: не матчить API, весь `/_next…`, Vercel internals, типичные файлы.
+     * `_next(?:/|$)` — и `/_next/static/...`, и голый `/_next` (без второго слэша).
      */
-    "/((?!api(?:/|$)|_next/|_vercel|favicon\\.ico|robots\\.txt|manifest\\.webmanifest|sw-audio\\.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)"
+    "/((?!api(?:/|$)|_next(?:/|$)|_vercel|favicon\\.ico|robots\\.txt|manifest\\.webmanifest|sw-audio\\.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)"
   ]
 };

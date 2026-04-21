@@ -65,9 +65,14 @@ export default function CreateTracksPage() {
   // without subscribing to future changes.
   const [initialTracks] = useState<CreateTracks["tracks"]>(() => {
     const { tracks, metadata } = useCreateReleaseDraftStore.getState();
-    const base = tracks.length > 0 ? tracks : [{ title: "", explicit: false }];
+    const base = tracks.length > 0 ? tracks : [{ title: "", explicit: false, lyrics: "" }];
     if (metadata.releaseType === "single") {
-      return [{ ...(base[0] ?? { explicit: false }), title: metadata.releaseTitle }];
+      return [
+        {
+          ...(base[0] ?? { title: "", explicit: false, lyrics: "" }),
+          title: metadata.releaseTitle
+        }
+      ];
     }
     return base;
   });
@@ -106,17 +111,27 @@ export default function CreateTracksPage() {
     } = useCreateReleaseDraftStore.getState();
 
     const base =
-      storedTracks.length > 0 ? storedTracks : [{ title: "", explicit: false }];
+      storedTracks.length > 0 ? storedTracks : [{ title: "", explicit: false, lyrics: "" }];
     const freshTracks =
       storedType === "single"
-        ? [{ ...(base[0] ?? { explicit: false }), title: storedReleaseTitle }]
+        ? [
+            {
+              ...(base[0] ?? { title: "", explicit: false, lyrics: "" }),
+              title: storedReleaseTitle
+            }
+          ]
         : base;
 
     reset({ tracks: freshTracks }, { keepDirty: false });
 
     // If the cap trimmed the track list, sync the store immediately.
     if (storedType === "single" && storedTracks.length > 1) {
-      setTracks([{ ...(base[0] ?? { explicit: false }), title: storedReleaseTitle }]);
+      setTracks([
+        {
+          ...(base[0] ?? { title: "", explicit: false, lyrics: "" }),
+          title: storedReleaseTitle
+        }
+      ]);
       syncTrackFilesLength(1);
     }
   }, [reset, setTracks, syncTrackFilesLength]);
@@ -330,11 +345,22 @@ export default function CreateTracksPage() {
                         setTrackUploadProgress((prev) => ({ ...prev, [index]: pct }));
                       }
                     });
-                    setTrackUploadProgress((prev) => {
-                      const next = { ...prev };
-                      delete next[index];
-                      return next;
-                    });
+                    if (ok) {
+                      setTrackUploadProgress((prev) => ({ ...prev, [index]: 100 }));
+                      window.setTimeout(() => {
+                        setTrackUploadProgress((prev) => {
+                          const next = { ...prev };
+                          delete next[index];
+                          return next;
+                        });
+                      }, 420);
+                    } else {
+                      setTrackUploadProgress((prev) => {
+                        const next = { ...prev };
+                        delete next[index];
+                        return next;
+                      });
+                    }
                     if (!ok) {
                       const msg = useCreateReleaseDraftStore.getState().submitError;
                       if (msg) toast.error(msg);
@@ -357,6 +383,23 @@ export default function CreateTracksPage() {
                     : undefined
                 }
               />
+
+              <div className="space-y-1.5">
+                <label
+                  htmlFor={`track-${field.id}-lyrics`}
+                  className={`mb-2.5 block ${WIZARD_FIELD_LABEL_CLASS}`}
+                >
+                  Текст песни (лирика)
+                </label>
+                <textarea
+                  id={`track-${field.id}-lyrics`}
+                  {...register(`tracks.${index}.lyrics` as const)}
+                  rows={5}
+                  placeholder="Необязательно. Можно заполнить во время загрузки WAV — текст сохранится вместе с треком."
+                  className={`${WIZARD_INPUT_CLASS} min-h-[120px] resize-y py-3`}
+                />
+                <FormFieldError message={errors.tracks?.[index]?.lyrics?.message} />
+              </div>
             </motion.div>
           ))}
 
@@ -365,7 +408,7 @@ export default function CreateTracksPage() {
               type="button"
               onClick={() => {
                 triggerHaptic("light");
-                append({ title: "", explicit: false });
+                append({ title: "", explicit: false, lyrics: "" });
                 syncTrackFilesLength(fields.length + 1);
               }}
               className="inline-flex h-[44px] w-full items-center justify-center rounded-xl border border-white/[0.06] bg-white/[0.03] text-[13px] font-medium text-white/70 transition-colors hover:bg-white/[0.06] hover:text-white"

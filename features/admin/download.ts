@@ -1,17 +1,18 @@
 "use client";
 
-import { getTelegramApiAuthHeadersForAdminApi } from "@/lib/admin";
+import { getAdminApiAuthHeaders } from "@/lib/admin";
 
 /**
  * Скачивание файла из админ API (Telegram initData / dev-заголовки).
  */
 export async function fetchAdminBlobDownload(path: string): Promise<{ blob: Blob; filename: string }> {
+  const authHeaders = await getAdminApiAuthHeaders();
   const res = await fetch(path, {
     method: "GET",
     credentials: "same-origin",
     headers: {
       Accept: "*/*",
-      ...getTelegramApiAuthHeadersForAdminApi()
+      ...authHeaders
     },
     cache: "no-store"
   });

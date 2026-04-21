@@ -32,15 +32,9 @@ function subscribe(onStoreChange: () => void) {
       onStoreChange();
     }
   }, 50);
-  const max = window.setTimeout(() => {
-    if (cancelled) return;
-    cancelled = true;
-    window.clearInterval(id);
-  }, 8000);
   return () => {
     cancelled = true;
     window.clearInterval(id);
-    window.clearTimeout(max);
   };
 }
 

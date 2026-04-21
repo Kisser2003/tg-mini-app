@@ -8,6 +8,7 @@ import {
 } from "@/lib/hooks/useIsTelegramMiniApp";
 import { useWebAuth } from "@/lib/hooks/useWebAuth";
 import { LoadingScreen } from "@/components/LoadingScreen";
+import { appendCurrentTelegramHash } from "@/lib/telegram";
 
 /**
  * Signup route handler
@@ -21,21 +22,21 @@ export default function SignupPage() {
 
   useEffect(() => {
     if (typeof window !== "undefined" && checkIsTelegramMiniApp()) {
-      router.replace("/library");
+      router.replace(appendCurrentTelegramHash("/library"));
       return;
     }
     if (isTelegram) {
-      router.replace("/library");
+      router.replace(appendCurrentTelegramHash("/library"));
       return;
     }
 
     // Web users
     if (webUser === undefined) {
       // Not authenticated: go to login page with signup hint
-      router.replace("/login?mode=signup");
+      router.replace(appendCurrentTelegramHash("/login?mode=signup"));
     } else if (webUser) {
       // Authenticated: go to library
-      router.replace("/library");
+      router.replace(appendCurrentTelegramHash("/library"));
     }
     // webUser === null means loading, show loader
   }, [isTelegram, webUser, router]);

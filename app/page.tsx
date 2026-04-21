@@ -6,6 +6,7 @@ import {
   useIsTelegramMiniApp,
   checkIsTelegramMiniApp
 } from "@/lib/hooks/useIsTelegramMiniApp";
+import { appendCurrentTelegramHash } from "@/lib/telegram";
 import { useWebAuth } from "@/lib/hooks/useWebAuth";
 import { LoadingScreen } from "@/components/LoadingScreen";
 
@@ -21,21 +22,21 @@ export default function HomePage() {
 
   useEffect(() => {
     if (typeof window !== "undefined" && checkIsTelegramMiniApp()) {
-      router.replace("/library");
+      router.replace(appendCurrentTelegramHash("/library"));
       return;
     }
     if (isTelegram) {
-      router.replace("/library");
+      router.replace(appendCurrentTelegramHash("/library"));
       return;
     }
 
     // Web users
     if (webUser === undefined) {
       // Not authenticated: go to login
-      router.replace("/login");
+      router.replace(appendCurrentTelegramHash("/login"));
     } else if (webUser) {
       // Authenticated: go to library
-      router.replace("/library");
+      router.replace(appendCurrentTelegramHash("/library"));
     }
     // webUser === null means loading, show loader below
   }, [isTelegram, webUser, router]);

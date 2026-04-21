@@ -189,12 +189,7 @@ export async function uploadReleaseTrackAudio(params: {
 
   try {
     await uploadReleaseTrackFileClient(path, params.file, {
-      onProgress: params.options?.onProgress,
-      chunkedMeta: {
-        userId: params.userId,
-        releaseId: params.releaseId,
-        trackIndex: params.trackIndex
-      }
+      onProgress: params.options?.onProgress
     });
   } catch (err) {
     if (params.options?.markReleaseFailedOnError?.releaseId) {

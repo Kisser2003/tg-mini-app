@@ -163,15 +163,33 @@ async function handleFinalizeSubmit(request: NextRequest, actor: ReleaseActor): 
     }
   }
 
-  if (current.status !== "draft" && current.status !== "pending") {
+  if (current.status !== "pending") {
     return NextResponse.json(
       {
         ok: false,
         error: rpcError
           ? formatErrorMessage(rpcError, "Не удалось завершить отправку.")
-          : "Некорректный статус для финализации."
+          : "Финализация доступна только для релиза в статусе pending."
       },
       { status: 400 }
+    );
+  }
+
+  const { count: tracksCount, error: tracksCountErr } = await admin
+    .from("tracks")
+    .select("*", { count: "exact", head: true })
+    .eq("release_id", releaseId);
+  if (tracksCountErr) {
+    console.error("[finalize-submit] tracks count:", tracksCountErr.message);
+    return NextResponse.json(
+      { ok: false, error: "Не удалось проверить треки перед отправкой." },
+      { status: 500 }
+    );
+  }
+  if ((tracksCount ?? 0) < 1) {
+    return NextResponse.json(
+      { ok: false, error: "Нельзя отправить релиз без загруженных треков." },
+      { status: 409 }
     );
   }
 
@@ -180,7 +198,7 @@ async function handleFinalizeSubmit(request: NextRequest, actor: ReleaseActor): 
     .update({ status: "processing", error_message: null })
     .eq("id", releaseId)
     .eq("client_request_id", clientRequestId)
-    .in("status", ["draft", "pending"])
+    .eq("status", "pending")
     .select("*");
 
   if (upErr) {

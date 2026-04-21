@@ -2,8 +2,11 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { requireAdminSupabaseClient } from "@/lib/admin-release-api-guard";
-import type { TelegramAuthContext } from "@/lib/api/with-telegram-auth";
-import { withTelegramAuth } from "@/lib/api/with-telegram-auth";
+import { getTelegramAuthContextFromRequest } from "@/lib/api/with-telegram-auth";
+import {
+  buildAdminLyricsTxtFilename,
+  buildAdminReleaseAggregatedLyricsFilename
+} from "@/lib/admin-track-lyrics";
 import {
   contentDispositionAttachment,
   downloadStorageObjectBytes,
@@ -19,10 +22,12 @@ const paramsSchema = z.object({
 
 async function handleDownload(
   request: NextRequest,
-  ctx: TelegramAuthContext,
   context: { params: { releaseId: string } }
 ): Promise<Response> {
-  const guard = requireAdminSupabaseClient(ctx);
+  const guard = await requireAdminSupabaseClient(
+    request,
+    getTelegramAuthContextFromRequest(request)
+  );
   if (!guard.ok) return guard.response;
 
   const parsedParams = paramsSchema.safeParse(context.params);
@@ -34,9 +39,9 @@ async function handleDownload(
   const url = new URL(request.url);
   const kind = url.searchParams.get("kind");
 
-  if (kind !== "artwork" && kind !== "audio") {
+  if (kind !== "artwork" && kind !== "audio" && kind !== "lyrics") {
     return NextResponse.json(
-      { ok: false, error: "Укажите kind=artwork или kind=audio." },
+      { ok: false, error: "Укажите kind=artwork, kind=audio или kind=lyrics." },
       { status: 400 }
     );
   }
@@ -57,6 +62,75 @@ async function handleDownload(
   }
 
   try {
+    if (kind === "lyrics") {
+      const trackId = url.searchParams.get("trackId")?.trim() ?? "";
+      const trackIndexRaw = url.searchParams.get("trackIndex");
+
+      let text: string | null = null;
+      let filename: string;
+
+      if (trackId.length > 0) {
+        const { data: tr, error: trErr } = await guard.supabase
+          .from("tracks")
+          .select("id, lyrics, title, index, release_id")
+          .eq("id", trackId)
+          .maybeSingle();
+
+        if (trErr) {
+          console.error("[admin/releases/download] lyrics track:", trErr.message);
+          return NextResponse.json({ ok: false, error: "Не удалось загрузить трек." }, { status: 500 });
+        }
+        if (!tr || String(tr.release_id) !== releaseId) {
+          return NextResponse.json({ ok: false, error: "Трек не найден." }, { status: 404 });
+        }
+        const raw = (tr.lyrics as string | null)?.trim() ?? "";
+        text = raw.length > 0 ? raw : null;
+        const idx = typeof tr.index === "number" ? tr.index : 0;
+        filename = buildAdminLyricsTxtFilename({
+          trackIndex: idx,
+          title: String(tr.title ?? "")
+        });
+      } else if (trackIndexRaw !== null && trackIndexRaw !== "") {
+        const idx = Number(trackIndexRaw);
+        if (!Number.isFinite(idx) || idx < 0 || !Number.isInteger(idx)) {
+          return NextResponse.json({ ok: false, error: "Некорректный trackIndex." }, { status: 400 });
+        }
+        const { data: tr, error: trErr } = await guard.supabase
+          .from("tracks")
+          .select("lyrics, title, index")
+          .eq("release_id", releaseId)
+          .eq("index", idx)
+          .maybeSingle();
+
+        if (trErr) {
+          console.error("[admin/releases/download] lyrics by index:", trErr.message);
+          return NextResponse.json({ ok: false, error: "Не удалось загрузить трек." }, { status: 500 });
+        }
+        const raw = (tr?.lyrics as string | null)?.trim() ?? "";
+        text = raw.length > 0 ? raw : null;
+        filename = buildAdminLyricsTxtFilename({
+          trackIndex: idx,
+          title: String(tr?.title ?? "")
+        });
+      } else {
+        const raw = typeof row.lyrics === "string" ? row.lyrics.trim() : "";
+        text = raw.length > 0 ? raw : null;
+        filename = buildAdminReleaseAggregatedLyricsFilename(releaseId);
+      }
+
+      if (!text) {
+        return NextResponse.json({ ok: false, error: "Текст песни не заполнен." }, { status: 404 });
+      }
+
+      return new NextResponse(new TextEncoder().encode(text), {
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+          "Content-Disposition": contentDispositionAttachment(filename),
+          "Cache-Control": "no-store"
+        }
+      });
+    }
+
     if (kind === "artwork") {
       const artworkUrl = row.artwork_url as string | null;
       if (!artworkUrl?.trim()) {
@@ -144,6 +218,5 @@ export async function GET(
   request: NextRequest,
   routeContext: { params: { releaseId: string } }
 ): Promise<Response> {
-  const run = withTelegramAuth((req, ctx) => handleDownload(req, ctx, routeContext));
-  return run(request);
+  return handleDownload(request, routeContext);
 }

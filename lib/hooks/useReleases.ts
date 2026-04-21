@@ -3,12 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import { initUserContextInStore } from "@/features/release/createRelease/actions";
+import { getMyReleases } from "@/repositories/releases.repo";
+import { type ReleaseRecord } from "@/repositories/releases.repo";
 import {
-  getMyReleases,
-  getMyReleasesForWebUser,
-  type ReleaseRecord
-} from "@/repositories/releases.repo";
-import {
+  getTelegramApiAuthHeaders,
+  isTelegramClientShell,
   getTelegramWebApp,
   getTelegramUserIdForSupabaseRequests,
   initTelegramWebApp,
@@ -33,6 +32,8 @@ export type ReleaseListRow = Pick<
   | "admin_notes"
   | "draft_upload_started"
   | "isrc"
+  | "upc"
+  | "release_type"
 >;
 
 const RELEASES_LIST_TIMEOUT_MS = 15000;
@@ -44,24 +45,65 @@ type ReleasesSwrKey =
 async function fetchReleasesTelegram([, , uid]: readonly ["releases", "telegram", string]): Promise<
   ReleaseListRow[]
 > {
-  const rows = await withRequestTimeout(
-    getMyReleases(uid),
-    RELEASES_LIST_TIMEOUT_MS,
-    USER_REQUEST_TIMEOUT_MESSAGE
-  );
-  return rows as ReleaseListRow[];
+  const numericUid = Number(uid);
+  const fallbackUid =
+    Number.isFinite(numericUid) && numericUid > 0
+      ? Math.trunc(numericUid)
+      : getTelegramUserIdForSupabaseRequests();
+  const tryDirectFallback = async (): Promise<ReleaseListRow[]> => {
+    if (!Number.isFinite(fallbackUid ?? NaN) || (fallbackUid ?? 0) <= 0) return [];
+    const rows = await withRequestTimeout(
+      getMyReleases(fallbackUid as number),
+      RELEASES_LIST_TIMEOUT_MS,
+      USER_REQUEST_TIMEOUT_MESSAGE
+    );
+    return rows as ReleaseListRow[];
+  };
+
+  const run = async () => {
+    const res = await fetch("/api/releases/my", {
+      method: "GET",
+      credentials: "include",
+      headers: {
+        Accept: "application/json",
+        ...getTelegramApiAuthHeaders(
+          Number.isFinite(numericUid) && numericUid > 0 ? { userId: numericUid } : undefined
+        )
+      },
+      cache: "no-store"
+    });
+    const json = (await res.json()) as { ok?: boolean; rows?: ReleaseListRow[]; error?: string };
+    if (!res.ok || json.ok !== true || !Array.isArray(json.rows)) {
+      const directRows = await tryDirectFallback();
+      if (directRows.length > 0) return directRows;
+      throw new Error(json.error || "Не удалось загрузить релизы.");
+    }
+    if (json.rows.length === 0) {
+      const directRows = await tryDirectFallback();
+      if (directRows.length > 0) return directRows;
+    }
+    return json.rows;
+  };
+  return withRequestTimeout(run(), RELEASES_LIST_TIMEOUT_MS, USER_REQUEST_TIMEOUT_MESSAGE);
 }
 
 async function fetchReleasesWeb([, , _authUid]: readonly ["releases", "web", string]): Promise<
   ReleaseListRow[]
 > {
-  const client = createSupabaseBrowser();
-  const rows = await withRequestTimeout(
-    getMyReleasesForWebUser(client),
-    RELEASES_LIST_TIMEOUT_MS,
-    USER_REQUEST_TIMEOUT_MESSAGE
-  );
-  return rows as ReleaseListRow[];
+  const run = async () => {
+    const res = await fetch("/api/releases/my", {
+      method: "GET",
+      credentials: "include",
+      headers: { Accept: "application/json" },
+      cache: "no-store"
+    });
+    const json = (await res.json()) as { ok?: boolean; rows?: ReleaseListRow[]; error?: string };
+    if (!res.ok || json.ok !== true || !Array.isArray(json.rows)) {
+      throw new Error(json.error || "Не удалось загрузить релизы.");
+    }
+    return json.rows;
+  };
+  return withRequestTimeout(run(), RELEASES_LIST_TIMEOUT_MS, USER_REQUEST_TIMEOUT_MESSAGE);
 }
 
 async function fetchReleases(key: ReleasesSwrKey): Promise<ReleaseListRow[]> {
@@ -81,23 +123,22 @@ export function useReleases() {
   const [authMode, setAuthMode] = useState<"telegram" | "web" | null>(null);
   const [user, setUser] = useState<TelegramUser | null>(null);
   const [greetingName, setGreetingName] = useState<string>("Артист");
+  const [hasResolvedInitialFetch, setHasResolvedInitialFetch] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+    let telegramModeLocked = false;
     initTelegramWebApp();
     initUserContextInStore();
 
-    const applyTelegramMode = (tid: number) => {
+    const applyTelegramMode = (tid: number | null) => {
       if (cancelled) return;
-      setUser(getTelegramWebApp()?.initDataUnsafe?.user ?? null);
-      setUserId(String(tid));
+      telegramModeLocked = true;
+      setUser((prev) => getTelegramWebApp()?.initDataUnsafe?.user ?? prev ?? null);
+      setUserId(tid != null ? String(tid) : "__tg_shell__");
       setAuthMode("telegram");
       const tg = getTelegramWebApp()?.initDataUnsafe?.user;
-      const name =
-        tg?.first_name?.trim() ||
-        tg?.username?.trim() ||
-        "Артист";
-      setGreetingName(name);
+      setGreetingName((prev) => tg?.first_name?.trim() || tg?.username?.trim() || prev || "Артист");
       setAuthReady(true);
     };
 
@@ -108,11 +149,23 @@ export function useReleases() {
         cancelled = true;
       };
     }
+    if (isTelegramClientShell()) {
+      // Не блокируем список релизов ожиданием user.id: API сам определит Telegram actor по initData/cookie.
+      applyTelegramMode(null);
+      return () => {
+        cancelled = true;
+      };
+    }
 
     const supabase = createSupabaseBrowser();
 
     const applySession = (session: Session | null) => {
       if (cancelled) return;
+      if (telegramModeLocked || isTelegramClientShell()) {
+        const tid = getTelegramUserIdForSupabaseRequests();
+        applyTelegramMode(tid ?? null);
+        return;
+      }
       const tid = getTelegramUserIdForSupabaseRequests();
       if (tid != null) {
         applyTelegramMode(tid);
@@ -129,9 +182,10 @@ export function useReleases() {
           "Артист";
         setGreetingName(name);
       } else {
+        if (telegramModeLocked) return;
         setUserId(null);
         setAuthMode(null);
-        setGreetingName("Артист");
+        setGreetingName((prev) => prev || "Артист");
       }
       setAuthReady(true);
     };
@@ -152,16 +206,16 @@ export function useReleases() {
       if (tid != null) {
         window.clearInterval(poll);
         applyTelegramMode(tid);
+        return;
+      }
+      if (isTelegramClientShell()) {
+        applyTelegramMode(null);
       }
     }, 50);
-    const pollStop = window.setTimeout(() => {
-      window.clearInterval(poll);
-    }, 8000);
 
     return () => {
       cancelled = true;
       window.clearInterval(poll);
-      window.clearTimeout(pollStop);
       subscription.unsubscribe();
     };
   }, []);
@@ -182,6 +236,20 @@ export function useReleases() {
     keepPreviousData: false
   });
 
+  /**
+   * "Первичная загрузка завершена" = получили данные или ошибку для активного ключа.
+   * Пока нет этого флага, UI должен показывать skeleton, а не empty-state.
+   */
+  useEffect(() => {
+    if (swrKey == null) {
+      setHasResolvedInitialFetch(false);
+      return;
+    }
+    if (swr.data !== undefined || swr.error != null || (!swr.isLoading && !swr.isValidating)) {
+      setHasResolvedInitialFetch(true);
+    }
+  }, [swrKey, swr.data, swr.error, swr.isLoading, swr.isValidating]);
+
   const releases = useMemo(() => swr.data ?? [], [swr.data]);
 
   const releaseStats = useMemo(() => {
@@ -201,6 +269,11 @@ export function useReleases() {
     userId,
     authReady,
     authMode,
+    isBootstrapping:
+      !authReady ||
+      (swrKey != null &&
+        !hasResolvedInitialFetch &&
+        (swr.isLoading || swr.isValidating || (swr.data === undefined && swr.error == null))),
     telegramUser: user,
     greetingName,
     releases,

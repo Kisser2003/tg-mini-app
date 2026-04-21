@@ -16,6 +16,7 @@ export type UserProfile = {
   telegram_last_name: string | null;
   email: string | null;
   display_name: string | null;
+  role: string | null;
   account_linked_at: string | null;
   created_at: string;
   updated_at: string;

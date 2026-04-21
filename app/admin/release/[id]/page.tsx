@@ -13,7 +13,7 @@ import { AdminReleaseMetadataCard } from "@/components/admin/AdminReleaseMetadat
 import { GlassCard } from "@/components/GlassCard";
 import { approveRelease, rejectRelease } from "@/features/admin/actions";
 import { fetchAdminReleaseDetail } from "@/features/admin/release-detail";
-import { isAdminUi } from "@/lib/admin";
+import { isAdminUi, isAdminUiByWebSession } from "@/lib/admin";
 import { getReleaseStatusMeta, normalizeReleaseStatus } from "@/lib/release-status";
 import type { ReleaseRecord, ReleaseTrackRow } from "@/repositories/releases.repo";
 import { getReleaseDisplayTitle } from "@/repositories/releases/types";
@@ -57,11 +57,16 @@ export default function AdminReleaseDetailPage() {
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
 
-  const isAdmin = isAdminUi();
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     initTelegramWebApp();
     setUserId(getTelegramUserId());
+    setIsAdmin(isAdminUi());
+    void (async () => {
+      const webAdmin = await isAdminUiByWebSession();
+      if (webAdmin) setIsAdmin(true);
+    })();
   }, []);
 
   const load = useCallback(async () => {
@@ -124,7 +129,7 @@ export default function AdminReleaseDetailPage() {
     }
   }, [release, rejectReason, router]);
 
-  if (userId == null && process.env.NODE_ENV === "production") {
+  if (userId == null && !isAdmin && process.env.NODE_ENV === "production") {
     return (
       <GlassCard className="p-5">
         <p className="text-sm text-white/65">Открой приложение из Telegram.</p>
@@ -211,6 +216,7 @@ export default function AdminReleaseDetailPage() {
           hasArtwork={Boolean(release.artwork_url?.trim())}
           tracks={tracks}
           legacyAudioUrl={release.audio_url}
+          releaseLyrics={release.lyrics ?? null}
         />
       </GlassCard>
 

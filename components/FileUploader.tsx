@@ -22,6 +22,7 @@ type Props = {
   invalid?: boolean;
   /** Реальный прогресс загрузки (0–100), например WAV на сервер; только для type `wav`. */
   uploadProgressPercent?: number | null;
+  helperText?: string;
 };
 
 function revokeIfBlobUrl(url: string | null): void {
@@ -44,7 +45,8 @@ export function FileUploader({
   initialFile,
   initialPreviewUrl,
   invalid = false,
-  uploadProgressPercent = null
+  uploadProgressPercent = null,
+  helperText
 }: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -247,10 +249,15 @@ export function FileUploader({
   };
 
   const showSelectedState = Boolean(file) || (type === "cover" && Boolean(previewUrl));
+  const clampedProgress =
+    uploadProgressPercent != null && Number.isFinite(uploadProgressPercent)
+      ? Math.round(Math.min(100, Math.max(0, uploadProgressPercent)))
+      : null;
+  const isWavUploading = type === "wav" && clampedProgress != null;
 
   return (
     <div className="space-y-2">
-      <label className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+      <label className="block text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
         {label}
       </label>
       <motion.label
@@ -298,24 +305,22 @@ export function FileUploader({
           className="hidden"
           onChange={handleChange}
         />
-        {type === "wav" &&
-          uploadProgressPercent != null &&
-          Number.isFinite(uploadProgressPercent) && (
+        {isWavUploading && (
             <div
-              className="absolute inset-0 z-10 flex flex-col justify-end bg-black/45"
+              className="absolute inset-0 z-10 flex flex-col justify-end bg-black/50"
               aria-live="polite"
-              aria-label={`Загрузка ${Math.round(Math.min(100, Math.max(0, uploadProgressPercent)))}%`}
+              aria-label={`Загрузка ${clampedProgress}%`}
             >
               <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-lg font-semibold tabular-nums text-white drop-shadow-md">
-                  {Math.round(Math.min(100, Math.max(0, uploadProgressPercent)))}%
+                <span className="rounded-full border border-white/20 bg-black/35 px-3 py-1 text-xl font-semibold tabular-nums text-white shadow-lg">
+                  {clampedProgress}%
                 </span>
               </div>
-              <div className="h-2.5 w-full bg-black/40">
+              <div className="h-3.5 w-full bg-black/45">
                 <div
-                  className="h-full bg-gradient-to-r from-sky-500 to-blue-600 transition-[width] duration-150 ease-out"
+                  className="h-full bg-gradient-to-r from-sky-400 via-blue-500 to-indigo-500 transition-[width] duration-200 ease-out"
                   style={{
-                    width: `${Math.min(100, Math.max(0, uploadProgressPercent))}%`
+                    width: `${clampedProgress}%`
                   }}
                 />
               </div>
@@ -328,22 +333,17 @@ export function FileUploader({
             ) : (
               <ImageIcon className="h-4 w-4 text-primary" />
             )}
-            {type === "wav" ? "WAV файл" : "Обложка релиза"}
+            {type === "wav" ? "WAV file" : "Cover"}
           </span>
-          {type === "wav" ? (
-            <span className="text-[11px] leading-snug text-muted-foreground">
-              Нажмите, чтобы выбрать WAV (до {maxSizeMb}
-              MB)
-            </span>
-          ) : (
+          {!showSelectedState && !isWavUploading ? (
             <span className="text-center text-[11px] leading-snug text-muted-foreground">
-              Квадратная, минимум 3000×3000 px,
-              <br />
-              без лишних надписей и логотипов
+              {type === "wav"
+                ? "Drag & drop WAV or click to browse"
+                : "Drag & drop cover or click to browse"}
             </span>
-          )}
+          ) : null}
           {showSelectedState && (
-            <div className="mt-1 w-full max-w-full space-y-1 text-[11px] text-foreground">
+            <div className="mt-1 w-full max-w-full space-y-2 text-[11px] text-foreground">
               {file ? (
                 <div className="flex max-w-full items-center justify-center gap-1 text-emerald-400">
                   <span className="shrink-0 text-base leading-none">✓</span>
@@ -352,19 +352,8 @@ export function FileUploader({
                   </span>
                 </div>
               ) : type === "cover" && previewUrl ? (
-                <p className="text-center text-[10px] text-white/50">Обложка из черновика</p>
+                <p className="text-center text-[10px] text-white/50">Saved cover</p>
               ) : null}
-              <p className="text-[10px] text-white/45">
-                {type === "wav"
-                  ? uploadProgressPercent != null
-                    ? "Загрузка в Supabase Storage…"
-                    : file
-                      ? "Файл принят. При необходимости нажмите «Далее» для перехода."
-                      : "Выберите WAV — сразу начнётся прямая загрузка в хранилище."
-                  : file
-                    ? "Локальная проверка файла завершена. Фактическая загрузка начнется на шаге отправки релиза."
-                    : "Обложка сохранена в черновике. Можно заменить файлом выше."}
-              </p>
               {type !== "wav" && isUploading && (
                 <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-black/30">
                   <motion.div
@@ -402,13 +391,14 @@ export function FileUploader({
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ duration: 0.35, ease: "easeOut" }}
-                  className="mx-auto mt-2 h-16 w-16 rounded-lg object-cover"
+                  className="mx-auto mt-2 h-24 w-24 rounded-lg object-cover shadow-lg"
                 />
               )}
             </div>
           )}
         </div>
       </motion.label>
+      {helperText ? <p className="text-[11px] text-white/45">{helperText}</p> : null}
 
       <FormFieldError message={error ?? undefined} />
     </div>

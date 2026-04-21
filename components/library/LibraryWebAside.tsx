@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Check, ChevronRight, HelpCircle, Music2, Wallet } from "lucide-react";
+import { Check, ChevronRight, HelpCircle, Music2 } from "lucide-react";
 
 const CHECKLIST = [
   {
@@ -30,7 +30,7 @@ const FAQ = [
 ] as const;
 
 /**
- * Правая колонка на широком экране (веб): чек-лист, краткий FAQ, блок про роялти.
+ * Правая колонка на широком экране (веб): чек-лист, краткий FAQ, полезные ссылки.
  */
 export function LibraryWebAside() {
   return (
@@ -70,25 +70,18 @@ export function LibraryWebAside() {
       </section>
 
       <section className="rounded-2xl border border-white/[0.08] bg-gradient-to-br from-indigo-500/10 to-purple-600/5 p-5 backdrop-blur-md">
-        <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/[0.06]">
-            <Wallet className="h-5 w-5 text-amber-300/90" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <h2 className="text-sm font-semibold text-white/90">Роялти и баланс</h2>
-            <p className="mt-1 text-[12px] leading-relaxed text-white/45">
-              Начисления отображаются после публикации релизов на площадках. Раздел кошелька в приложении
-              обновляется по мере поступления данных.
-            </p>
-            <Link
-              href="/settings"
-              className="mt-3 inline-flex items-center gap-1 text-[12px] font-medium text-indigo-300 hover:text-indigo-200"
-            >
-              Настройки и выплаты
-              <ChevronRight className="h-3.5 w-3.5" />
-            </Link>
-          </div>
-        </div>
+        <h2 className="text-sm font-semibold text-white/90">Полезно перед отправкой</h2>
+        <p className="mt-1 text-[12px] leading-relaxed text-white/45">
+          Проверьте соответствие названий в паспорте и названий загруженных треков, а также корректность
+          даты релиза.
+        </p>
+        <Link
+          href="/settings"
+          className="mt-3 inline-flex items-center gap-1 text-[12px] font-medium text-indigo-300 hover:text-indigo-200"
+        >
+          Открыть настройки
+          <ChevronRight className="h-3.5 w-3.5" />
+        </Link>
       </section>
 
       <p className="px-1 text-[11px] leading-relaxed text-white/25">

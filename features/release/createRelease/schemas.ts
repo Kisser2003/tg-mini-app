@@ -6,7 +6,7 @@ import { PERFORMANCE_LANGUAGE_VALUES } from "@/lib/performance-language";
 export const FIXED_RELEASE_LABEL = "OMF" as const;
 
 export const metadataSchema = z.object({
-  releaseTitle: z.string().min(1, "Укажите название релиза"),
+  releaseTitle: z.string().trim().min(1, "Укажите название релиза"),
   releaseType: z.enum(RELEASE_TYPE_VALUES),
   genre: z.string().min(1, "Выберите основной жанр"),
   subgenre: z.string().default(""),
@@ -14,7 +14,7 @@ export const metadataSchema = z.object({
     message: "Выберите язык исполнения"
   }),
   label: z.literal(FIXED_RELEASE_LABEL),
-  primaryArtist: z.string().min(1, "Укажите имя артиста"),
+  primaryArtist: z.string().trim().min(1, "Укажите имя артиста"),
   releaseDate: z
     .string()
     .min(1, "Укажите дату релизного издания")
@@ -30,13 +30,37 @@ export const metadataSchema = z.object({
   explicit: z.boolean()
 });
 
+/**
+ * Lenient metadata schema for hydrating already saved releases/drafts.
+ * Keeps shape checks but does not enforce the "today + 5 days" business rule
+ * to avoid breaking older drafts created before the rule changed.
+ */
+export const metadataHydrateSchema = z.object({
+  releaseTitle: z.string().trim().min(1, "Укажите название релиза"),
+  releaseType: z.enum(RELEASE_TYPE_VALUES),
+  genre: z.string().min(1, "Выберите основной жанр"),
+  subgenre: z.string().default(""),
+  language: z.enum(PERFORMANCE_LANGUAGE_VALUES, {
+    message: "Выберите язык исполнения"
+  }),
+  label: z.literal(FIXED_RELEASE_LABEL),
+  primaryArtist: z.string().trim().min(1, "Укажите имя артиста"),
+  releaseDate: z.string().min(1, "Укажите дату релизного издания"),
+  explicit: z.boolean()
+});
+
 export const assetsSchema = z.object({
   artworkUrl: z.string().url().nullable().default(null)
 });
 
 export const trackSchema = z.object({
   title: z.string().min(1, "Укажите название трека"),
-  explicit: z.boolean().default(false)
+  explicit: z.boolean().default(false),
+  lyrics: z
+    .string()
+    .max(32000, "Текст песни слишком длинный (макс. 32 000 символов)")
+    .optional()
+    .default("")
 });
 
 export const tracksSchema = z.object({

@@ -1,6 +1,6 @@
 /**
  * Webhook смены статуса релиза (Supabase/pg_net → Next).
- * Логики баланса / транзакций здесь нет и не планируется в рамках замороженного кошелька.
+ * Маршрут только для событий смены статуса релиза.
  */
 import crypto from "node:crypto";
 import { NextResponse } from "next/server";

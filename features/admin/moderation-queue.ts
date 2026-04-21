@@ -1,6 +1,6 @@
 "use client";
 
-import { getTelegramApiAuthHeadersForAdminApi } from "@/lib/admin";
+import { getAdminApiAuthHeaders } from "@/lib/admin";
 import type { ModerationQueueApiRow } from "@/types/admin";
 
 /**
@@ -8,12 +8,13 @@ import type { ModerationQueueApiRow } from "@/types/admin";
  * Не использует прямой Supabase с RLS по заголовку `x-telegram-user-id`.
  */
 export async function fetchAdminModerationQueue(): Promise<ModerationQueueApiRow[]> {
+  const authHeaders = await getAdminApiAuthHeaders();
   const res = await fetch("/api/admin/moderation-queue", {
     method: "GET",
     credentials: "same-origin",
     headers: {
       Accept: "application/json",
-      ...getTelegramApiAuthHeadersForAdminApi()
+      ...authHeaders
     },
     cache: "no-store"
   });

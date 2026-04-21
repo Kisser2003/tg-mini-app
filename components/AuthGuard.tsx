@@ -8,6 +8,7 @@ import {
 } from "@/lib/hooks/useIsTelegramMiniApp";
 import { useWebAuth } from "@/lib/hooks/useWebAuth";
 import { useDevE2eAuthBypass } from "@/lib/hooks/useDevE2eAuthBypass";
+import { appendCurrentTelegramHash } from "@/lib/telegram";
 import { LoadingScreen } from "./LoadingScreen";
 
 /**
@@ -27,7 +28,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     if (typeof window !== "undefined" && checkIsTelegramMiniApp()) return;
     if (devE2eBypass) return;
     if (!isTelegram && webUser === undefined) {
-      router.replace("/login");
+      router.replace(appendCurrentTelegramHash("/login"));
     }
   }, [isTelegram, webUser, router, devE2eBypass]);
 
@@ -40,9 +41,9 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     return <LoadingScreen />;
   }
 
-  // Если не авторизован - не показываем контент (редирект в useEffect)
+  // Нет веб-сессии: редирект на /login в useEffect — не рендерить null (пустой экран в Safari / WebView).
   if (!isTelegram && webUser === undefined) {
-    return null;
+    return <LoadingScreen />;
   }
 
   return <>{children}</>;

@@ -1,17 +1,18 @@
 "use client";
 
-import { getTelegramApiAuthHeadersForAdminApi } from "@/lib/admin";
+import { getAdminApiAuthHeaders } from "@/lib/admin";
 import type { ReleaseRecord, ReleaseTrackRow } from "@/repositories/releases.repo";
 
 export async function fetchAdminReleaseDetail(
   releaseId: string
 ): Promise<{ release: ReleaseRecord; tracks: ReleaseTrackRow[] }> {
+  const authHeaders = await getAdminApiAuthHeaders();
   const res = await fetch(`/api/admin/releases/${encodeURIComponent(releaseId)}`, {
     method: "GET",
     credentials: "same-origin",
     headers: {
       Accept: "application/json",
-      ...getTelegramApiAuthHeadersForAdminApi()
+      ...authHeaders
     },
     cache: "no-store"
   });

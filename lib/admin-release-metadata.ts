@@ -31,6 +31,12 @@ function pushString(
   entries.push({ label, value: t });
 }
 
+/** Всегда показываем строку (в т.ч. «—»), чтобы админ видел поле лирики. */
+function pushLyricsDisplay(entries: MetadataEntry[], v: string | null | undefined): void {
+  const t = v == null ? "" : String(v).trim();
+  entries.push({ label: "Текст песни", value: t.length > 0 ? t : "—" });
+}
+
 function pushJson(entries: MetadataEntry[], label: string, v: unknown): void {
   if (v == null) return;
   if (typeof v === "string") {
@@ -125,6 +131,7 @@ export function buildReleaseMetadataSections(release: AdminReleaseRow, tracks: R
     pushString(te, "Позиция (index)", String(idx));
     if (t.position != null) pushString(te, "Position", String(t.position));
     pushString(te, "Название трека", t.title);
+    pushLyricsDisplay(te, t.lyrics);
     te.push({ label: "Explicit", value: yn(t.explicit) });
     const dur = formatDuration(t.duration);
     if (dur) te.push({ label: "Длительность", value: dur });

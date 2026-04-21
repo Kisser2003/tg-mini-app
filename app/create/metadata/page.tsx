@@ -3,7 +3,7 @@
 import { useEffect, useRef, useMemo, useState, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
-import { useForm, type FieldErrors } from "react-hook-form";
+import { Controller, useForm, type FieldErrors } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, Calendar, Disc, Languages, Mic2, Music2 } from "lucide-react";
@@ -90,6 +90,7 @@ function CreateMetadataPageInner() {
   const releaseIdParam = searchParams.get("releaseId");
 
   const storeMetadata = useCreateReleaseDraftStore((s) => s.metadata);
+  const hasHydrated = useCreateReleaseDraftStore((s) => s.hasHydrated);
   const setMetadata = useCreateReleaseDraftStore((s) => s.setMetadata);
   const storeTracks = useCreateReleaseDraftStore((s) => s.tracks);
   const setTracks = useCreateReleaseDraftStore((s) => s.setTracks);
@@ -166,6 +167,7 @@ function CreateMetadataPageInner() {
 
   const {
     register,
+    control,
     handleSubmit,
     watch,
     setValue,
@@ -177,19 +179,20 @@ function CreateMetadataPageInner() {
     defaultValues
   });
 
-  // Post-mount: без `releaseId` в URL — один раз подтянуть метаданные из persist (localStorage).
-  // С `releaseId` ждём `hydrateFromReleaseId` и отдельный reset ниже.
-  const didHydrateRef = useRef(false);
-  useEffect(() => {
-    if (releaseIdParam) return;
-    if (didHydrateRef.current) return;
-    didHydrateRef.current = true;
-    const fresh = useCreateReleaseDraftStore.getState().metadata;
-    reset({ ...fresh, label: FIXED_RELEASE_LABEL }, { keepDirty: false });
-  }, [reset, releaseIdParam]);
-
   const values = watch();
   const lastSyncedValuesRef = useRef<string>("");
+
+  // После rehydrate persist синхронизируем RHF один раз из store (без releaseId в URL).
+  const didSyncHydratedDefaultsRef = useRef(false);
+  useEffect(() => {
+    if (releaseIdParam) return;
+    if (!hasHydrated) return;
+    if (didSyncHydratedDefaultsRef.current) return;
+    didSyncHydratedDefaultsRef.current = true;
+    const hydrated = { ...storeMetadata, label: FIXED_RELEASE_LABEL };
+    reset(hydrated, { keepDirty: false });
+    lastSyncedValuesRef.current = JSON.stringify(hydrated);
+  }, [reset, releaseIdParam, hasHydrated, storeMetadata]);
 
   // Single: keep store track list aligned with one WAV slot (avoid orphan trackFiles after EP → Single).
   useEffect(() => {
@@ -259,35 +262,45 @@ function CreateMetadataPageInner() {
   }, [values.releaseDate]);
 
   const onSubmit = useCallback(async (data: CreateMetadata) => {
-    hapticMap.impactLight();
-    const tracks = useCreateReleaseDraftStore.getState().tracks;
-    const rawTitles = tracks.map((t) => t.title);
-    const hasAnyTrackTitle = rawTitles.some((t) => t.trim().length > 0);
-    const links = useCreateReleaseDraftStore.getState().releaseArtistLinks;
-    const meta: ReleaseMetadata = {
-      primaryArtist: data.primaryArtist,
-      releaseTitle: data.releaseTitle,
-      trackTitles: hasAnyTrackTitle ? rawTitles : undefined,
-      language: data.language,
-      releaseArtistLinks: links
-    };
-    const dsp = validateMetadata(meta);
-    if (!dsp.isValid) {
+    try {
+      hapticMap.impactLight();
+      const tracks = useCreateReleaseDraftStore.getState().tracks;
+      const rawTitles = tracks.map((t) => t.title);
+      const hasAnyTrackTitle = rawTitles.some((t) => t.trim().length > 0);
+      const links = useCreateReleaseDraftStore.getState().releaseArtistLinks;
+      const meta: ReleaseMetadata = {
+        primaryArtist: data.primaryArtist,
+        releaseTitle: data.releaseTitle,
+        trackTitles: hasAnyTrackTitle ? rawTitles : undefined,
+        language: data.language,
+        releaseArtistLinks: links
+      };
+      const dsp = validateMetadata(meta);
+      if (!dsp.isValid) {
+        hapticMap.notificationError();
+        toast.error(
+          dsp.errors[0] ??
+            "Метаданные не проходят базовую проверку. Исправьте поля с подсказкой."
+        );
+        return;
+      }
+      setMetadata(data);
+      const saved = await saveDraftAction(data);
+      if (!saved.ok) {
+        hapticMap.notificationError();
+        toast.error(saved.message);
+        return;
+      }
+      router.push("/create/assets");
+    } catch (error) {
       hapticMap.notificationError();
-      toast.error(
-        dsp.errors[0] ??
-          "Метаданные не проходят базовую проверку. Исправьте поля с подсказкой."
-      );
-      return;
+      logClientError({
+        error,
+        screenName: "CreateMetadata_submit",
+        route: "/create/metadata"
+      });
+      toast.error("Не удалось перейти к шагу обложки. Попробуйте ещё раз.");
     }
-    setMetadata(data);
-    const saved = await saveDraftAction();
-    if (!saved.ok) {
-      hapticMap.notificationError();
-      toast.error(saved.message);
-      return;
-    }
-    router.push("/create/assets");
   }, [router, setMetadata]);
 
   const onInvalid = useCallback((formErrors: FieldErrors<CreateMetadata>) => {
@@ -402,16 +415,26 @@ function CreateMetadataPageInner() {
                 <Mic2 className="h-3.5 w-3.5 text-white/35" aria-hidden />
                 Артист
               </label>
-              <input
-                {...register("primaryArtist")}
-                className={`${WIZARD_INPUT_CLASS} ${borderForField(
-                  Boolean(errors.primaryArtist),
-                  touchedFields.primaryArtist,
-                  dirtyFields.primaryArtist,
-                  guidelineFieldFlags.primaryArtist
-                )}`}
-                placeholder="Имя на обложке"
-                autoComplete="off"
+              <Controller
+                name="primaryArtist"
+                control={control}
+                render={({ field }) => (
+                  <input
+                    name={field.name}
+                    ref={field.ref}
+                    value={typeof field.value === "string" ? field.value : ""}
+                    onChange={(e) => field.onChange(e.target.value)}
+                    onBlur={field.onBlur}
+                    className={`${WIZARD_INPUT_CLASS} ${borderForField(
+                      Boolean(errors.primaryArtist),
+                      touchedFields.primaryArtist,
+                      dirtyFields.primaryArtist,
+                      guidelineFieldFlags.primaryArtist
+                    )}`}
+                    placeholder="Имя на обложке"
+                    autoComplete="off"
+                  />
+                )}
               />
               <FormFieldError message={errors.primaryArtist?.message} />
             </div>
@@ -420,15 +443,26 @@ function CreateMetadataPageInner() {
               <label className={`mb-2.5 block ${WIZARD_FIELD_LABEL_CLASS}`}>
                 Название релиза
               </label>
-              <input
-                {...register("releaseTitle")}
-                className={`${WIZARD_INPUT_CLASS} ${borderForField(
-                  Boolean(errors.releaseTitle),
-                  touchedFields.releaseTitle,
-                  dirtyFields.releaseTitle,
-                  guidelineFieldFlags.releaseTitle
-                )}`}
-                placeholder="Основное название релиза"
+              <Controller
+                name="releaseTitle"
+                control={control}
+                render={({ field }) => (
+                  <input
+                    name={field.name}
+                    ref={field.ref}
+                    value={typeof field.value === "string" ? field.value : ""}
+                    onChange={(e) => field.onChange(e.target.value)}
+                    onBlur={field.onBlur}
+                    className={`${WIZARD_INPUT_CLASS} ${borderForField(
+                      Boolean(errors.releaseTitle),
+                      touchedFields.releaseTitle,
+                      dirtyFields.releaseTitle,
+                      guidelineFieldFlags.releaseTitle
+                    )}`}
+                    placeholder="Основное название релиза"
+                    autoComplete="off"
+                  />
+                )}
               />
               <FormFieldError message={errors.releaseTitle?.message} />
             </div>

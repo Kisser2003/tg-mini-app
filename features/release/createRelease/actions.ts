@@ -41,6 +41,7 @@ import {
   isAssetsComplete,
   isMetadataComplete,
   isTracksComplete,
+  metadataHydrateSchema,
   metadataSchema,
   tracksSchema
 } from "./schemas";
@@ -476,19 +477,82 @@ export function createMetadataFromReleaseRecord(existing: ReleaseRecord): Create
   };
 }
 
+function buildCombinedReleaseLyrics(tracks: CreateTrack[]): string | null {
+  const parts: string[] = [];
+  for (const t of tracks) {
+    const L = t.lyrics == null ? "" : String(t.lyrics).trim();
+    if (!L) continue;
+    const title = t.title?.trim() ?? "";
+    parts.push(title.length > 0 ? `${title}\n\n${L}` : L);
+  }
+  if (parts.length === 0) return null;
+  return parts.join("\n\n---\n\n");
+}
+
+async function persistCombinedReleaseLyricsFromStore(releaseId: string): Promise<void> {
+  const st = useCreateReleaseDraftStore.getState();
+  const parsed = tracksSchema.safeParse({ tracks: st.tracks });
+  if (!parsed.success) return;
+  const combined = buildCombinedReleaseLyrics(parsed.data.tracks);
+  await withRequestTimeout(
+    updateRelease(releaseId, { lyrics: combined }),
+    SUPABASE_DB_OP_TIMEOUT_MS,
+    USER_REQUEST_TIMEOUT_MESSAGE
+  );
+}
+
+async function syncTrackRowsAndReleaseLyrics(args: {
+  releaseId: string;
+  tracks: CreateTrack[];
+  audioUrls: (string | null)[];
+  userId: number;
+  telegramId: number;
+  webOnlyUuid: string | null | undefined;
+}): Promise<void> {
+  const { releaseId, tracks, audioUrls, userId, telegramId, webOnlyUuid } = args;
+  for (let index = 0; index < tracks.length; index += 1) {
+    const audioUrl = audioUrls[index]?.trim() ?? "";
+    if (!audioUrl) continue;
+    await withRequestTimeout(
+      addReleaseTrack({
+        releaseId,
+        userId,
+        telegramId,
+        supabaseUserUuid: webOnlyUuid,
+        index,
+        title: tracks[index].title,
+        explicit: Boolean(tracks[index].explicit),
+        audioUrl,
+        lyrics: tracks[index].lyrics
+      }),
+      SUPABASE_DB_OP_TIMEOUT_MS,
+      USER_REQUEST_TIMEOUT_MESSAGE
+    );
+  }
+  const combined = buildCombinedReleaseLyrics(tracks);
+  await withRequestTimeout(
+    updateRelease(releaseId, { lyrics: combined }),
+    SUPABASE_DB_OP_TIMEOUT_MS,
+    USER_REQUEST_TIMEOUT_MESSAGE
+  );
+}
+
 function buildTracksForResume(release: ReleaseRecord, rows: ReleaseTrackRow[]): CreateTrack[] {
   if (rows.length > 0) {
     return rows.map((r) => ({
       title: r.title,
-      explicit: Boolean(r.explicit)
+      explicit: Boolean(r.explicit),
+      lyrics: r.lyrics?.trim() ? r.lyrics : ""
     }));
   }
   if (release.release_type === "single") {
-    return [{ title: getReleaseDisplayTitle(release), explicit: Boolean(release.explicit) }];
+    return [
+      { title: getReleaseDisplayTitle(release), explicit: Boolean(release.explicit), lyrics: "" }
+    ];
   }
   return [
-    { title: "", explicit: false },
-    { title: "", explicit: false }
+    { title: "", explicit: false, lyrics: "" },
+    { title: "", explicit: false, lyrics: "" }
   ];
 }
 
@@ -565,7 +629,7 @@ export async function resumeDraftFromRelease(releaseId: string): Promise<string 
 
     const trackRows = await getReleaseTracksByReleaseId(releaseId);
     const metadata = createMetadataFromReleaseRecord(existing);
-    metadataSchema.parse(metadata);
+    metadataHydrateSchema.parse(metadata);
     const tracks = buildTracksForResume(existing, trackRows);
     const trackAudioUrlsFromDb = buildTrackAudioUrlsFromDb(existing, trackRows, tracks);
 
@@ -615,7 +679,7 @@ export async function hydrateFromReleaseId(releaseId: string): Promise<void> {
       }
     }
     const metadata = createMetadataFromReleaseRecord(existing);
-    metadataSchema.parse(metadata);
+    metadataHydrateSchema.parse(metadata);
 
     store.setReleaseId(existing.id);
     store.setClientRequestId(existing.client_request_id ?? null);
@@ -818,11 +882,20 @@ export async function uploadArtworkForDraft(file: File): Promise<string | null> 
  * Сохраняет текущие метаданные (и обложку, если есть) в строку `releases` в БД.
  * При отсутствии `releaseId` создаёт черновик через `ensureDraftRelease`.
  */
-export async function saveDraftAction(): Promise<{ ok: true } | { ok: false; message: string }> {
-  initUserContextInStore();
-  await syncWebUserIntoStore();
+export async function saveDraftAction(
+  metadataOverride?: CreateMetadata
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  try {
+    initUserContextInStore();
+    await syncWebUserIntoStore();
+  } catch (e: unknown) {
+    return {
+      ok: false,
+      message: formatErrorMessage(e, "Не удалось проверить авторизацию.")
+    };
+  }
   const store = useCreateReleaseDraftStore.getState();
-  const parsed = metadataSchema.safeParse(store.metadata);
+  const parsed = metadataSchema.safeParse(metadataOverride ?? store.metadata);
   if (!parsed.success) {
     return {
       ok: false,
@@ -836,6 +909,8 @@ export async function saveDraftAction(): Promise<{ ok: true } | { ok: false; mes
     };
   }
   try {
+    // Keep store in sync with the exact payload validated by RHF submit.
+    store.setMetadata(parsed.data);
     store.setSubmitError(null);
     await verifyStoredReleaseExistsOrClearReleaseId();
     if (!useCreateReleaseDraftStore.getState().releaseId) {
@@ -1090,11 +1165,13 @@ export async function uploadTrackWavAtIndex(options: {
           index: options.index,
           title: track.title,
           explicit: Boolean(track.explicit),
-          audioUrl
+          audioUrl,
+          lyrics: track.lyrics
         }),
         SUPABASE_DB_OP_TIMEOUT_MS,
         USER_REQUEST_TIMEOUT_MESSAGE
       );
+      await persistCombinedReleaseLyricsFromStore(releaseId);
     } catch (e: unknown) {
       console.error("[uploadTrackWavAtIndex] DB tracks upsert failed", {
         postgrest: getPostgrestErrorPayload(e),
@@ -1183,51 +1260,51 @@ export async function uploadTracksForDraftStep(options: {
       for (let index = 0; index < tracks.length; index += 1) {
         const file = trackFiles[index]!;
         const track = tracks[index];
-        const existingUrl =
-          useCreateReleaseDraftStore.getState().trackAudioUrlsFromDb[index] ?? "";
-        if (existingUrl.trim().length > 0) {
+        let audioUrl = (
+          useCreateReleaseDraftStore.getState().trackAudioUrlsFromDb[index] ?? ""
+        ).trim();
+
+        if (!audioUrl) {
+          options.onTrackProgress(index, 0);
+          try {
+            audioUrl = await uploadReleaseTrackAudio({
+              userId,
+              releaseId,
+              trackIndex: index,
+              file,
+              options: {
+                markReleaseFailedOnError: { releaseId },
+                onProgress: (pct) => options.onTrackProgress(index, pct)
+              }
+            });
+          } catch (e: unknown) {
+            void postDraftUploadState(releaseId, "failed");
+            console.error("[uploadTracksForDraftStep] Storage (WAV) upload failed", {
+              phase: "storage",
+              trackIndex: index,
+              releaseId,
+              hint: "Network → POST …/storage/v1/object/releases/…",
+              error: e
+            });
+            const up = getUploadErrorDetails(e);
+            const sc =
+              e && typeof e === "object" && "statusCode" in e
+                ? Number((e as { statusCode?: unknown }).statusCode)
+                : NaN;
+            const statusLabel = Number.isFinite(sc) ? String(sc) : "0 (сеть/обрыв)";
+            const msg = formatErrorMessage(
+              e,
+              "Не удалось загрузить WAV в хранилище. Проверьте политику bucket «releases», размер и формат файла."
+            );
+            useCreateReleaseDraftStore.getState().setSubmitError(msg);
+            toast.error(`Трек ${index + 1}: ${msg}`, {
+              description: `HTTP ${statusLabel}${up.supabaseHint ? ` · ${up.supabaseHint}` : ""}`
+            });
+            return false;
+          }
+          useCreateReleaseDraftStore.getState().setTrackAudioUrlAt(index, audioUrl);
+        } else {
           options.onTrackProgress(index, 100);
-          continue;
-        }
-
-        options.onTrackProgress(index, 0);
-
-        let audioUrl: string;
-        try {
-          audioUrl = await uploadReleaseTrackAudio({
-            userId,
-            releaseId,
-            trackIndex: index,
-            file,
-            options: {
-              markReleaseFailedOnError: { releaseId },
-              onProgress: (pct) => options.onTrackProgress(index, pct)
-            }
-          });
-        } catch (e: unknown) {
-          void postDraftUploadState(releaseId, "failed");
-          console.error("[uploadTracksForDraftStep] Storage (WAV) upload failed", {
-            phase: "storage",
-            trackIndex: index,
-            releaseId,
-            hint: "Network → POST …/storage/v1/object/releases/…",
-            error: e
-          });
-          const up = getUploadErrorDetails(e);
-          const sc =
-            e && typeof e === "object" && "statusCode" in e
-              ? Number((e as { statusCode?: unknown }).statusCode)
-              : NaN;
-          const statusLabel = Number.isFinite(sc) ? String(sc) : "0 (сеть/обрыв)";
-          const msg = formatErrorMessage(
-            e,
-            "Не удалось загрузить WAV в хранилище. Проверьте политику bucket «releases», размер и формат файла."
-          );
-          useCreateReleaseDraftStore.getState().setSubmitError(msg);
-          toast.error(`Трек ${index + 1}: ${msg}`, {
-            description: `HTTP ${statusLabel}${up.supabaseHint ? ` · ${up.supabaseHint}` : ""}`
-          });
-          return false;
         }
 
         try {
@@ -1240,7 +1317,8 @@ export async function uploadTracksForDraftStep(options: {
               index,
               title: track.title,
               explicit: Boolean(track.explicit),
-              audioUrl
+              audioUrl,
+              lyrics: track.lyrics
             }),
             SUPABASE_DB_OP_TIMEOUT_MS,
             USER_REQUEST_TIMEOUT_MESSAGE
@@ -1263,9 +1341,9 @@ export async function uploadTracksForDraftStep(options: {
           );
           return false;
         }
-
-        useCreateReleaseDraftStore.getState().setTrackAudioUrlAt(index, audioUrl);
       }
+
+      await persistCombinedReleaseLyricsFromStore(releaseId);
     } catch (e: unknown) {
       void postDraftUploadState(releaseId, "failed");
       console.error("[uploadTracksForDraftStep] unexpected", { error: e });
@@ -1365,6 +1443,15 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
       if (skipWavUpload) {
         useCreateReleaseDraftStore.getState().setSubmitStage("uploading_tracks");
         useCreateReleaseDraftStore.getState().setSubmitProgress(85);
+        const stNow = useCreateReleaseDraftStore.getState();
+        await syncTrackRowsAndReleaseLyrics({
+          releaseId,
+          tracks: parsedTracks.data.tracks,
+          audioUrls: stNow.trackAudioUrlsFromDb,
+          userId: submitUserId,
+          telegramId: submitTelegramId,
+          webOnlyUuid
+        });
       } else {
         for (let index = 0; index < parsedTracks.data.tracks.length; index += 1) {
           uploadTrackIndex = index;
@@ -1392,13 +1479,15 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
               index,
               title: track.title,
               explicit: Boolean(track.explicit),
-              audioUrl
+              audioUrl,
+              lyrics: track.lyrics
             }),
             SUPABASE_DB_OP_TIMEOUT_MS,
             USER_REQUEST_TIMEOUT_MESSAGE
           );
           setTrackUploadProgress(index + 1, 0);
         }
+        await persistCombinedReleaseLyricsFromStore(releaseId);
       }
       uploadTrackIndex = null;
     } catch (e: unknown) {

@@ -270,6 +270,7 @@ export async function updateRelease(
     artist_links?: Record<string, string> | Record<string, unknown>;
     performance_language?: string | null;
     collaborators?: Record<string, unknown>[] | unknown;
+    lyrics?: string | null;
   }
 ): Promise<ReleaseRecord> {
   const base: Partial<ReleaseStep1Payload & ReleaseStep2Payload> = {};
@@ -582,7 +583,7 @@ export async function getMyReleasesForWebUser(
 }
 
 /**
- * Очередь модерации: релизы на проверке (`processing` или `pending`).
+ * Очередь модерации: только реально отправленные релизы (`processing`).
  * Для UI админки используйте GET `/api/admin/moderation-queue` (service role), а не этот метод —
  * иначе доступ зависит от RLS с заголовком `x-telegram-user-id`.
  */
@@ -591,7 +592,7 @@ export async function getPendingReleases(): Promise<ReleaseRecord[]> {
     const response = await supabase
       .from("releases")
       .select("*")
-      .in("status", ["processing", "pending"])
+      .eq("status", "processing")
       .order("created_at", { ascending: true });
     return response;
   });

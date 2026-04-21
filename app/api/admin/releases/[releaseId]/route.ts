@@ -2,8 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { requireAdminSupabaseClient } from "@/lib/admin-release-api-guard";
-import type { TelegramAuthContext } from "@/lib/api/with-telegram-auth";
-import { withTelegramAuth } from "@/lib/api/with-telegram-auth";
+import { getTelegramAuthContextFromRequest } from "@/lib/api/with-telegram-auth";
 import type { ReleaseRecord, ReleaseTrackRow } from "@/repositories/releases.repo";
 
 export const dynamic = "force-dynamic";
@@ -13,11 +12,13 @@ const paramsSchema = z.object({
 });
 
 async function handleGetAdminRelease(
-  _request: NextRequest,
-  ctx: TelegramAuthContext,
+  request: NextRequest,
   routeContext: { params: { releaseId: string } }
 ): Promise<Response> {
-  const guard = requireAdminSupabaseClient(ctx);
+  const guard = await requireAdminSupabaseClient(
+    request,
+    getTelegramAuthContextFromRequest(request)
+  );
   if (!guard.ok) return guard.response;
 
   const parsed = paramsSchema.safeParse(routeContext.params);
@@ -44,7 +45,7 @@ async function handleGetAdminRelease(
 
   const { data: tracks, error: trErr } = await guard.supabase
     .from("tracks")
-    .select("id, release_id, user_id, index, position, title, explicit, file_path, duration")
+    .select("id, release_id, user_id, index, position, title, explicit, file_path, lyrics, duration")
     .eq("release_id", releaseId)
     .order("index", { ascending: true });
 
@@ -70,6 +71,5 @@ export async function GET(
   request: NextRequest,
   routeContext: { params: { releaseId: string } }
 ): Promise<Response> {
-  const run = withTelegramAuth((req, ctx) => handleGetAdminRelease(req, ctx, routeContext));
-  return run(request);
+  return handleGetAdminRelease(request, routeContext);
 }

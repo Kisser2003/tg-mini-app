@@ -1,4 +1,5 @@
 import { TELEGRAM_INIT_DATA_HEADER } from "@/lib/api/get-telegram-init-data-from-request";
+import { createSupabaseBrowser } from "@/lib/supabase";
 import { getTelegramWebApp } from "@/lib/telegram";
 import type { AdminStatsResponse } from "@/types/admin";
 
@@ -8,6 +9,16 @@ export async function fetchAdminStats(): Promise<AdminStatsResponse> {
   headers.set("Accept", "application/json");
   if (initData) {
     headers.set(TELEGRAM_INIT_DATA_HEADER, initData);
+  }
+  try {
+    const {
+      data: { session }
+    } = await createSupabaseBrowser().auth.getSession();
+    if (session?.access_token) {
+      headers.set("Authorization", `Bearer ${session.access_token}`);
+    }
+  } catch {
+    // no-op
   }
 
   const res = await fetch("/api/admin/stats", {

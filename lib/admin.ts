@@ -1,4 +1,5 @@
 import { getTelegramApiAuthHeaders, getTelegramUserId } from "./telegram";
+import { createSupabaseBrowser } from "./supabase";
 
 function parsePositiveTelegramId(raw: string): number | null {
   const trimmed = raw.trim();
@@ -79,6 +80,25 @@ export function isAdminUi(): boolean {
   return telegramIdsEqual(uid, adminId);
 }
 
+export async function isAdminUiByWebSession(): Promise<boolean> {
+  try {
+    const supabase = createSupabaseBrowser();
+    const {
+      data: { session }
+    } = await supabase.auth.getSession();
+    if (!session?.user?.id) return false;
+    const { data, error } = await supabase
+      .from("users")
+      .select("*")
+      .eq("id", session.user.id)
+      .maybeSingle();
+    if (error || !data) return false;
+    return String((data as { role?: string | null }).role ?? "").trim().toLowerCase() === "admin";
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Заголовки для админских API (`withTelegramAuth` + проверка admin ID).
  * В `next dev` в обычном браузере без Mini App подставляется `X-Dev-Telegram-User-Id`
@@ -94,4 +114,22 @@ export function getTelegramApiAuthHeadersForAdminApi(): Record<string, string> {
     return getTelegramApiAuthHeaders({ userId: adminId });
   }
   return getTelegramApiAuthHeaders();
+}
+
+export async function getAdminApiAuthHeaders(): Promise<Record<string, string>> {
+  const headers: Record<string, string> = {
+    ...getTelegramApiAuthHeadersForAdminApi()
+  };
+  try {
+    const supabase = createSupabaseBrowser();
+    const {
+      data: { session }
+    } = await supabase.auth.getSession();
+    if (session?.access_token) {
+      headers.Authorization = `Bearer ${session.access_token}`;
+    }
+  } catch {
+    // no-op
+  }
+  return headers;
 }

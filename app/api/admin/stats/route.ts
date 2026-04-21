@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import type { TelegramAuthContext } from "@/lib/api/with-telegram-auth";
-import { withTelegramAuth } from "@/lib/api/with-telegram-auth";
-import { getExpectedAdminTelegramId, telegramIdsEqual } from "@/lib/admin";
-import { createSupabaseAdmin } from "@/lib/supabase-admin";
+import { requireAdminSupabaseClient } from "@/lib/admin-release-api-guard";
+import { getTelegramAuthContextFromRequest } from "@/lib/api/with-telegram-auth";
 import type { AdminStatsResponse } from "@/types/admin";
 
 function startOfUtcDayIso(): string {
@@ -12,17 +10,13 @@ function startOfUtcDayIso(): string {
   return d.toISOString();
 }
 
-async function handleAdminStats(_request: NextRequest, ctx: TelegramAuthContext): Promise<Response> {
-  const adminId = getExpectedAdminTelegramId();
-  if (!telegramIdsEqual(ctx.user.id, adminId)) {
-    return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
-  }
-
-  const supabase = createSupabaseAdmin();
-  if (!supabase) {
-    console.error("[admin/stats] missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
-    return NextResponse.json({ ok: false, error: "Server misconfigured" }, { status: 503 });
-  }
+async function handleAdminStats(request: NextRequest): Promise<Response> {
+  const guard = await requireAdminSupabaseClient(
+    request,
+    getTelegramAuthContextFromRequest(request)
+  );
+  if (!guard.ok) return guard.response;
+  const supabase = guard.supabase;
 
   const dayStart = startOfUtcDayIso();
 
@@ -53,4 +47,4 @@ async function handleAdminStats(_request: NextRequest, ctx: TelegramAuthContext)
   return NextResponse.json(body);
 }
 
-export const GET = withTelegramAuth(handleAdminStats);
+export const GET = handleAdminStats;

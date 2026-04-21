@@ -25,7 +25,12 @@ async function handleAlign(_request: NextRequest, ctx: { user: { id: number } })
   // Get user UUID from Telegram ID
   const userProfile = await getUserProfileByTelegramId(BigInt(tg));
   if (!userProfile) {
-    return NextResponse.json({ ok: false, error: "User profile not found" }, { status: 404 });
+    return NextResponse.json({
+      ok: true,
+      telegramId: tg,
+      skipped: true,
+      reason: "user_profile_not_found"
+    });
   }
 
   // Update releases to use user_uuid

@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
-import type { TelegramAuthContext } from "@/lib/api/with-telegram-auth";
-import { withTelegramAuth } from "@/lib/api/with-telegram-auth";
-import { getExpectedAdminTelegramId, telegramIdsEqual } from "@/lib/admin";
-import { createSupabaseAdmin } from "@/lib/supabase-admin";
-import type { ReleaseRecord } from "@/repositories/releases.repo";
+import { requireAdminSupabaseClient } from "@/lib/admin-release-api-guard";
+import { getTelegramAuthContextFromRequest } from "@/lib/api/with-telegram-auth";
+import { getReleaseDisplayTitle, type ReleaseRecord } from "@/repositories/releases.repo";
+import { escapeHtml } from "@/lib/telegram-bot.server";
+import { sendTelegramNotification } from "@/lib/telegram-notifications";
 
 const bodySchema = z.object({
   releaseId: z.string().uuid(),
@@ -13,20 +13,44 @@ const bodySchema = z.object({
   comment: z.string().optional()
 });
 
-async function handleUpdateReleaseStatus(
-  request: NextRequest,
-  ctx: TelegramAuthContext
-): Promise<Response> {
-  const adminId = getExpectedAdminTelegramId();
-  if (!telegramIdsEqual(ctx.user.id, adminId)) {
-    return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
+async function notifyArtistOnModerationResult(
+  record: ReleaseRecord,
+  action: "approve" | "reject",
+  comment?: string
+): Promise<void> {
+  const tid =
+    record.telegram_id != null && String(record.telegram_id).trim() !== ""
+      ? String(record.telegram_id)
+      : null;
+  if (!tid) return;
+
+  const titleRaw = getReleaseDisplayTitle(record);
+  const title = escapeHtml(titleRaw.length > 0 ? titleRaw : "релиз");
+
+  if (action === "approve") {
+    await sendTelegramNotification(
+      tid,
+      `✅ <b>Релиз «${title}» одобрен модерацией!</b>\n\nОн принят в дистрибуцию.`
+    );
+    return;
   }
 
-  const supabase = createSupabaseAdmin();
-  if (!supabase) {
-    console.error("[admin/update-release-status] missing Supabase service role");
-    return NextResponse.json({ ok: false, error: "Server misconfigured" }, { status: 503 });
-  }
+  const reason = escapeHtml((comment && comment.trim()) || "Отклонено модератором");
+  await sendTelegramNotification(
+    tid,
+    `❌ <b>Релиз «${title}» отклонён модерацией.</b>\n\nПричина: ${reason}`
+  );
+}
+
+async function handleUpdateReleaseStatus(
+  request: NextRequest
+): Promise<Response> {
+  const guard = await requireAdminSupabaseClient(
+    request,
+    getTelegramAuthContextFromRequest(request)
+  );
+  if (!guard.ok) return guard.response;
+  const supabase = guard.supabase;
 
   let json: unknown;
   try {
@@ -58,9 +82,9 @@ async function handleUpdateReleaseStatus(
   }
 
   const status = row.status as string;
-  if (status !== "processing" && status !== "pending") {
+  if (status !== "processing") {
     return NextResponse.json(
-      { ok: false, error: "Релиз не в очереди модерации (ожидались статусы processing или pending)." },
+      { ok: false, error: "Релиз не в очереди модерации (ожидался статус processing)." },
       { status: 409 }
     );
   }
@@ -84,6 +108,7 @@ async function handleUpdateReleaseStatus(
     if (!updated) {
       return NextResponse.json({ ok: false, error: "Не удалось обновить релиз." }, { status: 500 });
     }
+    await notifyArtistOnModerationResult(updated as ReleaseRecord, "approve");
     return NextResponse.json({ ok: true, record: updated as ReleaseRecord });
   }
 
@@ -107,7 +132,8 @@ async function handleUpdateReleaseStatus(
     return NextResponse.json({ ok: false, error: "Не удалось обновить релиз." }, { status: 500 });
   }
 
+  await notifyArtistOnModerationResult(updated as ReleaseRecord, "reject", msg);
   return NextResponse.json({ ok: true, record: updated as ReleaseRecord });
 }
 
-export const POST = withTelegramAuth(handleUpdateReleaseStatus);
+export const POST = handleUpdateReleaseStatus;

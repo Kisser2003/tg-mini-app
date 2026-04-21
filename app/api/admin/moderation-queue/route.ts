@@ -1,24 +1,21 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { requireAdminSupabaseClient } from "@/lib/admin-release-api-guard";
-import type { TelegramAuthContext } from "@/lib/api/with-telegram-auth";
-import { withTelegramAuth } from "@/lib/api/with-telegram-auth";
+import { getTelegramAuthContextFromRequest } from "@/lib/api/with-telegram-auth";
 import type { ReleaseRecord, ReleaseTrackRow } from "@/repositories/releases.repo";
 import type { ModerationQueueApiRow } from "@/types/admin";
 
 export const dynamic = "force-dynamic";
 
-async function handleModerationQueue(
-  _request: NextRequest,
-  ctx: TelegramAuthContext
-): Promise<Response> {
-  const guard = requireAdminSupabaseClient(ctx);
+async function handleModerationQueue(request: NextRequest): Promise<Response> {
+  const guard = await requireAdminSupabaseClient(request, getTelegramAuthContextFromRequest(request));
   if (!guard.ok) return guard.response;
 
   const { data: releases, error: relErr } = await guard.supabase
     .from("releases")
     .select("*")
-    .in("status", ["processing", "pending"])
+    // Only truly submitted releases should appear in moderation queue.
+    .eq("status", "processing")
     .order("created_at", { ascending: true });
 
   if (relErr) {
@@ -32,7 +29,7 @@ async function handleModerationQueue(
   for (const release of list) {
     const { data: tracks, error: trErr } = await guard.supabase
       .from("tracks")
-      .select("id, release_id, user_id, index, position, title, explicit, file_path, duration")
+      .select("id, release_id, user_id, index, position, title, explicit, file_path, lyrics, duration")
       .eq("release_id", (release as { id: string }).id)
       .order("index", { ascending: true });
 
@@ -50,4 +47,4 @@ async function handleModerationQueue(
   return NextResponse.json({ ok: true, rows });
 }
 
-export const GET = withTelegramAuth(handleModerationQueue);
+export const GET = handleModerationQueue;

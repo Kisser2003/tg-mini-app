@@ -1,7 +1,11 @@
 "use client";
 
 import { useEffect } from "react";
-import { initTelegramWebApp, isTelegramClientShell } from "@/lib/telegram";
+import {
+  initTelegramWebApp,
+  isTelegramClientShell,
+  persistTelegramShellSignalsFromUrl
+} from "@/lib/telegram";
 
 const SCRIPT_ID = "telegram-web-app-js";
 const TELEGRAM_SCRIPT_SRC = "https://telegram.org/js/telegram-web-app.js";
@@ -12,6 +16,10 @@ const TELEGRAM_SCRIPT_SRC = "https://telegram.org/js/telegram-web-app.js";
  * и «висит», ломая загрузку остальных скриптов/стилей.
  */
 export function TelegramWebAppScript() {
+  if (typeof window !== "undefined") {
+    persistTelegramShellSignalsFromUrl();
+  }
+
   useEffect(() => {
     if (typeof document === "undefined") return;
     if (!isTelegramClientShell()) return;

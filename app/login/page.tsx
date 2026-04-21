@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { LogIn, UserPlus, Mail, Lock, AlertCircle, Sparkles, UserRound } from "lucide-react";
 import { createSupabaseBrowser } from "@/lib/supabase";
-import { isTelegramClientShell } from "@/lib/telegram";
+import { appendCurrentTelegramHash, isTelegramClientShell } from "@/lib/telegram";
 import { useIsTelegramMiniApp } from "@/lib/hooks/useIsTelegramMiniApp";
 
 type AuthMode = "login" | "signup";
@@ -25,7 +25,8 @@ function LoginPageContent() {
   /** В Mini App вход по email не нужен — уходим с формы, если попали сюда по ошибочному редиректу. */
   useEffect(() => {
     if (!isTelegram) return;
-    router.replace(redirectTo.startsWith("/") ? redirectTo : "/library");
+    const target = redirectTo.startsWith("/") ? redirectTo : "/library";
+    router.replace(appendCurrentTelegramHash(target));
   }, [isTelegram, router, redirectTo]);
   /** Имя артиста / сценическое имя — только при регистрации */
   const [artistName, setArtistName] = useState("");

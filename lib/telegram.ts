@@ -70,16 +70,71 @@ export function getTelegramWebApp(): TelegramWebApp | null {
   return window.Telegram?.WebApp ?? null;
 }
 
+/** sessionStorage: редиректы Next сбрасывают `#tgWebApp…`, маркер остаётся на всю вкладку. */
+const TG_SHELL_SESSION_KEY = "__omf_tg_mini_shell";
+
+/**
+ * Сохраняет признак Mini App из hash/query (один раз на вкладку).
+ * Вызывать синхронно при первом клиентском рендере — до дочерних `useEffect` (редирект `/` → `/login` иначе теряет hash).
+ */
+export function persistTelegramShellSignalsFromUrl(): void {
+  if (typeof window === "undefined") return;
+  try {
+    const hash = window.location.hash ?? "";
+    const search = window.location.search ?? "";
+    if (/tgWebApp/i.test(hash) || /[?&]tgWebApp/i.test(search)) {
+      sessionStorage.setItem(TG_SHELL_SESSION_KEY, "1");
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Клиентская навигация `router.replace("/x")` сбрасывает fragment; переносим `#tgWebApp…` если он ещё на месте.
+ */
+export function appendCurrentTelegramHash(path: string): string {
+  if (typeof window === "undefined") return path;
+  try {
+    const h = window.location.hash;
+    if (!h || !/tgWebApp/i.test(h)) return path;
+    if (path.includes("#")) return path;
+    return `${path}${h}`;
+  } catch {
+    return path;
+  }
+}
+
 /**
  * Открыт ли сайт во встроенном WebView Telegram (Mini App).
  * Для пропуска веб-логина достаточно этого флага — не ждём `initData` (скрипт может подгрузиться позже).
  * Подписанный `initData` для API по-прежнему проверяется отдельно.
+ *
+ * Важно: Telegram Desktop/macOS часто не пишет `Telegram` в User-Agent — тогда опираемся на `#tgWebApp…` в URL и sessionStorage.
  */
 export function isTelegramClientShell(): boolean {
   if (typeof window === "undefined") return false;
   try {
+    if (sessionStorage.getItem(TG_SHELL_SESSION_KEY) === "1") return true;
+  } catch {
+    /* ignore */
+  }
+  try {
+    const hash = window.location.hash ?? "";
+    const search = window.location.search ?? "";
+    if (/tgWebApp/i.test(hash) || /[?&]tgWebApp/i.test(search)) return true;
+  } catch {
+    /* ignore */
+  }
+  try {
     const ua = navigator.userAgent?.toLowerCase() ?? "";
     if (ua.includes("telegram")) return true;
+  } catch {
+    /* ignore */
+  }
+  try {
+    const referrer = document.referrer?.toLowerCase() ?? "";
+    if (referrer.includes("t.me") || referrer.includes("telegram.me")) return true;
   } catch {
     /* ignore */
   }
@@ -170,7 +225,9 @@ export function initTelegramWebApp() {
 export function getTelegramInitDataForApiHeader(): string {
   if (typeof window === "undefined") return "";
   initTelegramWebApp();
-  return getTelegramWebApp()?.initData?.trim() ?? "";
+  const direct = getTelegramWebApp()?.initData?.trim() ?? "";
+  if (direct.length > 0) return direct;
+  return getTelegramInitDataFallback();
 }
 
 /** Синхронизация с `userId` в сторе мастера создания релиза (для RLS в PostgREST/Storage). */
@@ -250,7 +307,7 @@ function getDevUserIdForApiHeaders(): number | null {
  */
 export function getTelegramApiAuthHeaders(options?: { userId?: number | null }): Record<string, string> {
   initTelegramWebApp();
-  const initData = getTelegramWebApp()?.initData?.trim() ?? "";
+  const initData = getTelegramInitDataForApiHeader();
   const headers: Record<string, string> = {};
   if (initData.length > 0) {
     headers["X-Telegram-Init-Data"] = initData;
@@ -302,12 +359,42 @@ function parseTelegramUserFromInitDataString(initDataRaw: string): TelegramUser 
   }
 }
 
+/**
+ * Fallback initData source before Telegram WebApp object becomes available:
+ * - URL query param `tgWebAppData` (Telegram launch format)
+ * - cookie `tg_init_data` (written by initTelegramWebApp when possible)
+ */
+function getTelegramInitDataFallback(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    const params = new URLSearchParams(window.location.search ?? "");
+    const q = params.get("tgWebAppData");
+    if (q && q.trim().length > 0) {
+      return decodeURIComponent(q).trim();
+    }
+  } catch {
+    /* ignore */
+  }
+  try {
+    const cookies = document.cookie?.split(";") ?? [];
+    for (const c of cookies) {
+      const part = c.trim();
+      if (!part.startsWith("tg_init_data=")) continue;
+      const raw = part.slice("tg_init_data=".length);
+      if (!raw) continue;
+      return decodeURIComponent(raw).trim();
+    }
+  } catch {
+    /* ignore */
+  }
+  return "";
+}
+
 export function getTelegramUser(): TelegramUser | null {
   const webApp = getTelegramWebApp();
-  if (!webApp) return null;
-  const unsafe = webApp.initDataUnsafe?.user;
+  const unsafe = webApp?.initDataUnsafe?.user;
   if (unsafe) return unsafe;
-  const raw = webApp.initData?.trim();
+  const raw = webApp?.initData?.trim() || getTelegramInitDataFallback();
   if (!raw) return null;
   return parseTelegramUserFromInitDataString(raw);
 }

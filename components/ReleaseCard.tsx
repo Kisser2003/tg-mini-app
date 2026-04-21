@@ -9,6 +9,7 @@ export type ReleaseCardProps = {
   title: string;
   artist: string;
   status: ReleaseStatus;
+  meta?: string[];
   coverUrl?: string;
   index?: number;
   onClick?: () => void;
@@ -26,6 +27,7 @@ export function ReleaseCard({
   title,
   artist,
   status,
+  meta = [],
   coverUrl,
   index = 0,
   onClick
@@ -68,6 +70,18 @@ export function ReleaseCard({
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold tracking-tight text-white/90">{title}</p>
         <p className="mt-0.5 truncate text-xs text-white/30">{artist}</p>
+        {meta.length > 0 ? (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {meta.map((item) => (
+              <span
+                key={item}
+                className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] font-medium tracking-wide text-white/55"
+              >
+                {item}
+              </span>
+            ))}
+          </div>
+        ) : null}
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
