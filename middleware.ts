@@ -7,6 +7,7 @@ function isTelegramMiniAppShellPath(p: string): boolean {
   if (p === "/" || p === "") return true;
   const roots = [
     "library",
+    "multi-links",
     "release",
     "create",
     "settings",
