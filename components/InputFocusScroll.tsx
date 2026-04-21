@@ -14,8 +14,9 @@ function isTextField(el: EventTarget | null): el is HTMLInputElement | HTMLTextA
 }
 
 /**
- * TMA: при фокусе на поле ввода прокручивает его в центр видимой области
- * (после появления клавиатуры layout успевает обновиться).
+ * TMA / мобильный WebView: после фокуса подкручиваем поле с учётом visualViewport
+ * (клавиатура приходит с задержкой — повтор через ~320ms).
+ * `nearest` меньше ломает длинные формы, чем `center`, когда снизу важна кнопка «Далее».
  */
 export function InputFocusScroll() {
   useEffect(() => {
@@ -23,13 +24,14 @@ export function InputFocusScroll() {
       if (!isTextField(e.target)) return;
       const el = e.target;
 
-      const run = () => {
-        el.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+      const run = (behavior: ScrollBehavior) => {
+        el.scrollIntoView({ behavior, block: "nearest", inline: "nearest" });
       };
 
       requestAnimationFrame(() => {
-        requestAnimationFrame(run);
+        requestAnimationFrame(() => run("smooth"));
       });
+      window.setTimeout(() => run("auto"), 320);
     };
 
     document.addEventListener("focusin", onFocusIn, true);

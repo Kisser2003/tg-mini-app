@@ -58,7 +58,11 @@ export function AdaptiveLayout({ children }: { children: React.ReactNode }) {
       <div className="relative z-[1] mx-auto min-h-app w-full max-w-[450px]">
         <div
           id="app-main-scroll"
-          className="app-main-scroll relative px-3 pb-28 pt-4"
+          className="app-main-scroll relative px-3 pt-4"
+          style={{
+            paddingBottom:
+              "calc(7rem + env(safe-area-inset-bottom, 0px) + var(--keyboard-overlap, 0px))"
+          }}
         >
           {children}
         </div>

@@ -6,6 +6,7 @@ import { AppProviders } from "@/components/AppProviders";
 import { AppErrorBoundary } from "@/components/ErrorBoundary";
 import { PageTransition } from "@/components/PageTransition";
 import { InputFocusScroll } from "@/components/InputFocusScroll";
+import { VisualViewportKeyboardBridge } from "@/components/VisualViewportKeyboardBridge";
 import { TelegramBootstrap } from "@/components/TelegramBootstrap";
 import { TelegramWebAppScript } from "@/components/TelegramWebAppScript";
 import { AdaptiveLayout } from "@/components/AdaptiveLayout";
@@ -51,6 +52,8 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  /** Android Chrome: layout подстраивается под клавиатуру (в паре с visualViewport на iOS). */
+  interactiveWidget: "resizes-content",
   viewportFit: "cover",
   themeColor: [
     { media: "(prefers-color-scheme: dark)", color: "#030303" },
@@ -84,6 +87,7 @@ export default function RootLayout({
         <TelegramWebAppScript />
         <TelegramBootstrap />
         <InputFocusScroll />
+        <VisualViewportKeyboardBridge />
         <Toaster richColors expand position="top-center" />
         <div className="mesh-bg" aria-hidden>
           <div className="light-hero" />

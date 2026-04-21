@@ -470,7 +470,7 @@ export default function CreateReviewPage() {
                   whileTap={submitBlocked ? undefined : { scale: 0.98 }}
                   whileHover={submitBlocked ? undefined : { scale: 1.02 }}
                   transition={{ type: "spring", stiffness: 420, damping: 28 }}
-                  className="group relative z-10 inline-flex h-[58px] w-full items-center justify-center overflow-hidden rounded-[22px] bg-gradient-to-r from-[#6366f1] via-[#a855f7] to-[#ec4899] text-[16px] font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.22)] ring-1 ring-white/10 transition-transform duration-200 disabled:cursor-not-allowed disabled:opacity-55 disabled:ring-white/5 disabled:hover:scale-100"
+                  className="create-flow-submit-target group relative z-10 inline-flex h-[58px] w-full items-center justify-center overflow-hidden rounded-[22px] bg-gradient-to-r from-[#6366f1] via-[#a855f7] to-[#ec4899] text-[16px] font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.22)] ring-1 ring-white/10 transition-transform duration-200 disabled:cursor-not-allowed disabled:opacity-55 disabled:ring-white/5 disabled:hover:scale-100"
                 >
                   <span
                     className="pointer-events-none absolute inset-0 opacity-40 mix-blend-overlay"

@@ -11,6 +11,8 @@
     --safe-right: env(safe-area-inset-right, 0px);
     --safe-bottom: env(safe-area-inset-bottom, 0px);
     --safe-left: env(safe-area-inset-left, 0px);
+    /** TMA: перекрытие снизу от виртуальной клавиатуры (px), выставляет VisualViewportKeyboardBridge */
+    --keyboard-overlap: 0px;
 
     --background: 240 20% 1.5%;
     --foreground: 0 0% 95%;
@@ -193,6 +195,16 @@ textarea::placeholder {
 
 button {
   -webkit-tap-highlight-color: transparent;
+}
+
+/**
+ * Мастер создания релиза (TMA): запас снизу при программной прокрутке / фокусе,
+ * чтобы «Далее» / «Отправить» не оказывались под клавиатурой и нижней навигацией.
+ */
+.create-flow-submit-target {
+  scroll-margin-bottom: calc(
+    7rem + env(safe-area-inset-bottom, 0px) + var(--keyboard-overlap, 0px) + 0.75rem
+  );
 }
 
 /* Нативный date внутри flex: локализованная строка не вылезает за карточку */

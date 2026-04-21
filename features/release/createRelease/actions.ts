@@ -200,7 +200,8 @@ function getCreateReleaseApiAuthHeaders(): Record<string, string> {
 
 async function saveDraftPatchViaServiceApi(
   releaseId: string,
-  patch: Record<string, unknown>
+  patch: Record<string, unknown>,
+  fetchInit?: RequestInit
 ): Promise<boolean> {
   const doFetch = (authHeaders: Record<string, string>) =>
     fetch("/api/releases/save-draft-patch", {
@@ -210,7 +211,8 @@ async function saveDraftPatchViaServiceApi(
         "Content-Type": "application/json",
         ...authHeaders
       },
-      body: JSON.stringify({ releaseId, patch })
+      body: JSON.stringify({ releaseId, patch }),
+      ...fetchInit
     });
 
   let authHeaders =
@@ -878,6 +880,45 @@ export async function uploadArtworkForDraft(file: File): Promise<string | null> 
   }
 }
 
+/** Поля паспорта → колонки `releases` (как в `saveDraftAction`, без строгой Zod-проверки). */
+function buildReleaseRowPatchFromMetadata(
+  m: CreateMetadata,
+  artworkUrl: string | null
+): Record<string, unknown> {
+  const mainArtist = m.primaryArtist ?? "";
+  return {
+    artist_name: mainArtist,
+    title: m.releaseTitle,
+    release_type: m.releaseType,
+    genre: m.genre,
+    release_date: m.releaseDate,
+    explicit: m.explicit,
+    ...(artworkUrl ? { artwork_url: artworkUrl } : {})
+  };
+}
+
+/**
+ * Фоновое сохранение паспорта в Supabase для уже существующего черновика (без валидации Zod).
+ * Нужно для Mini App: при свайпе закрытия локальный стор может не успеть дописаться, но строка в БД уже есть.
+ */
+export async function syncPassportFormToReleaseDraft(
+  metadata: CreateMetadata,
+  options?: { keepalive?: boolean }
+): Promise<boolean> {
+  if (typeof window === "undefined") return false;
+  try {
+    initUserContextInStore();
+    await syncWebUserIntoStore();
+  } catch {
+    return false;
+  }
+  const store = useCreateReleaseDraftStore.getState();
+  const rid = store.releaseId;
+  if (!rid) return false;
+  const patch = buildReleaseRowPatchFromMetadata(metadata, store.artworkUrl);
+  return saveDraftPatchViaServiceApi(rid, patch, options?.keepalive ? { keepalive: true } : undefined);
+}
+
 /**
  * Сохраняет текущие метаданные (и обложку, если есть) в строку `releases` в БД.
  * При отсутствии `releaseId` создаёт черновик через `ensureDraftRelease`.
@@ -927,26 +968,8 @@ export async function saveDraftAction(
       return { ok: false, message: "Нет идентификатора релиза." };
     }
     const m = parsed.data;
-    const mainArtist = m.primaryArtist ?? "";
     const latest = useCreateReleaseDraftStore.getState();
-
-    /**
-     * TEMP: минимальный набор полей под «старую» схему `releases` (обход рассинхрона миграций).
-     * Закомментировано: collaborators, artist_links, performance_language, has_existing_profiles.
-     */
-    const finalData: Record<string, unknown> = {
-      artist_name: mainArtist,
-      title: m.releaseTitle,
-      release_type: m.releaseType,
-      genre: m.genre,
-      release_date: m.releaseDate,
-      explicit: m.explicit,
-      ...(latest.artworkUrl ? { artwork_url: latest.artworkUrl } : {}),
-      // performance_language: m.language,
-      // collaborators: [] as unknown[],
-      // has_existing_profiles: Object.keys(artistLinksToJson(latest.releaseArtistLinks)).length > 0,
-      // artist_links: artistLinksToJson(latest.releaseArtistLinks) ?? {},
-    };
+    const finalData = buildReleaseRowPatchFromMetadata(m, latest.artworkUrl);
 
     try {
       const viaService = await saveDraftPatchViaServiceApi(rid, finalData);

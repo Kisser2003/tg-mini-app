@@ -21,7 +21,8 @@ import {
   fetchLatestDraftReleaseIdForUser,
   hydrateFromReleaseId,
   initUserContextInStore,
-  saveDraftAction
+  saveDraftAction,
+  syncPassportFormToReleaseDraft
 } from "@/features/release/createRelease/actions";
 import { logClientError } from "@/lib/logger";
 import { firstRhfErrorMessage } from "@/lib/rhf-first-error";
@@ -90,6 +91,7 @@ function CreateMetadataPageInner() {
   const releaseIdParam = searchParams.get("releaseId");
 
   const storeMetadata = useCreateReleaseDraftStore((s) => s.metadata);
+  const releaseId = useCreateReleaseDraftStore((s) => s.releaseId);
   const hasHydrated = useCreateReleaseDraftStore((s) => s.hasHydrated);
   const setMetadata = useCreateReleaseDraftStore((s) => s.setMetadata);
   const storeTracks = useCreateReleaseDraftStore((s) => s.tracks);
@@ -172,6 +174,7 @@ function CreateMetadataPageInner() {
     watch,
     setValue,
     reset,
+    getValues,
     formState: { errors, isDirty, dirtyFields, touchedFields, isSubmitting }
   } = useForm<CreateMetadata>({
     resolver: zodResolver(metadataSchema),
@@ -181,6 +184,29 @@ function CreateMetadataPageInner() {
 
   const values = watch();
   const lastSyncedValuesRef = useRef<string>("");
+  const serverSyncTimerRef = useRef<number | null>(null);
+
+  const flushPassportToZustand = useCallback(() => {
+    const v = getValues();
+    const serialized = JSON.stringify(v);
+    if (serialized === lastSyncedValuesRef.current) return;
+    setMetadata(v);
+    lastSyncedValuesRef.current = serialized;
+  }, [getValues, setMetadata]);
+
+  const clearServerSyncTimer = useCallback(() => {
+    if (serverSyncTimerRef.current != null) {
+      window.clearTimeout(serverSyncTimerRef.current);
+      serverSyncTimerRef.current = null;
+    }
+  }, []);
+
+  const flushPassportToServerNow = useCallback(() => {
+    clearServerSyncTimer();
+    const rid = useCreateReleaseDraftStore.getState().releaseId;
+    if (!rid) return;
+    void syncPassportFormToReleaseDraft(getValues());
+  }, [clearServerSyncTimer, getValues]);
 
   // После rehydrate persist синхронизируем RHF один раз из store (без releaseId в URL).
   const didSyncHydratedDefaultsRef = useRef(false);
@@ -228,16 +254,43 @@ function CreateMetadataPageInner() {
     [metaForGuidelines]
   );
 
+  // Каждый символ → сразу в Zustand + localStorage (persist). Debounce убираем: при свайпе закрытия
+  // Mini App таймер отменяется и прогресс не успевал сохраниться.
   useEffect(() => {
     if (!isDirty) return;
     const serialized = JSON.stringify(values);
     if (serialized === lastSyncedValuesRef.current) return;
-    const timeoutId = window.setTimeout(() => {
-      setMetadata(values);
-      lastSyncedValuesRef.current = serialized;
-    }, 200);
-    return () => window.clearTimeout(timeoutId);
+    setMetadata(values);
+    lastSyncedValuesRef.current = serialized;
   }, [values, isDirty, setMetadata]);
+
+  // Уже есть строка в БД — дублируем паспорт в Supabase (редко: debounce), плюс мгновенно на blur / pagehide.
+  useEffect(() => {
+    if (!releaseId || !isDirty) return;
+    clearServerSyncTimer();
+    serverSyncTimerRef.current = window.setTimeout(() => {
+      serverSyncTimerRef.current = null;
+      void syncPassportFormToReleaseDraft(getValues());
+    }, 1100);
+    return () => clearServerSyncTimer();
+  }, [values, isDirty, releaseId, getValues, clearServerSyncTimer]);
+
+  useEffect(() => {
+    const onVisibilityHidden = () => {
+      if (document.visibilityState !== "hidden") return;
+      flushPassportToZustand();
+    };
+    const onPageHide = () => {
+      flushPassportToZustand();
+      void syncPassportFormToReleaseDraft(getValues(), { keepalive: true });
+    };
+    document.addEventListener("visibilitychange", onVisibilityHidden);
+    window.addEventListener("pagehide", onPageHide);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityHidden);
+      window.removeEventListener("pagehide", onPageHide);
+    };
+  }, [flushPassportToZustand, getValues]);
 
   const minReleaseDate = useMemo(() => {
     const today = new Date();
@@ -345,7 +398,14 @@ function CreateMetadataPageInner() {
             <div className="h-14 animate-pulse rounded-[20px] bg-white/[0.08]" />
           </div>
         ) : (
-          <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="flex flex-col gap-6">
+          <form
+            onSubmit={handleSubmit(onSubmit, onInvalid)}
+            onBlurCapture={() => {
+              flushPassportToZustand();
+              flushPassportToServerNow();
+            }}
+            className="flex flex-col gap-6"
+          >
             {hydrateError && (
               <p className="break-words rounded-[14px] border border-red-500/30 bg-red-950/40 px-3 py-2 text-[12px] leading-relaxed text-red-100">
                 {hydrateError}
@@ -632,7 +692,7 @@ function CreateMetadataPageInner() {
             <MagneticButton
               type="submit"
               disabled={!canProceed || isSubmitting}
-              className="pulse-glow mt-1 inline-flex h-14 w-full items-center justify-center rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-[16px] font-bold text-white drop-shadow-[0_0_20px_rgba(168,85,247,0.45)] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+              className="create-flow-submit-target pulse-glow mt-1 inline-flex h-14 w-full items-center justify-center rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-[16px] font-bold text-white drop-shadow-[0_0_20px_rgba(168,85,247,0.45)] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
             >
               {isSubmitting ? "Сохраняем…" : "Далее"}
             </MagneticButton>

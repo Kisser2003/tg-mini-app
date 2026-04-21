@@ -420,7 +420,7 @@ export default function CreateTracksPage() {
           <MagneticButton
             type="submit"
             disabled={!isValid || isSubmitting || isUploadingWav || isWavTransferActive}
-            className="pulse-glow inline-flex h-14 w-full items-center justify-center rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-[16px] font-bold text-white drop-shadow-[0_0_20px_rgba(168,85,247,0.45)] disabled:opacity-60 disabled:shadow-none"
+            className="create-flow-submit-target pulse-glow inline-flex h-14 w-full items-center justify-center rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-[16px] font-bold text-white drop-shadow-[0_0_20px_rgba(168,85,247,0.45)] disabled:opacity-60 disabled:shadow-none"
           >
             {isUploadingWav || isWavTransferActive
               ? "Загружаем WAV…"

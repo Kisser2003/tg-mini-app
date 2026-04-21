@@ -72,10 +72,10 @@ export function ArtistProfileLinksSection() {
 
   return (
     <div ref={panelRef} className="min-w-0 space-y-3 rounded-[16px] border border-white/[0.08] bg-black/25 p-3">
-      <div className="flex items-center justify-between gap-3">
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1">
         <label
           htmlFor="artist-has-profiles"
-          className="min-w-0 flex-1 cursor-pointer text-[13px] leading-snug text-white/85"
+          className="min-w-0 cursor-pointer text-[13px] leading-snug text-white/85"
         >
           У меня уже есть профили на площадках
         </label>
@@ -85,7 +85,7 @@ export function ArtistProfileLinksSection() {
           role="switch"
           aria-checked={hasProfiles}
           onClick={() => toggleProfiles(!hasProfiles)}
-          className={`relative inline-flex h-8 w-[52px] flex-shrink-0 items-center rounded-full px-[3px] transition-colors ${
+          className={`relative inline-flex h-8 w-[52px] shrink-0 items-center justify-start rounded-full px-[3px] transition-colors ${
             hasProfiles ? "bg-blue-600" : "bg-white/15"
           }`}
         >
