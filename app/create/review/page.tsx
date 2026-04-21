@@ -34,12 +34,7 @@ import {
 } from "@/lib/performance-language";
 
 function SectionDivider() {
-  return (
-    <div
-      className="my-4 h-px w-full bg-gradient-to-r from-transparent via-white/20 to-transparent"
-      aria-hidden
-    />
-  );
+  return <div className="my-4 h-px w-full bg-white/10" aria-hidden />;
 }
 
 function formatReleaseDateBadge(iso: string | undefined): string {
@@ -127,6 +122,8 @@ export default function CreateReviewPage() {
     submitStatus === "submitting" ||
     submitStatus === "error" ||
     (submitStatus === "success" && !progressDismissed);
+
+  const progressActive = isSubmitting || submitStatus === "submitting";
 
   const releaseTitle = metadata.releaseTitle?.trim() || "Релиз";
   const artistName = metadata.primaryArtist?.trim() || "Артист";
@@ -307,10 +304,10 @@ export default function CreateReviewPage() {
               exit={{ opacity: 0, y: -12 }}
               transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
             >
-              <div className="glass-glow glass-glow-charged p-6">
+              <div className="overflow-hidden rounded-[1.25rem] border border-white/10 bg-[#1A1A1E] p-6">
                 <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:gap-8">
                   <div className="mx-auto w-full max-w-[168px] shrink-0 sm:mx-0">
-                    <div className="relative aspect-square overflow-hidden rounded-md border border-white/10 shadow-md">
+                    <div className="relative aspect-square overflow-hidden rounded-md border border-white/10">
                       {artworkUrl ? (
                         <Image
                           src={artworkUrl}
@@ -366,21 +363,21 @@ export default function CreateReviewPage() {
                     {artistName} — {releaseTitle}
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <span className="inline-flex items-center rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-medium text-white/90 backdrop-blur-md">
+                    <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/90">
                       {RELEASE_TYPE_RU[metadata.releaseType] ?? metadata.releaseType}
                     </span>
-                    <span className="inline-flex items-center rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-medium text-white/90 backdrop-blur-md">
+                    <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/90">
                       {metadata.genre?.trim() || "Жанр"}
                     </span>
-                    <span className="inline-flex items-center rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-medium text-white/90 backdrop-blur-md">
+                    <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/90">
                       {PERFORMANCE_LANGUAGE_LABELS[metadata.language as PerformanceLanguage] ??
                         metadata.language}
                     </span>
-                    <span className="inline-flex items-center rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-medium text-white/90 backdrop-blur-md">
+                    <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/90">
                       {formatReleaseDateBadge(metadata.releaseDate)}
                     </span>
                     {metadata.explicit ? (
-                      <span className="inline-flex items-center rounded-full border border-red-500/25 bg-red-500/15 px-3 py-1 text-xs font-medium text-red-100/95 backdrop-blur-md">
+                      <span className="inline-flex items-center rounded-full border border-red-500/25 bg-red-500/15 px-3 py-1 text-xs font-medium text-red-100/95">
                         Explicit
                       </span>
                     ) : null}
@@ -438,103 +435,91 @@ export default function CreateReviewPage() {
                     })}
                   </ul>
                 </section>
-              </div>
 
-              {missingFiles && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  className="overflow-hidden rounded-[18px] border border-amber-500/30 bg-amber-950/30 px-4 py-3 text-[12px] text-amber-100/90"
-                >
-                  <p>
-                    Для отправки нужны WAV-файлы в этой сессии (после возврата из черновика их
-                    нужно прикрепить заново).{" "}
-                    <Link
-                      href="/create/tracks"
-                      className="font-medium text-amber-200 underline underline-offset-2"
-                    >
-                      Вернуться и загрузить треки
-                    </Link>
-                  </p>
-                </motion.div>
-              )}
-
-              <div className="relative mt-6 w-full pb-6 pt-1">
-                {/* Мягкий подсвет без «прямоугольника» от box-shadow */}
-                <div
-                  className={`pointer-events-none absolute left-1/2 top-[calc(100%-0.5rem)] h-14 w-[min(100%,420px)] -translate-x-1/2 -translate-y-1/2 rounded-[100px] bg-gradient-to-r from-[#6366f1] via-[#c084fc] to-[#ec4899] blur-[28px] sm:blur-[36px] ${submitBlocked ? "opacity-20" : "opacity-[0.55]"}`}
-                  aria-hidden
-                />
-                <motion.button
-                  type="button"
-                  disabled={submitBlocked}
-                  onClick={() => void handleSubmit()}
-                  whileTap={submitBlocked ? undefined : { scale: 0.98 }}
-                  whileHover={submitBlocked ? undefined : { scale: 1.02 }}
-                  transition={{ type: "spring", stiffness: 420, damping: 28 }}
-                  className="create-flow-submit-target group relative z-10 inline-flex h-[58px] w-full items-center justify-center overflow-hidden rounded-[22px] bg-gradient-to-r from-[#6366f1] via-[#a855f7] to-[#ec4899] text-[16px] font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.22)] ring-1 ring-white/10 transition-transform duration-200 disabled:cursor-not-allowed disabled:opacity-55 disabled:ring-white/5 disabled:hover:scale-100"
-                >
-                  <span
-                    className="pointer-events-none absolute inset-0 opacity-40 mix-blend-overlay"
-                    style={{
-                      background:
-                        "linear-gradient(110deg, transparent 0%, transparent 38%, rgba(255,255,255,0.12) 50%, transparent 62%, transparent 100%)",
-                      backgroundSize: "200% 100%",
-                      animation: submitBlocked ? "none" : "review-btn-shimmer 3.2s ease-in-out infinite"
-                    }}
-                    aria-hidden
-                  />
-                  <motion.span
-                    className="pointer-events-none absolute inset-y-0 left-0 w-[38%] skew-x-[-16deg] bg-gradient-to-r from-transparent via-white/40 to-transparent opacity-60"
-                    animate={submitBlocked ? undefined : { x: ["-130%", "230%"] }}
-                    transition={{
-                      duration: 2.8,
-                      repeat: Infinity,
-                      ease: "linear",
-                      repeatDelay: 0.35
-                    }}
-                  />
-                  <span className="relative z-[1] drop-shadow-sm">
-                    {tracksUploadInProgress
-                      ? "Загрузка WAV…"
-                      : isSubmitting || submitStatus === "submitting"
-                        ? "Отправляем..."
-                        : "Отправить релиз"}
-                  </span>
-                </motion.button>
-              </div>
-
-              <AnimatePresence mode="wait">
-                {showProgressPanel && (
+                {missingFiles && (
                   <motion.div
-                    key="upload-progress"
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 8 }}
-                    transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    className="mt-6 overflow-hidden rounded-xl border border-amber-500/30 bg-amber-950/25 px-4 py-3 text-[12px] text-amber-100/90"
                   >
-                    <UploadProgress label={stageLabel} progress={submitProgress} />
+                    <p>
+                      Для отправки нужны WAV-файлы в этой сессии (после возврата из черновика их
+                      нужно прикрепить заново).{" "}
+                      <Link
+                        href="/create/tracks"
+                        className="font-medium text-amber-200 underline underline-offset-2"
+                      >
+                        Вернуться и загрузить треки
+                      </Link>
+                    </p>
                   </motion.div>
                 )}
-              </AnimatePresence>
 
-              {submitError && (
-                <p className="break-words text-center text-[11px] leading-relaxed text-red-400">
-                  {submitError}{" "}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      triggerHaptic("light");
-                      router.push("/create/tracks");
-                    }}
-                    className="inline font-medium text-red-300 underline underline-offset-2"
-                  >
-                    Вернуться и загрузить треки
-                  </button>
-                  {" · "}
-                  Попробуйте снова после загрузки файлов.
-                </p>
-              )}
+                <div className="mt-6 border-t border-white/10 pt-6">
+                  <AnimatePresence mode="wait">
+                    {!progressActive ? (
+                      <motion.div
+                        key="submit-cta"
+                        initial={{ opacity: 0, y: 4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -4 }}
+                        transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+                      >
+                        <motion.button
+                          type="button"
+                          disabled={submitBlocked}
+                          onClick={() => void handleSubmit()}
+                          whileTap={submitBlocked ? undefined : { scale: 0.98 }}
+                          whileHover={submitBlocked ? undefined : { scale: 1.01 }}
+                          transition={{ type: "spring", stiffness: 420, damping: 28 }}
+                          className="create-flow-submit-target relative inline-flex h-[52px] w-full items-center justify-center rounded-2xl bg-gradient-to-r from-[#6366f1] via-[#a855f7] to-[#ec4899] text-[15px] font-semibold text-white ring-1 ring-white/10 transition-transform duration-200 disabled:cursor-not-allowed disabled:bg-none disabled:bg-white/10 disabled:text-white/50 disabled:ring-white/5 disabled:hover:scale-100"
+                        >
+                          <span className="relative z-[1]">
+                            {tracksUploadInProgress ? "Загрузка WAV…" : "Отправить релиз"}
+                          </span>
+                        </motion.button>
+                      </motion.div>
+                    ) : null}
+                  </AnimatePresence>
+
+                  <AnimatePresence mode="wait">
+                    {showProgressPanel ? (
+                      <motion.div
+                        key="upload-progress"
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 8 }}
+                        transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+                        className={progressActive ? "" : "mt-4"}
+                      >
+                        <UploadProgress
+                          label={stageLabel}
+                          progress={submitProgress}
+                          className="border-0 bg-transparent p-0 backdrop-blur-none"
+                        />
+                      </motion.div>
+                    ) : null}
+                  </AnimatePresence>
+                </div>
+
+                {submitError && (
+                  <p className="mt-4 break-words text-center text-[11px] leading-relaxed text-red-400">
+                    {submitError}{" "}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        triggerHaptic("light");
+                        router.push("/create/tracks");
+                      }}
+                      className="inline font-medium text-red-300 underline underline-offset-2"
+                    >
+                      Вернуться и загрузить треки
+                    </button>
+                    {" · "}
+                    Попробуйте снова после загрузки файлов.
+                  </p>
+                )}
+              </div>
             </motion.div>
           </AnimatePresence>
         </div>
