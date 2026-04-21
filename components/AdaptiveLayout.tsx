@@ -10,8 +10,9 @@ import { Sidebar } from "./Sidebar";
 /**
  * Адаптивный layout: Telegram Mini App vs Web
  * - Telegram: max-w-[450px], bottom navigation
- * - Web: полный экран, sidebar навигация
- * - Public pages (login): no sidebar, centered content
+ * - Web desktop (lg+): сайдбар слева
+ * - Web mobile: без сайдбара — нижняя панель как в TMA (навигация не пропадает)
+ * - Public pages (login): без навигации
  */
 export function AdaptiveLayout({ children }: { children: React.ReactNode }) {
   const isTelegram = useIsTelegramMiniApp();
@@ -33,6 +34,10 @@ export function AdaptiveLayout({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
   }
 
+  /** Отступ снизу под фиксированный BottomNav на узком экране (мобильный веб, до срабатывания lg:). */
+  const webMobileScrollPad =
+    "px-4 pt-6 pb-[calc(7rem+env(safe-area-inset-bottom,0px))] md:px-8 md:pt-8 lg:px-12 lg:py-8 lg:pb-8";
+
   // During SSR and initial mount, render universal layout
   if (!mounted) {
     return (
@@ -41,10 +46,13 @@ export function AdaptiveLayout({ children }: { children: React.ReactNode }) {
         <div className="ml-0 flex-1 lg:ml-64">
           <div
             id="app-main-scroll"
-            className="app-main-scroll relative max-w-[1400px] px-4 py-6 md:px-8 md:py-8 lg:px-12"
+            className={`app-main-scroll relative max-w-[1400px] ${webMobileScrollPad}`}
           >
             {children}
           </div>
+        </div>
+        <div className="lg:hidden">
+          <BottomNavHost />
         </div>
         <FAB />
       </div>
@@ -72,17 +80,20 @@ export function AdaptiveLayout({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // Web: полноценный desktop layout с sidebar
+  // Web: desktop — сайдбар; мобильный браузер — та же нижняя панель, что в Telegram (сайдбар только lg+)
   return (
     <div className="relative z-[1] flex min-h-app w-full">
       <Sidebar />
       <div className="ml-0 flex-1 lg:ml-64">
         <div
           id="app-main-scroll"
-          className="app-main-scroll relative max-w-[1400px] px-4 py-6 md:px-8 md:py-8 lg:px-12"
+          className={`app-main-scroll relative max-w-[1400px] ${webMobileScrollPad}`}
         >
           {children}
         </div>
+      </div>
+      <div className="lg:hidden">
+        <BottomNavHost />
       </div>
       <FAB />
     </div>
