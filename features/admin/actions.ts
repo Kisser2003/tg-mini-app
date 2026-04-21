@@ -110,11 +110,13 @@ async function postPublishSmartLink(body: {
   }
 
   if (!res.ok) {
-    const err =
-      typeof json === "object" && json !== null && "error" in json && typeof (json as { error: unknown }).error === "string"
-        ? (json as { error: string }).error
+    const o = json as { error?: unknown; detail?: unknown };
+    const base =
+      typeof o.error === "string" && o.error.length > 0
+        ? o.error
         : "Не удалось выпустить релиз со ссылкой.";
-    throw new Error(err);
+    const detail = typeof o.detail === "string" && o.detail.trim() ? o.detail.trim() : "";
+    throw new Error(detail ? `${base} ${detail}` : base);
   }
 
   const parsed = json as { ok?: boolean; record?: ReleaseRecord };

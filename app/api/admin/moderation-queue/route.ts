@@ -14,8 +14,8 @@ async function handleModerationQueue(request: NextRequest): Promise<Response> {
   const { data: releases, error: relErr } = await guard.supabase
     .from("releases")
     .select("*")
-    // Only truly submitted releases should appear in moderation queue.
-    .eq("status", "processing")
+    // Отправленные на модерацию: в БД обычно `processing`, реже legacy `review`.
+    .in("status", ["processing", "review"])
     .order("created_at", { ascending: true });
 
   if (relErr) {

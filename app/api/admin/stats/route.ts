@@ -21,7 +21,10 @@ async function handleAdminStats(request: NextRequest): Promise<Response> {
   const dayStart = startOfUtcDayIso();
 
   const [{ count: pendingQueue, error: e1 }, { count: readyToday, error: e2 }] = await Promise.all([
-    supabase.from("releases").select("*", { count: "exact", head: true }).eq("status", "processing"),
+    supabase
+      .from("releases")
+      .select("*", { count: "exact", head: true })
+      .in("status", ["processing", "review"]),
     supabase
       .from("releases")
       .select("*", { count: "exact", head: true })

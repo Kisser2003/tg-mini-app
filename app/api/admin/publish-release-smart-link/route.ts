@@ -85,10 +85,13 @@ async function handlePublishReleaseSmartLink(request: NextRequest): Promise<Resp
     return NextResponse.json({ ok: false, error: "Релиз не найден." }, { status: 404 });
   }
 
-  const status = row.status as string;
-  if (status !== "processing") {
+  const status = String(row.status ?? "").toLowerCase();
+  if (status !== "processing" && status !== "review") {
     return NextResponse.json(
-      { ok: false, error: "Релиз не в очереди модерации (ожидался статус processing)." },
+      {
+        ok: false,
+        error: "Релиз не в очереди модерации (нужен статус «на проверке»: processing или review)."
+      },
       { status: 409 }
     );
   }
@@ -105,8 +108,18 @@ async function handlePublishReleaseSmartLink(request: NextRequest): Promise<Resp
     .maybeSingle();
 
   if (updErr) {
-    console.error("[admin/publish-release-smart-link] update:", updErr.message);
-    return NextResponse.json({ ok: false, error: "Не удалось сохранить выпуск." }, { status: 500 });
+    const detail = [updErr.message, (updErr as { details?: string }).details]
+      .filter(Boolean)
+      .join(" — ");
+    console.error("[admin/publish-release-smart-link] update:", detail, updErr);
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Не удалось сохранить выпуск.",
+        detail: detail || undefined
+      },
+      { status: 500 }
+    );
   }
 
   if (!updated) {
