@@ -12,12 +12,17 @@ import {
   FileText,
   Clock3,
   Link2,
-  Megaphone
+  Megaphone,
+  ChevronDown
 } from "lucide-react";
 import { useLogout } from "@/lib/hooks/useWebAuth";
 import { motion } from "framer-motion";
 import { isAdminUi, isAdminUiByWebSession } from "@/lib/admin";
 import { initTelegramWebApp } from "@/lib/telegram";
+import { cn } from "@/lib/utils";
+
+const LS_RELEASES_OPEN = "omf.sidebar.releasesOpen";
+const LS_MARKETING_OPEN = "omf.sidebar.marketingOpen";
 
 /**
  * Боковая навигация для веб-версии (desktop)
@@ -27,6 +32,8 @@ export function Sidebar() {
   const { logout } = useLogout();
   const [showAdminTab, setShowAdminTab] = useState(false);
   const [releaseView, setReleaseView] = useState<"all" | "drafts" | "moderation">("all");
+  const [releasesOpen, setReleasesOpen] = useState(true);
+  const [marketingOpen, setMarketingOpen] = useState(true);
 
   useEffect(() => {
     initTelegramWebApp();
@@ -35,6 +42,17 @@ export function Sidebar() {
       const webAdmin = await isAdminUiByWebSession();
       if (webAdmin) setShowAdminTab(true);
     })();
+  }, []);
+
+  useEffect(() => {
+    try {
+      const r = localStorage.getItem(LS_RELEASES_OPEN);
+      const m = localStorage.getItem(LS_MARKETING_OPEN);
+      if (r !== null) setReleasesOpen(r === "1");
+      if (m !== null) setMarketingOpen(m === "1");
+    } catch {
+      /* ignore */
+    }
   }, []);
 
   useEffect(() => {
@@ -83,54 +101,101 @@ export function Sidebar() {
       {/* Navigation */}
       <nav className="flex-1 space-y-4 p-4">
         <div className="space-y-2">
-          <div className="flex items-center gap-3 px-4 py-2 text-white/85">
-            <FileMusic className="h-5 w-5" />
-            <span className="font-medium">Ваши релизы</span>
-          </div>
-          <div className="ml-3 border-l border-white/10 pl-3">
-            {releaseViews.map((item) => {
-              const Icon = item.icon;
-              const isActive = pathname === "/library" && releaseView === item.view;
+          <button
+            type="button"
+            onClick={() => {
+              setReleasesOpen((v) => {
+                const next = !v;
+                try {
+                  localStorage.setItem(LS_RELEASES_OPEN, next ? "1" : "0");
+                } catch {
+                  /* ignore */
+                }
+                return next;
+              });
+            }}
+            aria-expanded={releasesOpen}
+            className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-white/85 transition-colors hover:bg-white/5"
+          >
+            <ChevronDown
+              className={cn(
+                "h-4 w-4 shrink-0 text-white/45 transition-transform duration-200",
+                !releasesOpen && "-rotate-90"
+              )}
+              aria-hidden
+            />
+            <FileMusic className="h-5 w-5 shrink-0" />
+            <span className="min-w-0 flex-1 font-medium">Ваши релизы</span>
+          </button>
+          {releasesOpen ? (
+            <div className="ml-3 border-l border-white/10 pl-3">
+              {releaseViews.map((item) => {
+                const Icon = item.icon;
+                const isActive = pathname === "/library" && releaseView === item.view;
 
-              return (
-                <Link
-                  key={item.path}
-                  href={item.path}
-                  onClick={() => setReleaseView(item.view)}
-                >
-                  <motion.div
-                    className={`
+                return (
+                  <Link
+                    key={item.path}
+                    href={item.path}
+                    onClick={() => setReleaseView(item.view)}
+                  >
+                    <motion.div
+                      className={`
                       relative mt-1.5 flex items-center gap-2.5 rounded-lg px-3 py-2.5 transition-all duration-200
                       ${isActive ? "bg-white/10 text-white" : "text-white/55 hover:bg-white/5 hover:text-white"}
                     `}
-                    whileHover={{ scale: 1.01 }}
-                    whileTap={{ scale: 0.98 }}
-                  >
-                    {isActive && (
-                      <motion.div
-                        layoutId="sidebar-active-sub"
-                        className="absolute inset-0 rounded-lg border border-white/10 bg-gradient-to-r from-purple-500/20 to-pink-500/20"
-                        transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                      />
-                    )}
-                    <Icon className="relative h-4 w-4" />
-                    <span className="relative text-[14px] font-medium">{item.label}</span>
-                  </motion.div>
-                </Link>
-              );
-            })}
-          </div>
+                      whileHover={{ scale: 1.01 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      {isActive && (
+                        <motion.div
+                          layoutId="sidebar-active-sub"
+                          className="absolute inset-0 rounded-lg border border-white/10 bg-gradient-to-r from-purple-500/20 to-pink-500/20"
+                          transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                        />
+                      )}
+                      <Icon className="relative h-4 w-4" />
+                      <span className="relative text-[14px] font-medium">{item.label}</span>
+                    </motion.div>
+                  </Link>
+                );
+              })}
+            </div>
+          ) : null}
         </div>
 
         <div className="space-y-2">
-          <div className="flex items-center gap-3 px-4 py-2 text-white/85">
-            <Megaphone className="h-5 w-5" />
-            <span className="font-medium">Маркетинг</span>
-          </div>
-          <div className="ml-3 border-l border-white/10 pl-3">
-            <Link href="/multi-links">
-              <motion.div
-                className={`
+          <button
+            type="button"
+            onClick={() => {
+              setMarketingOpen((v) => {
+                const next = !v;
+                try {
+                  localStorage.setItem(LS_MARKETING_OPEN, next ? "1" : "0");
+                } catch {
+                  /* ignore */
+                }
+                return next;
+              });
+            }}
+            aria-expanded={marketingOpen}
+            className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-white/85 transition-colors hover:bg-white/5"
+          >
+            <ChevronDown
+              className={cn(
+                "h-4 w-4 shrink-0 text-white/45 transition-transform duration-200",
+                !marketingOpen && "-rotate-90"
+              )}
+              aria-hidden
+            />
+            <Megaphone className="h-5 w-5 shrink-0" />
+            <span className="min-w-0 flex-1 font-medium">Маркетинг</span>
+          </button>
+          {marketingOpen ? (
+            <div className="ml-3 border-l border-white/10 pl-3">
+              <Link href="/multi-links">
+                <motion.div
+                  className={`
                   relative mt-1.5 flex items-center gap-2.5 rounded-lg px-3 py-2.5 transition-all duration-200
                   ${
                     pathname === "/multi-links"
@@ -138,21 +203,22 @@ export function Sidebar() {
                       : "text-white/55 hover:bg-white/5 hover:text-white"
                   }
                 `}
-                whileHover={{ scale: 1.01 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                {pathname === "/multi-links" && (
-                  <motion.div
-                    layoutId="sidebar-active-marketing"
-                    className="absolute inset-0 rounded-lg border border-white/10 bg-gradient-to-r from-purple-500/20 to-pink-500/20"
-                    transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                  />
-                )}
-                <Link2 className="relative h-4 w-4" />
-                <span className="relative text-[14px] font-medium">Мультиссылки</span>
-              </motion.div>
-            </Link>
-          </div>
+                  whileHover={{ scale: 1.01 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  {pathname === "/multi-links" && (
+                    <motion.div
+                      layoutId="sidebar-active-marketing"
+                      className="absolute inset-0 rounded-lg border border-white/10 bg-gradient-to-r from-purple-500/20 to-pink-500/20"
+                      transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                    />
+                  )}
+                  <Link2 className="relative h-4 w-4" />
+                  <span className="relative text-[14px] font-medium">Мультиссылки</span>
+                </motion.div>
+              </Link>
+            </div>
+          ) : null}
         </div>
 
         {navItems.map((item) => {
