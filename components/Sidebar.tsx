@@ -3,7 +3,17 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { Shield, LogOut, CircleHelp, FileMusic, List, FileText, Clock3 } from "lucide-react";
+import {
+  Shield,
+  LogOut,
+  CircleHelp,
+  FileMusic,
+  List,
+  FileText,
+  Clock3,
+  Link2,
+  Megaphone
+} from "lucide-react";
 import { useLogout } from "@/lib/hooks/useWebAuth";
 import { motion } from "framer-motion";
 import { isAdminUi, isAdminUiByWebSession } from "@/lib/admin";
@@ -109,6 +119,39 @@ export function Sidebar() {
                 </Link>
               );
             })}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex items-center gap-3 px-4 py-2 text-white/85">
+            <Megaphone className="h-5 w-5" />
+            <span className="font-medium">Маркетинг</span>
+          </div>
+          <div className="ml-3 border-l border-white/10 pl-3">
+            <Link href="/multi-links">
+              <motion.div
+                className={`
+                  relative mt-1.5 flex items-center gap-2.5 rounded-lg px-3 py-2.5 transition-all duration-200
+                  ${
+                    pathname === "/multi-links"
+                      ? "bg-white/10 text-white"
+                      : "text-white/55 hover:bg-white/5 hover:text-white"
+                  }
+                `}
+                whileHover={{ scale: 1.01 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                {pathname === "/multi-links" && (
+                  <motion.div
+                    layoutId="sidebar-active-marketing"
+                    className="absolute inset-0 rounded-lg border border-white/10 bg-gradient-to-r from-purple-500/20 to-pink-500/20"
+                    transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                  />
+                )}
+                <Link2 className="relative h-4 w-4" />
+                <span className="relative text-[14px] font-medium">Мультиссылки</span>
+              </motion.div>
+            </Link>
           </div>
         </div>
 

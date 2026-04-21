@@ -25,6 +25,7 @@ export type ReleaseListRow = Pick<
   | "id"
   | "title"
   | "track_name"
+  | "artist_name"
   | "artwork_url"
   | "status"
   | "created_at"

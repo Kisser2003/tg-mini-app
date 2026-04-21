@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import type { LucideIcon } from "lucide-react";
-import { LayoutDashboard, Shield, CircleHelp } from "lucide-react";
+import { LayoutDashboard, Shield, CircleHelp, Link2 } from "lucide-react";
 import { isAdminUi, isAdminUiByWebSession } from "@/lib/admin";
 import { hapticMap } from "@/lib/haptic-map";
 import { useHideOnScrollDown } from "@/lib/hooks/useHideOnScrollDown";
@@ -41,7 +41,8 @@ const BottomNavInner = memo(function BottomNavInner() {
 
   const tabs = useMemo<NavTab[]>(
     () => [
-      { path: "/library", icon: LayoutDashboard, label: "Мои релизы" },
+      { path: "/library", icon: LayoutDashboard, label: "Релизы" },
+      { path: "/multi-links", icon: Link2, label: "Ссылки" },
       { path: "/requirements", icon: CircleHelp, label: "FAQ" },
       ...(showAdminTab ? [{ path: "/admin", icon: Shield, label: "Админ" }] : [])
     ],
@@ -85,7 +86,7 @@ const BottomNavInner = memo(function BottomNavInner() {
                     onClick={() => {
                       if (!isActive) hapticMap.impactLight();
                     }}
-                    className="relative flex flex-col items-center gap-1 px-6 py-1.5"
+                    className="relative flex min-w-0 flex-1 flex-col items-center gap-1 px-2 py-1.5 sm:px-4"
                   >
                     {isActive ? (
                       <motion.div
