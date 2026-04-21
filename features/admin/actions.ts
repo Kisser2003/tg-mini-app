@@ -4,17 +4,26 @@ import type { ReleaseRecord } from "@/repositories/releases.repo";
 import {
   getAdminTelegramIdForUi,
   getAdminApiAuthHeaders,
+  isAdminUiByWebSession,
   telegramIdsEqual
 } from "@/lib/admin";
 import { getTelegramUserId } from "@/lib/telegram";
 
-function assertAdmin(): void {
+/**
+ * В production: Telegram ID совпадает с ADMIN_TELEGRAM_ID **или** веб-сессия Supabase
+ * с `public.users.role = 'admin'` (как в `requireAdminSupabaseClient` / `isAdminUiByWebSession`).
+ */
+async function assertAdminAsync(): Promise<void> {
   if (process.env.NODE_ENV === "development") {
     return;
   }
   const uid = getTelegramUserId();
   const adminId = getAdminTelegramIdForUi();
-  if (uid == null || adminId === null || !telegramIdsEqual(uid, adminId)) {
+  if (uid != null && adminId != null && telegramIdsEqual(uid, adminId)) {
+    return;
+  }
+  const webAdmin = await isAdminUiByWebSession();
+  if (!webAdmin) {
     throw new Error("Доступ только для администратора.");
   }
 }
@@ -63,7 +72,7 @@ async function postModeration(
  * Обновление через API с service role (обходит RLS Mini App клиента).
  */
 export async function approveRelease(releaseId: string): Promise<ReleaseRecord> {
-  assertAdmin();
+  await assertAdminAsync();
   return postModeration({ releaseId, action: "approve" });
 }
 
@@ -71,7 +80,7 @@ export async function approveRelease(releaseId: string): Promise<ReleaseRecord> 
  * Отклонить релиз: статус `failed`; причина в `error_message` / `admin_notes`.
  */
 export async function rejectRelease(releaseId: string, comment: string): Promise<ReleaseRecord> {
-  assertAdmin();
+  await assertAdminAsync();
   return postModeration({ releaseId, action: "reject", comment });
 }
 
@@ -125,6 +134,6 @@ export async function publishReleaseWithSmartLink(
   newStatus: string,
   smartLink: string
 ): Promise<ReleaseRecord> {
-  assertAdmin();
+  await assertAdminAsync();
   return postPublishSmartLink({ releaseId, newStatus, smartLink });
 }
