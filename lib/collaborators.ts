@@ -92,6 +92,25 @@ export function featuringNamesFromCollaboratorsJson(raw: unknown): string[] {
     .filter((n) => n.length > 0);
 }
 
+/** Объединить списки доп. артистов по трекам (для колонки `releases.collaborators`). */
+export function unionFeaturingNamesFromTracks(
+  tracks: ReadonlyArray<{ featuringArtistNames?: readonly string[] | undefined }>
+): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const t of tracks) {
+    for (const raw of t.featuringArtistNames ?? []) {
+      const n = String(raw).trim();
+      if (n.length === 0) continue;
+      const k = n.toLowerCase();
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push(n);
+    }
+  }
+  return out;
+}
+
 /**
  * Слить уже сериализованный блок формы (primary + featuring) с существующим JSON из БД:
  * сохраняет producer и любые будущие роли, не управляемые мастером.

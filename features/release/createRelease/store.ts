@@ -13,6 +13,7 @@ import {
   isMetadataComplete,
   isTracksComplete
 } from "./schemas";
+import { unionFeaturingNamesFromTracks } from "@/lib/collaborators";
 import { parsePerformanceLanguage } from "@/lib/performance-language";
 import { EMPTY_ARTIST_LINKS, type ArtistLinksState } from "@/lib/artist-links";
 
@@ -40,8 +41,6 @@ export type CreateReleaseDraftState = {
 
   /** Ссылки на карточки артиста на DSP (глобально на релиз). */
   releaseArtistLinks: ArtistLinksState;
-  /** Доп. артисты (фит и т.п.) — сохраняются в `releases.collaborators` с ролью featuring. */
-  featuringArtistNames: string[];
 
   // submission / status
   submitError: string | null;
@@ -74,7 +73,6 @@ type CreateReleaseDraftActions = {
   setTracksUploadInProgress: (value: boolean) => void;
 
   setReleaseArtistLinks: (patch: Partial<ArtistLinksState>) => void;
-  setFeaturingArtistNames: (names: string[]) => void;
 
   setSubmitStatus: (status: SubmissionStatus) => void;
   setSubmitStage: (stage: SubmissionStage) => void;
@@ -138,7 +136,6 @@ export type ResumeDraftPayload = {
   /** Параллельно индексам `tracks`; для подсказок после резюме. */
   trackAudioUrlsFromDb: (string | null)[];
   releaseArtistLinks: ArtistLinksState;
-  featuringArtistNames: string[];
 };
 
 const EMPTY_METADATA: CreateMetadata = {
@@ -180,12 +177,23 @@ function normLyrics(v: unknown): string {
   return typeof v === "string" ? v.trim() : "";
 }
 
+function normFeaturingList(v: unknown): string {
+  if (!Array.isArray(v)) return "[]";
+  return JSON.stringify(v.map((x) => String(x).trim()));
+}
+
 function areTracksEqual(current: CreateTrack[], next: CreateTrack[]) {
   if (current.length !== next.length) return false;
   for (let i = 0; i < current.length; i += 1) {
     if (current[i]?.title !== next[i]?.title) return false;
     if (Boolean(current[i]?.explicit) !== Boolean(next[i]?.explicit)) return false;
     if (normLyrics(current[i]?.lyrics) !== normLyrics(next[i]?.lyrics)) return false;
+    if (
+      normFeaturingList(current[i]?.featuringArtistNames) !==
+      normFeaturingList(next[i]?.featuringArtistNames)
+    ) {
+      return false;
+    }
   }
   return true;
 }
@@ -214,9 +222,15 @@ function syncStateForSingleRelease(
   CreateReleaseDraftState,
   "tracks" | "trackFiles" | "trackAudioUrlsFromDb"
 > {
-  const prev0 = state.tracks[0] ?? { title: "", explicit: false, lyrics: "" };
+  const prev0 = state.tracks[0] ?? {
+    title: "",
+    explicit: false,
+    lyrics: "",
+    featuringArtistNames: []
+  };
+  const mergedFeat = unionFeaturingNamesFromTracks(state.tracks);
   const nextTracks: CreateTrack[] = [
-    { ...prev0, title: nextMetadata.releaseTitle }
+    { ...prev0, title: nextMetadata.releaseTitle, featuringArtistNames: mergedFeat }
   ];
   const nextTrackFiles = state.trackFiles.slice(0, 1);
   while (nextTrackFiles.length < 1) nextTrackFiles.push(null);
@@ -245,13 +259,12 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
         metadata: EMPTY_METADATA,
         artworkUrl: null,
         artworkFile: null,
-        tracks: [{ title: "", explicit: false, lyrics: "" }],
+        tracks: [{ title: "", explicit: false, lyrics: "", featuringArtistNames: [] }],
         trackFiles: [null],
         trackAudioUrlsFromDb: [],
         tracksUploadInProgress: false,
 
         releaseArtistLinks: { ...EMPTY_ARTIST_LINKS },
-        featuringArtistNames: [],
 
         submitError: null,
         submitStatus: "idle",
@@ -369,17 +382,6 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
             if (areReleaseArtistLinksEqual(state.releaseArtistLinks, next)) return state;
             return { releaseArtistLinks: next, ...stamp() };
           }),
-        setFeaturingArtistNames: (names) =>
-          set((state) => {
-            const next = names.map((n) => String(n));
-            if (
-              next.length === state.featuringArtistNames.length &&
-              next.every((v, i) => v === state.featuringArtistNames[i])
-            ) {
-              return state;
-            }
-            return { featuringArtistNames: next, ...stamp() };
-          }),
         syncTrackFilesLength: (len) =>
           set((state) => {
             const prev = state.trackFiles;
@@ -405,12 +407,11 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
             metadata: EMPTY_METADATA,
             artworkUrl: null,
             artworkFile: null,
-            tracks: [{ title: "", explicit: false, lyrics: "" }],
+            tracks: [{ title: "", explicit: false, lyrics: "", featuringArtistNames: [] }],
             trackFiles: [null],
             trackAudioUrlsFromDb: [],
             tracksUploadInProgress: false,
             releaseArtistLinks: { ...EMPTY_ARTIST_LINKS },
-            featuringArtistNames: [],
             submitError: null,
             submitStatus: "idle",
             submitStage: "idle",
@@ -426,12 +427,11 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
             metadata: EMPTY_METADATA,
             artworkUrl: null,
             artworkFile: null,
-            tracks: [{ title: "", explicit: false, lyrics: "" }],
+            tracks: [{ title: "", explicit: false, lyrics: "", featuringArtistNames: [] }],
             trackFiles: [null],
             trackAudioUrlsFromDb: [],
             tracksUploadInProgress: false,
             releaseArtistLinks: { ...EMPTY_ARTIST_LINKS },
-            featuringArtistNames: [],
             submitError: null,
             submitStatus: "idle",
             submitStage: "idle",
@@ -446,12 +446,11 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
             metadata: EMPTY_METADATA,
             artworkUrl: null,
             artworkFile: null,
-            tracks: [{ title: "", explicit: false, lyrics: "" }],
+            tracks: [{ title: "", explicit: false, lyrics: "", featuringArtistNames: [] }],
             trackFiles: [null],
             trackAudioUrlsFromDb: [],
             tracksUploadInProgress: false,
             releaseArtistLinks: { ...EMPTY_ARTIST_LINKS },
-            featuringArtistNames: [],
             submitError: null,
             lastModified: null,
             hasHydrated: true
@@ -470,12 +469,27 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
           set(() => {
             const isSingle = payload.metadata.releaseType === "single";
 
-            let tracks: CreateTrack[] = payload.tracks;
+            let tracks: CreateTrack[] = payload.tracks.map((t) => ({
+              ...t,
+              featuringArtistNames: t.featuringArtistNames ?? []
+            }));
             let len = tracks.length;
 
             if (isSingle) {
-              const first = tracks[0] ?? { title: "", explicit: false, lyrics: "" };
-              tracks = [{ ...first, title: payload.metadata.releaseTitle }];
+              const first = tracks[0] ?? {
+                title: "",
+                explicit: false,
+                lyrics: "",
+                featuringArtistNames: []
+              };
+              const mergedFeat = unionFeaturingNamesFromTracks(tracks);
+              tracks = [
+                {
+                  ...first,
+                  title: payload.metadata.releaseTitle,
+                  featuringArtistNames: mergedFeat
+                }
+              ];
               len = 1;
             }
 
@@ -507,7 +521,6 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
               trackAudioUrlsFromDb,
               tracksUploadInProgress: false,
               releaseArtistLinks: { ...payload.releaseArtistLinks },
-              featuringArtistNames: [...payload.featuringArtistNames],
               submitError: null,
               submitStatus: "idle" as SubmissionStatus,
               submitStage: "idle" as SubmissionStage,
@@ -575,14 +588,39 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
           p.releaseArtistLinks != null
             ? { ...EMPTY_ARTIST_LINKS, ...p.releaseArtistLinks }
             : currentState.releaseArtistLinks;
+
+        let mergedTracks =
+          Array.isArray(p.tracks) && p.tracks.length > 0 ? p.tracks : currentState.tracks;
+        mergedTracks = mergedTracks.map((t) => ({
+          ...t,
+          featuringArtistNames: (t as CreateTrack).featuringArtistNames ?? []
+        }));
+        const legacyFeat = Array.isArray(
+          (p as { featuringArtistNames?: unknown }).featuringArtistNames
+        )
+          ? (p as { featuringArtistNames: unknown[] }).featuringArtistNames.map((n) => String(n))
+          : [];
+        if (legacyFeat.some((n) => n.trim().length > 0)) {
+          mergedTracks = mergedTracks.map((t, i) => {
+            const cur = (t as CreateTrack).featuringArtistNames ?? [];
+            if (i === 0 && cur.length === 0) {
+              return { ...t, featuringArtistNames: legacyFeat };
+            }
+            return t;
+          });
+        }
+
+        const { featuringArtistNames: _legacyFeatKey, ...persistSansLegacy } = p as Record<
+          string,
+          unknown
+        >;
+
         return {
           ...currentState,
-          ...p,
+          ...persistSansLegacy,
           metadata: mergedMeta,
           releaseArtistLinks: mergedLinks,
-          featuringArtistNames: Array.isArray(p.featuringArtistNames)
-            ? p.featuringArtistNames.map((n) => String(n))
-            : currentState.featuringArtistNames
+          tracks: mergedTracks
         };
       },
       // artworkFile and trackFiles are intentionally excluded: File objects
@@ -595,7 +633,6 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
         tracks: state.tracks,
         trackAudioUrlsFromDb: state.trackAudioUrlsFromDb,
         releaseArtistLinks: state.releaseArtistLinks,
-        featuringArtistNames: state.featuringArtistNames,
         lastModified: state.lastModified,
         successSummary: state.successSummary
       })

@@ -60,7 +60,13 @@ export const trackSchema = z.object({
     .string()
     .max(32000, "Текст песни слишком длинный (макс. 32 000 символов)")
     .optional()
-    .default("")
+    .default(""),
+  /** Доп. артисты (фит) для этого трека; в БД уезжают объединённым списком на релиз. */
+  featuringArtistNames: z
+    .array(z.string())
+    .max(12, "Не более 12 дополнительных артистов на трек")
+    .optional()
+    .default([])
 });
 
 export const tracksSchema = z.object({

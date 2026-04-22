@@ -51,8 +51,6 @@ export default function CreateTracksPage() {
   const setSubmitError = useCreateReleaseDraftStore((s) => s.setSubmitError);
   const tracksUploadInProgress = useCreateReleaseDraftStore((s) => s.tracksUploadInProgress);
   const trackAudioUrlsFromDb = useCreateReleaseDraftStore((s) => s.trackAudioUrlsFromDb);
-  const featuringArtistNames = useCreateReleaseDraftStore((s) => s.featuringArtistNames);
-  const setFeaturingArtistNames = useCreateReleaseDraftStore((s) => s.setFeaturingArtistNames);
 
   const showResumeAudioBanner = useMemo(
     () =>
@@ -72,9 +70,21 @@ export default function CreateTracksPage() {
   // without subscribing to future changes.
   const [initialTracks] = useState<CreateTracks["tracks"]>(() => {
     const { tracks, metadata } = useCreateReleaseDraftStore.getState();
-    const base = tracks.length > 0 ? tracks : [{ title: "", explicit: false, lyrics: "" }];
+    const empty = {
+      title: "",
+      explicit: false,
+      lyrics: "",
+      featuringArtistNames: [] as string[]
+    };
+    const base =
+      tracks.length > 0
+        ? tracks.map((t) => ({
+            ...t,
+            featuringArtistNames: t.featuringArtistNames ?? []
+          }))
+        : [empty];
     if (metadata.releaseType === "single") {
-      const row = base[0] ?? { title: "", explicit: false, lyrics: "" };
+      const row = base[0] ?? empty;
       const trackT = (row.title ?? "").trim();
       const releaseT = (metadata.releaseTitle ?? "").trim();
       return [{ ...row, title: trackT || releaseT }];
@@ -89,6 +99,7 @@ export default function CreateTracksPage() {
     watch,
     reset,
     setValue,
+    getValues,
     formState: { errors, isValid, isDirty, dirtyFields, isSubmitting }
   } = useForm<CreateTracks>({
     resolver: zodResolver(tracksSchema),
@@ -115,13 +126,24 @@ export default function CreateTracksPage() {
       metadata: { releaseType: storedType, releaseTitle: storedReleaseTitle }
     } = useCreateReleaseDraftStore.getState();
 
+    const empty = {
+      title: "",
+      explicit: false,
+      lyrics: "",
+      featuringArtistNames: [] as string[]
+    };
     const base =
-      storedTracks.length > 0 ? storedTracks : [{ title: "", explicit: false, lyrics: "" }];
+      storedTracks.length > 0
+        ? storedTracks.map((t) => ({
+            ...t,
+            featuringArtistNames: t.featuringArtistNames ?? []
+          }))
+        : [empty];
     const freshTracks =
       storedType === "single"
         ? [
             {
-              ...(base[0] ?? { title: "", explicit: false, lyrics: "" }),
+              ...(base[0] ?? empty),
               title: (() => {
                 const trackT = (base[0]?.title ?? "").trim();
                 const releaseT = (storedReleaseTitle ?? "").trim();
@@ -145,7 +167,12 @@ export default function CreateTracksPage() {
       const releaseT = (storedReleaseTitle ?? "").trim();
       setTracks([
         {
-          ...(base[0] ?? { title: "", explicit: false, lyrics: "" }),
+          ...(base[0] ?? {
+            title: "",
+            explicit: false,
+            lyrics: "",
+            featuringArtistNames: []
+          }),
           title: trackT || releaseT
         }
       ]);
@@ -248,27 +275,42 @@ export default function CreateTracksPage() {
     [router, setSubmitError, setTracks, syncTrackFilesLength]
   );
 
-  const addFeaturingSlot = useCallback(() => {
-    if (featuringArtistNames.length >= MAX_FEATURING_ARTISTS) return;
-    triggerHaptic("light");
-    setFeaturingArtistNames([...featuringArtistNames, ""]);
-  }, [featuringArtistNames, setFeaturingArtistNames]);
+  const addFeaturingSlot = useCallback(
+    (trackIndex: number) => {
+      const cur = getValues(`tracks.${trackIndex}.featuringArtistNames`) ?? [];
+      if (cur.length >= MAX_FEATURING_ARTISTS) return;
+      triggerHaptic("light");
+      setValue(`tracks.${trackIndex}.featuringArtistNames`, [...cur, ""], {
+        shouldDirty: true,
+        shouldValidate: true
+      });
+    },
+    [getValues, setValue]
+  );
 
   const setFeaturingAt = useCallback(
-    (idx: number, value: string) => {
-      const next = [...featuringArtistNames];
-      next[idx] = value;
-      setFeaturingArtistNames(next);
+    (trackIndex: number, featIndex: number, value: string) => {
+      const cur = [...(getValues(`tracks.${trackIndex}.featuringArtistNames`) ?? [])];
+      cur[featIndex] = value;
+      setValue(`tracks.${trackIndex}.featuringArtistNames`, cur, {
+        shouldDirty: true,
+        shouldValidate: true
+      });
     },
-    [featuringArtistNames, setFeaturingArtistNames]
+    [getValues, setValue]
   );
 
   const removeFeaturingAt = useCallback(
-    (idx: number) => {
+    (trackIndex: number, featIndex: number) => {
       triggerHaptic("light");
-      setFeaturingArtistNames(featuringArtistNames.filter((_, i) => i !== idx));
+      const cur = [...(getValues(`tracks.${trackIndex}.featuringArtistNames`) ?? [])];
+      setValue(
+        `tracks.${trackIndex}.featuringArtistNames`,
+        cur.filter((_, i) => i !== featIndex),
+        { shouldDirty: true, shouldValidate: true }
+      );
     },
-    [featuringArtistNames, setFeaturingArtistNames]
+    [getValues, setValue]
   );
 
   return (
@@ -290,53 +332,6 @@ export default function CreateTracksPage() {
               иначе отправка на модерацию будет недоступна.
             </div>
           )}
-
-          <motion.section
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="glass-glow glass-glow-charged space-y-4 px-5 py-5"
-          >
-            <div>
-              <label className={`mb-2 block ${WIZARD_FIELD_LABEL_CLASS}`}>
-                Дополнительные артисты
-              </label>
-              <p className="text-[12px] leading-relaxed text-white/50">
-                Если есть фит или другой участник (кроме основного артиста из паспорта), нажмите
-                «Добавить» и введите имя или псевдоним — это попадёт в метаданные релиза для
-                модерации и дистрибуции.
-              </p>
-            </div>
-            <ul className="space-y-2">
-              {featuringArtistNames.map((name, idx) => (
-                <li key={`feat-${idx}`} className="flex items-center gap-2">
-                  <input
-                    value={name}
-                    onChange={(e) => setFeaturingAt(idx, e.target.value)}
-                    placeholder="Имя артиста"
-                    autoComplete="off"
-                    className={`${WIZARD_INPUT_CLASS} min-w-0 flex-1`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeFeaturingAt(idx)}
-                    className="shrink-0 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-2 text-[11px] text-white/55 hover:bg-white/[0.08] hover:text-white/80"
-                  >
-                    Убрать
-                  </button>
-                </li>
-              ))}
-            </ul>
-            {featuringArtistNames.length < MAX_FEATURING_ARTISTS ? (
-              <button
-                type="button"
-                onClick={addFeaturingSlot}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-violet-400/30 bg-violet-500/10 py-2.5 text-[13px] font-medium text-violet-100/95 hover:bg-violet-500/[0.16]"
-              >
-                <UserPlus className="h-4 w-4 shrink-0 opacity-90" />
-                Добавить артиста
-              </button>
-            ) : null}
-          </motion.section>
 
           {fields.map((field, index) => (
             <motion.div
@@ -368,8 +363,8 @@ export default function CreateTracksPage() {
                 <div className="space-y-1.5">
                   <label className={`mb-2.5 block ${WIZARD_FIELD_LABEL_CLASS}`}>Название трека</label>
                   <p className="mb-1 text-[12px] leading-relaxed text-white/50">
-                    Обычно совпадает с названием релиза. Участников / фит добавьте в блоке
-                    «Дополнительные артисты» выше; при необходимости допишите отображаемое название
+                    Обычно совпадает с названием релиза. Участников / фит укажите в блоке
+                    «Дополнительные артисты» ниже; при необходимости допишите отображаемое название
                     трека здесь (как в сторе).
                   </p>
                   <input
@@ -405,6 +400,50 @@ export default function CreateTracksPage() {
                   <FormFieldError message={errors.tracks?.[index]?.title?.message} />
                 </div>
               )}
+
+              <div className="space-y-3 rounded-[14px] border border-white/[0.06] bg-white/[0.02] px-4 py-4">
+                <div>
+                  <label className={`mb-2 block ${WIZARD_FIELD_LABEL_CLASS}`}>
+                    Дополнительные артисты
+                  </label>
+                  <p className="text-[12px] leading-relaxed text-white/50">
+                    Если на этом треке есть фит или другой участник (кроме основного артиста из
+                    паспорта), нажмите «Добавить» и введите имя — имена со всех треков попадут в
+                    метаданные релиза для модерации.
+                  </p>
+                </div>
+                <ul className="space-y-2">
+                  {(values.tracks[index]?.featuringArtistNames ?? []).map((name, featIdx) => (
+                    <li key={`${field.id}-feat-${featIdx}`} className="flex items-center gap-2">
+                      <input
+                        value={name}
+                        onChange={(e) => setFeaturingAt(index, featIdx, e.target.value)}
+                        placeholder="Имя артиста"
+                        autoComplete="off"
+                        className={`${WIZARD_INPUT_CLASS} min-w-0 flex-1`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeFeaturingAt(index, featIdx)}
+                        className="shrink-0 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-2 text-[11px] text-white/55 hover:bg-white/[0.08] hover:text-white/80"
+                      >
+                        Убрать
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                {(values.tracks[index]?.featuringArtistNames ?? []).length <
+                MAX_FEATURING_ARTISTS ? (
+                  <button
+                    type="button"
+                    onClick={() => addFeaturingSlot(index)}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-violet-400/30 bg-violet-500/10 py-2.5 text-[13px] font-medium text-violet-100/95 hover:bg-violet-500/[0.16]"
+                  >
+                    <UserPlus className="h-4 w-4 shrink-0 opacity-90" />
+                    Добавить артиста
+                  </button>
+                ) : null}
+              </div>
 
               {/* Pass the stored File reference so the uploader shows "file selected"
                   state when the user navigates back to this step within the session. */}
@@ -506,7 +545,7 @@ export default function CreateTracksPage() {
               type="button"
               onClick={() => {
                 triggerHaptic("light");
-                append({ title: "", explicit: false, lyrics: "" });
+                append({ title: "", explicit: false, lyrics: "", featuringArtistNames: [] });
                 syncTrackFilesLength(fields.length + 1);
               }}
               className="inline-flex h-[44px] w-full items-center justify-center rounded-xl border border-white/[0.06] bg-white/[0.03] text-[13px] font-medium text-white/70 transition-colors hover:bg-white/[0.06] hover:text-white"

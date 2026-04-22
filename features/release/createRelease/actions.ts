@@ -52,7 +52,8 @@ import { parseArtistLinksFromJson } from "@/lib/artist-links";
 import {
   buildCollaboratorsPayloadForDb,
   featuringNamesFromCollaboratorsJson,
-  parseCollaboratorsFromDb
+  parseCollaboratorsFromDb,
+  unionFeaturingNamesFromTracks
 } from "@/lib/collaborators";
 import { parsePerformanceLanguage } from "@/lib/performance-language";
 import { celebrateReleaseSubmission } from "@/lib/confetti-release-success";
@@ -548,17 +549,23 @@ function buildTracksForResume(release: ReleaseRecord, rows: ReleaseTrackRow[]): 
     return rows.map((r) => ({
       title: r.title,
       explicit: Boolean(r.explicit),
-      lyrics: r.lyrics?.trim() ? r.lyrics : ""
+      lyrics: r.lyrics?.trim() ? r.lyrics : "",
+      featuringArtistNames: []
     }));
   }
   if (release.release_type === "single") {
     return [
-      { title: getReleaseDisplayTitle(release), explicit: Boolean(release.explicit), lyrics: "" }
+      {
+        title: getReleaseDisplayTitle(release),
+        explicit: Boolean(release.explicit),
+        lyrics: "",
+        featuringArtistNames: []
+      }
     ];
   }
   return [
-    { title: "", explicit: false, lyrics: "" },
-    { title: "", explicit: false, lyrics: "" }
+    { title: "", explicit: false, lyrics: "", featuringArtistNames: [] },
+    { title: "", explicit: false, lyrics: "", featuringArtistNames: [] }
   ];
 }
 
@@ -636,7 +643,11 @@ export async function resumeDraftFromRelease(releaseId: string): Promise<string 
     const trackRows = await getReleaseTracksByReleaseId(releaseId);
     const metadata = createMetadataFromReleaseRecord(existing);
     metadataHydrateSchema.parse(metadata);
-    const tracks = buildTracksForResume(existing, trackRows);
+    const featFromDb = featuringNamesFromCollaboratorsJson(existing.collaborators);
+    const tracks = buildTracksForResume(existing, trackRows).map((t, i) => ({
+      ...t,
+      featuringArtistNames: i === 0 ? featFromDb : []
+    }));
     const trackAudioUrlsFromDb = buildTrackAudioUrlsFromDb(existing, trackRows, tracks);
 
     store.resumeFromDraft({
@@ -646,8 +657,7 @@ export async function resumeDraftFromRelease(releaseId: string): Promise<string 
       artworkUrl: existing.artwork_url ?? null,
       tracks,
       trackAudioUrlsFromDb,
-      releaseArtistLinks: parseArtistLinksFromJson(existing.artist_links),
-      featuringArtistNames: featuringNamesFromCollaboratorsJson(existing.collaborators)
+      releaseArtistLinks: parseArtistLinksFromJson(existing.artist_links)
     });
 
     const next = getResumeCreatePath({
@@ -693,7 +703,23 @@ export async function hydrateFromReleaseId(releaseId: string): Promise<void> {
     store.setMetadata(metadata);
     store.setArtworkUrl(existing.artwork_url ?? null);
     store.setReleaseArtistLinks(parseArtistLinksFromJson(existing.artist_links));
-    store.setFeaturingArtistNames(featuringNamesFromCollaboratorsJson(existing.collaborators));
+    const featFromDb = featuringNamesFromCollaboratorsJson(existing.collaborators);
+    const tr = store.tracks;
+    const nextTracks =
+      tr.length > 0
+        ? tr.map((t, i) => ({
+            ...t,
+            featuringArtistNames: i === 0 ? featFromDb : (t.featuringArtistNames ?? [])
+          }))
+        : [
+            {
+              title: "",
+              explicit: false,
+              lyrics: "",
+              featuringArtistNames: featFromDb
+            }
+          ];
+    store.setTracks(nextTracks);
     store.setSubmitError(null);
   } catch (e: unknown) {
     useCreateReleaseDraftStore
@@ -890,10 +916,11 @@ export async function uploadArtworkForDraft(file: File): Promise<string | null> 
 function buildReleaseRowPatchFromMetadata(
   m: CreateMetadata,
   artworkUrl: string | null,
-  featuringArtistNames: string[],
+  tracks: CreateTrack[],
   existingCollaboratorsFromDb?: unknown
 ): Record<string, unknown> {
   const mainArtist = m.primaryArtist ?? "";
+  const featuringArtistNames = unionFeaturingNamesFromTracks(tracks);
   return {
     artist_name: mainArtist,
     title: m.releaseTitle,
@@ -931,7 +958,7 @@ export async function syncPassportFormToReleaseDraft(
   const patch = buildReleaseRowPatchFromMetadata(
     metadata,
     store.artworkUrl,
-    store.featuringArtistNames
+    store.tracks
   );
   return saveDraftPatchViaServiceApi(rid, patch, options?.keepalive ? { keepalive: true } : undefined);
 }
@@ -990,7 +1017,7 @@ export async function saveDraftAction(
     const finalData = buildReleaseRowPatchFromMetadata(
       m,
       latest.artworkUrl,
-      latest.featuringArtistNames,
+      latest.tracks,
       currentRow.collaborators
     );
 
@@ -1640,7 +1667,7 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
             buildReleaseRowPatchFromMetadata(
               parsedMetaForSubmit.data,
               storeAfterUpload.artworkUrl,
-              storeAfterUpload.featuringArtistNames,
+              storeAfterUpload.tracks,
               existing.collaborators
             ) as Parameters<typeof updateRelease>[1]
           ),

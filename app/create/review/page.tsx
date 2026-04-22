@@ -32,6 +32,7 @@ import {
   PERFORMANCE_LANGUAGE_LABELS,
   type PerformanceLanguage
 } from "@/lib/performance-language";
+import { unionFeaturingNamesFromTracks } from "@/lib/collaborators";
 
 function SectionDivider() {
   return <div className="my-4 h-px w-full bg-white/10" aria-hidden />;
@@ -92,8 +93,6 @@ export default function CreateReviewPage() {
   const submitProgress = useCreateReleaseDraftStore((s) => s.submitProgress);
   const tracksWavSyncedToDb = useCreateReleaseDraftStore(selectTracksWavFullySynced);
   const tracksUploadInProgress = useCreateReleaseDraftStore((s) => s.tracksUploadInProgress);
-  const featuringArtistNames = useCreateReleaseDraftStore((s) => s.featuringArtistNames);
-
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [progressDismissed, setProgressDismissed] = useState(false);
   const prevSubmitErrorRef = useRef<string | null>(null);
@@ -129,12 +128,8 @@ export default function CreateReviewPage() {
   const releaseTitle = metadata.releaseTitle?.trim() || "Релиз";
   const artistName = metadata.primaryArtist?.trim() || "Артист";
   const featuringLine = useMemo(
-    () =>
-      featuringArtistNames
-        .map((n) => n.trim())
-        .filter(Boolean)
-        .join(", "),
-    [featuringArtistNames]
+    () => unionFeaturingNamesFromTracks(tracks).join(", "),
+    [tracks]
   );
 
   useEffect(() => {
