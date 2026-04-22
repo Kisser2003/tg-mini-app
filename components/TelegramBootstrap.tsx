@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { getAdminTelegramIdForUi, telegramIdsEqual } from "@/lib/admin";
 import {
@@ -15,7 +15,6 @@ import {
 export function TelegramBootstrap() {
   const router = useRouter();
   const pathname = usePathname();
-  const didAdminAutoredirect = useRef(false);
 
   useEffect(() => {
     initTelegramWebApp();
@@ -48,14 +47,12 @@ export function TelegramBootstrap() {
     const userId = getTelegramUserId();
     const adminId = getAdminTelegramIdForUi();
     if (
-      !didAdminAutoredirect.current &&
       startParam === "admin" &&
       adminId !== null &&
       userId !== null &&
       telegramIdsEqual(userId, adminId) &&
-      pathname !== "/admin"
+      pathname === "/"
     ) {
-      didAdminAutoredirect.current = true;
       router.replace("/admin");
     }
   }, [pathname, router]);
