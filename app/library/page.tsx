@@ -87,7 +87,6 @@ function LibraryPageInner() {
 
   const isWeb = !isTelegram;
 
-  const [expandedErrorId, setExpandedErrorId] = useState<string | null>(null);
   const [resumingId, setResumingId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<LibraryStatusFilter>("all");
   const didRetryInitialEmptyRef = useRef(false);
@@ -316,8 +315,6 @@ function LibraryPageInner() {
     const effectiveErrorText = hasErrorText
       ? release.error_message!
       : "Причина ошибки не указана";
-    const isExpanded = expandedErrorId === release.id;
-
     const onCardClick = () => {
       if (isResumingDraft) return;
       if (isDraft) {
@@ -326,7 +323,14 @@ function LibraryPageInner() {
       }
       if (isFailed) {
         hapticMap.notificationError();
-        setExpandedErrorId((prev) => (prev === release.id ? null : release.id));
+        const notes = release.admin_notes?.trim();
+        setAdminNotesModal({
+          title: displayTitle,
+          body:
+            notes && notes.length > 0
+              ? notes
+              : "Свяжитесь с поддержкой для уточнения деталей"
+        });
         return;
       }
       hapticMap.impactLight();
@@ -335,42 +339,21 @@ function LibraryPageInner() {
 
     if (isFailed) {
       return (
-        <div key={release.id} className="space-y-2">
-          <div className={isResumingDraft ? "pointer-events-none opacity-70" : ""}>
-            <ReleaseCard
-              title={displayTitle}
-              artist={artistLine}
-              status="error"
-              meta={releaseMeta}
-              coverUrl={release.artwork_url ?? undefined}
-              index={listIndex}
-              rejectionReason={effectiveErrorText}
-              onFix={() => {
-                hapticMap.impactLight();
-                router.push(`/create/metadata?from=failed&releaseId=${release.id}`);
-              }}
-              onClick={onCardClick}
-            />
-          </div>
-          <div className="flex flex-wrap items-center justify-end gap-2 px-1">
-            <button
-              type="button"
-              className="text-[11px] font-medium text-white/50 underline-offset-2 hover:text-white/75"
-              onClick={() => {
-                hapticMap.impactLight();
-                const notes = release.admin_notes?.trim();
-                setAdminNotesModal({
-                  title: displayTitle,
-                  body:
-                    notes && notes.length > 0
-                      ? notes
-                      : "Свяжитесь с поддержкой для уточнения деталей"
-                });
-              }}
-            >
-              Комментарий модератора
-            </button>
-          </div>
+        <div key={release.id} className={isResumingDraft ? "pointer-events-none opacity-70" : ""}>
+          <ReleaseCard
+            title={displayTitle}
+            artist={artistLine}
+            status="error"
+            meta={releaseMeta}
+            coverUrl={release.artwork_url ?? undefined}
+            index={listIndex}
+            rejectionReason={effectiveErrorText}
+            onFix={() => {
+              hapticMap.impactLight();
+              router.push(`/create/metadata?from=failed&releaseId=${release.id}`);
+            }}
+            onClick={onCardClick}
+          />
         </div>
       );
     }
@@ -398,13 +381,6 @@ function LibraryPageInner() {
 
   return (
     <div className="min-h-app text-foreground">
-      {isTelegram && (
-        <div className="fixed left-0 right-0 top-0 z-[999] bg-black/80 px-3 py-2 font-mono text-[10px] text-green-400">
-          authReady:{String(authReady)} | userId:{userId ?? "null"} | loading:{String(isLoading)} |
-          validating:{String(isValidating)} | releases:{releases?.length ?? "null"} | error:
-          {error ? "YES" : "no"}
-        </div>
-      )}
       <PullRefreshBrand />
 
       <div
