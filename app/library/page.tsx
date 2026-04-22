@@ -162,12 +162,12 @@ function LibraryPageInner() {
       if (telegramInitialEmptyRetries !== 0) setTelegramInitialEmptyRetries(0);
       return;
     }
-    if (telegramInitialEmptyRetries >= 10) return;
+    if (telegramInitialEmptyRetries >= 3) return;
 
     const t = window.setTimeout(() => {
       setTelegramInitialEmptyRetries((n) => n + 1);
       void mutate(undefined, { revalidate: true });
-    }, 1200);
+    }, 400);
 
     return () => window.clearTimeout(t);
   }, [
@@ -263,7 +263,7 @@ function LibraryPageInner() {
   const telegramIdentityReady =
     !isTelegram ||
     authMode !== "telegram" ||
-    (userId != null && userId !== "__tg_shell__") ||
+    userId != null ||
     getTelegramUserIdForSupabaseRequests() != null ||
     getTelegramInitDataForApiHeader().length > 0;
   /** Нет контекста пользователя (сессия / Telegram) или ещё не инициализировали */
@@ -275,7 +275,7 @@ function LibraryPageInner() {
     authMode === "telegram" &&
     error == null &&
     releases.length === 0 &&
-    telegramInitialEmptyRetries < 10;
+    telegramInitialEmptyRetries < 3;
   const showListSkeleton =
     !hasReleases &&
     (((!showAuthWait && data === undefined && error == null && (isLoading || isValidating)) ||
@@ -288,7 +288,7 @@ function LibraryPageInner() {
     error == null &&
     releases.length === 0 &&
     telegramIdentityReady &&
-    (!isTelegram || telegramInitialEmptyRetries >= 10);
+    (!isTelegram || telegramInitialEmptyRetries >= 3);
 
   const artistFirstName = pickProfileGreetingName(authProfile ?? undefined, greetingName);
 
@@ -398,6 +398,13 @@ function LibraryPageInner() {
 
   return (
     <div className="min-h-app text-foreground">
+      {isTelegram && (
+        <div className="fixed left-0 right-0 top-0 z-[999] bg-black/80 px-3 py-2 font-mono text-[10px] text-green-400">
+          authReady:{String(authReady)} | userId:{userId ?? "null"} | loading:{String(isLoading)} |
+          validating:{String(isValidating)} | releases:{releases?.length ?? "null"} | error:
+          {error ? "YES" : "no"}
+        </div>
+      )}
       <PullRefreshBrand />
 
       <div

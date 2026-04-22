@@ -39,6 +39,13 @@ export type ReleaseListRow = Pick<
 >;
 
 const RELEASES_LIST_TIMEOUT_MS = 15000;
+const TELEGRAM_ID_POLL_INTERVAL_MS = 100;
+
+function isValidTelegramUserId(value: string | null): value is string {
+  if (value == null) return false;
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0;
+}
 
 type ReleasesSwrKey =
   | readonly ["releases", "telegram", string]
@@ -68,6 +75,7 @@ async function fetchReleasesTelegram([, , uid]: readonly ["releases", "telegram"
       credentials: "include",
       headers: {
         Accept: "application/json",
+        ...(numericUid > 0 ? { "x-telegram-user-id": String(numericUid) } : {}),
         ...getTelegramApiAuthHeaders(
           Number.isFinite(numericUid) && numericUid > 0 ? { userId: numericUid } : undefined
         )
@@ -130,18 +138,25 @@ export function useReleases() {
   useEffect(() => {
     let cancelled = false;
     let telegramModeLocked = false;
+    console.log("[TG-DEBUG] useEffect start", {
+      isTelegramClientShell: isTelegramClientShell(),
+      tidNow: getTelegramUserIdForSupabaseRequests()
+    });
     initTelegramWebApp();
     initUserContextInStore();
 
     const applyTelegramMode = (tid: number | null) => {
+      console.log("[TG-DEBUG] applyTelegramMode", { tid });
       if (cancelled) return;
-      telegramModeLocked = true;
+      if (tid != null) {
+        telegramModeLocked = true;
+      }
       setUser((prev) => getTelegramWebApp()?.initDataUnsafe?.user ?? prev ?? null);
-      setUserId(tid != null ? String(tid) : "__tg_shell__");
+      setUserId(tid != null ? String(tid) : null);
       setAuthMode("telegram");
       const tg = getTelegramWebApp()?.initDataUnsafe?.user;
       setGreetingName((prev) => tg?.first_name?.trim() || tg?.username?.trim() || prev || "Артист");
-      setAuthReady(true);
+      setAuthReady(tid != null);
     };
 
     const tidNow = getTelegramUserIdForSupabaseRequests();
@@ -152,29 +167,21 @@ export function useReleases() {
       };
     }
     if (isTelegramClientShell()) {
-      const MAX_WAIT_MS = 3000;
-      const POLL_INTERVAL_MS = 50;
-      let elapsed = 0;
-
+      initTelegramWebApp(); // ensure cookie is set before SWR fires
       const poll = window.setInterval(() => {
         if (cancelled) {
           window.clearInterval(poll);
           return;
         }
-        elapsed += POLL_INTERVAL_MS;
+        initTelegramWebApp(); // ensure cookie is set before SWR fires
         const tid = getTelegramUserIdForSupabaseRequests();
+        console.log("[TG-DEBUG] poll tick", { tid });
 
         if (tid != null) {
           window.clearInterval(poll);
           applyTelegramMode(tid);
-          return;
         }
-
-        if (elapsed >= MAX_WAIT_MS) {
-          window.clearInterval(poll);
-          applyTelegramMode(null);
-        }
-      }, POLL_INTERVAL_MS);
+      }, TELEGRAM_ID_POLL_INTERVAL_MS);
 
       return () => {
         cancelled = true;
@@ -246,7 +253,9 @@ export function useReleases() {
   }, []);
 
   const swrKey: ReleasesSwrKey | null = useMemo(() => {
+    console.log("[TG-DEBUG] swrKey computed", { authReady, userId, authMode });
     if (!authReady || userId == null || authMode == null) return null;
+    if (authMode === "telegram" && !isValidTelegramUserId(userId)) return null;
     if (authMode === "telegram") {
       return ["releases", "telegram", userId];
     }
@@ -290,19 +299,35 @@ export function useReleases() {
     );
   }, [releases]);
 
+  const waitingForTelegramIdentity =
+    authMode === "telegram" && !isValidTelegramUserId(userId);
+  const isBootstrapping =
+    !authReady ||
+    waitingForTelegramIdentity ||
+    (swrKey != null &&
+      !hasResolvedInitialFetch &&
+      (swr.isLoading || swr.isValidating || (swr.data === undefined && swr.error == null)));
+
+  console.log("[TG-DEBUG] useReleases return", {
+    authReady,
+    userId,
+    swrKey,
+    isLoading: swr.isLoading,
+    isValidating: swr.isValidating,
+    dataLength: swr.data?.length ?? "undefined",
+    error: swr.error
+  });
+
   return {
     userId,
     authReady,
     authMode,
-    isBootstrapping:
-      !authReady ||
-      (swrKey != null &&
-        !hasResolvedInitialFetch &&
-        (swr.isLoading || swr.isValidating || (swr.data === undefined && swr.error == null))),
+    isBootstrapping,
     telegramUser: user,
     greetingName,
     releases,
     releaseStats,
-    ...swr
+    ...swr,
+    isLoading: isBootstrapping
   };
 }
