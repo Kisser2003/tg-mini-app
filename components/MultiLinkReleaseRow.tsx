@@ -17,20 +17,6 @@ export type MultiLinkReleaseRowProps = {
   index?: number;
 };
 
-/** Последний сегмент пути или hostname — для строки «короткий код» как у band.link. */
-function shortLinkLabel(url: string): string {
-  const t = url.trim();
-  if (!t) return "—";
-  try {
-    const u = new URL(t);
-    const parts = u.pathname.split("/").filter(Boolean);
-    if (parts.length > 0) return parts[parts.length - 1]!;
-    return u.hostname.replace(/^www\./, "");
-  } catch {
-    return t.length > 40 ? `${t.slice(0, 37)}…` : t;
-  }
-}
-
 function compactUrlForCard(url: string): string {
   const t = url.trim();
   try {
@@ -51,7 +37,6 @@ export function MultiLinkReleaseRow({
   coverUrl,
   index = 0
 }: MultiLinkReleaseRowProps) {
-  const short = shortLinkLabel(smartLink);
   const lineUrl = compactUrlForCard(smartLink);
 
   const copy = async () => {
@@ -93,31 +78,6 @@ export function MultiLinkReleaseRow({
           <p className="mt-0.5 truncate text-[14px] text-white/65">{artist}</p>
           <p className="mt-1.5 truncate font-mono text-[12px] text-violet-300/90" title={smartLink}>
             {lineUrl}
-          </p>
-        </div>
-      </div>
-
-      <div className="flex flex-1 flex-col gap-3 border-t border-white/[0.06] pt-4 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-5 md:max-w-[240px]">
-        <div className="flex items-center gap-2">
-          <span
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-pink-500/15 text-pink-300"
-            aria-hidden
-          >
-            <span className="text-[11px] font-bold leading-none">BL</span>
-          </span>
-          <div className="min-w-0 text-[12px]">
-            <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-white/45">
-              Статус релиза
-            </p>
-            <p className="mt-0.5 font-medium text-emerald-300/95">Активен</p>
-          </div>
-        </div>
-        <div className="text-[12px]">
-          <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-white/45">
-            Короткая ссылка
-          </p>
-          <p className="mt-0.5 truncate font-mono text-[13px] text-white/88" title={short}>
-            {short}
           </p>
         </div>
       </div>
