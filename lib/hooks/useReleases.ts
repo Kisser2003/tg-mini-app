@@ -136,7 +136,10 @@ async function fetchReleasesWeb([, , _authUid]: readonly ["releases", "web", str
   ReleaseListRow[]
 > {
   const run = async () => {
-    const telegramHeaders = isTelegramClientShell() ? await buildTelegramRequestHeaders() : {};
+    const parsedAuthUid = Number(_authUid);
+    const telegramHeaders = await buildTelegramRequestHeaders(
+      Number.isFinite(parsedAuthUid) && parsedAuthUid > 0 ? Math.trunc(parsedAuthUid) : undefined
+    );
     const res = await fetch("/api/releases/my", {
       method: "GET",
       credentials: "include",
@@ -235,6 +238,19 @@ export function useReleases() {
       if (telegramModeLocked || isTelegramClientShell()) {
         const tid = getTelegramUserIdForSupabaseRequests();
         applyTelegramMode(tid ?? null);
+        return;
+      }
+      const tgInitData = getTelegramInitDataForApiHeader();
+      if (tgInitData.length > 0) {
+        const tid = getTelegramUserIdForSupabaseRequests();
+        if (tid != null) {
+          applyTelegramMode(tid);
+        } else {
+          // Telegram context is present but user id is not resolved yet: don't fall back to web actor.
+          setAuthMode("telegram");
+          setAuthReady(false);
+          setTelegramInitDataReady(true);
+        }
         return;
       }
       const tid = getTelegramUserIdForSupabaseRequests();
