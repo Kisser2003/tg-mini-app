@@ -15,6 +15,7 @@ import { getReleaseStatusMeta } from "@/lib/release-status";
 import { Badge } from "@/components/Badge";
 import { ARTWORK_BLUR_DATA_URL } from "@/lib/image-blur";
 import { triggerHaptic } from "@/lib/telegram";
+import { featuringNamesFromCollaboratorsJson } from "@/lib/collaborators";
 
 function releaseTypeLabel(type: ReleaseRecord["release_type"]): string {
   if (type === "single") return "Сингл";
@@ -80,6 +81,7 @@ function AdminReleaseCardInner({
   const statusMeta = getReleaseStatusMeta(release.status);
   const displayTitle = getReleaseDisplayTitle(release);
   const audioItems = buildAudioItems(release, tracks);
+  const featuringNames = featuringNamesFromCollaboratorsJson(release.collaborators);
 
   return (
     <motion.div
@@ -127,6 +129,14 @@ function AdminReleaseCardInner({
             )}
           </div>
           <p className="truncate text-[13px] text-white/60">{release.artist_name}</p>
+          {featuringNames.length > 0 ? (
+            <p
+              className="truncate text-[12px] text-violet-200/85"
+              title={featuringNames.join(", ")}
+            >
+              feat: {featuringNames.join(", ")}
+            </p>
+          ) : null}
           <div className="flex min-w-0 flex-wrap items-center gap-2 pt-0.5">
             <Badge className="shrink-0 border-emerald-400/25 bg-emerald-500/10 text-emerald-100/90">
               {releaseTypeLabel(release.release_type)}

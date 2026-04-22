@@ -102,13 +102,13 @@ const BottomNavInner = memo(function BottomNavInner() {
                     <Icon
                       size={18}
                       className={`relative z-10 transition-colors duration-200 ${
-                        isActive ? "text-[#818cf8]" : "text-white/25"
+                        isActive ? "text-[var(--ss-neon-blue)]" : "text-white/25"
                       }`}
                       strokeWidth={2}
                     />
                     <span
                       className={`relative z-10 text-[10px] font-semibold tracking-wide transition-colors duration-200 ${
-                        isActive ? "text-[#818cf8]" : "text-white/25"
+                        isActive ? "text-[var(--ss-neon-blue)]" : "text-white/25"
                       }`}
                     >
                       {tab.label}

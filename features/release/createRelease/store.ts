@@ -17,6 +17,13 @@ import { unionFeaturingNamesFromTracks } from "@/lib/collaborators";
 import { parsePerformanceLanguage } from "@/lib/performance-language";
 import { EMPTY_ARTIST_LINKS, type ArtistLinksState } from "@/lib/artist-links";
 
+export type TrackFileMeta = {
+  name: string;
+  size: number;
+  type: string;
+  lastModified: number;
+};
+
 export type CreateReleaseDraftState = {
   // identity / context (Telegram id как строка — совпадает с TEXT в БД и фильтрами)
   userId: string | null;
@@ -34,6 +41,8 @@ export type CreateReleaseDraftState = {
   // non-serializable files — kept in memory only, excluded from persist
   artworkFile: File | null;
   trackFiles: (File | null)[];
+  /** Serializable fallback for showing previously attached files in UI after rehydrate. */
+  trackFilesMeta: (TrackFileMeta | null)[];
   /** URL аудио из БД после резюме черновика (подсказки UX; не заменяют File при отправке). */
   trackAudioUrlsFromDb: (string | null)[];
   /** Идёт загрузка WAV в Storage (блокирует «Отправить» на проверке). */
@@ -68,6 +77,7 @@ type CreateReleaseDraftActions = {
   setArtworkFile: (file: File | null) => void;
   setTracks: (tracks: CreateTrack[]) => void;
   setTrackFile: (index: number, file: File | null) => void;
+  clearTrackFile: (index: number) => void;
   syncTrackFilesLength: (len: number) => void;
   setTrackAudioUrlAt: (index: number, url: string | null) => void;
   setTracksUploadInProgress: (value: boolean) => void;
@@ -206,6 +216,24 @@ function areTrackFilesEqualLengthAndRefs(
   return a.every((f, i) => f === b[i]);
 }
 
+function areTrackFilesMetaEqualLengthAndValues(
+  a: (TrackFileMeta | null)[],
+  b: (TrackFileMeta | null)[]
+): boolean {
+  if (a.length !== b.length) return false;
+  return a.every((m, i) => {
+    const n = b[i];
+    if (m === n) return true;
+    if (!m || !n) return false;
+    return (
+      m.name === n.name &&
+      m.size === n.size &&
+      m.type === n.type &&
+      m.lastModified === n.lastModified
+    );
+  });
+}
+
 function areTrackUrlsEqualLengthAndValues(
   a: (string | null)[],
   b: (string | null)[]
@@ -220,7 +248,7 @@ function syncStateForSingleRelease(
   nextMetadata: CreateMetadata
 ): Pick<
   CreateReleaseDraftState,
-  "tracks" | "trackFiles" | "trackAudioUrlsFromDb"
+  "tracks" | "trackFiles" | "trackFilesMeta" | "trackAudioUrlsFromDb"
 > {
   const prev0 = state.tracks[0] ?? {
     title: "",
@@ -234,11 +262,14 @@ function syncStateForSingleRelease(
   ];
   const nextTrackFiles = state.trackFiles.slice(0, 1);
   while (nextTrackFiles.length < 1) nextTrackFiles.push(null);
+  const nextTrackFilesMeta = state.trackFilesMeta.slice(0, 1);
+  while (nextTrackFilesMeta.length < 1) nextTrackFilesMeta.push(null);
   const nextUrls = state.trackAudioUrlsFromDb.slice(0, 1);
   while (nextUrls.length < 1) nextUrls.push(null);
   return {
     tracks: nextTracks,
     trackFiles: nextTrackFiles,
+    trackFilesMeta: nextTrackFilesMeta,
     trackAudioUrlsFromDb: nextUrls
   };
 }
@@ -261,6 +292,7 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
         artworkFile: null,
         tracks: [{ title: "", explicit: false, lyrics: "", featuringArtistNames: [] }],
         trackFiles: [null],
+        trackFilesMeta: [null],
         trackAudioUrlsFromDb: [],
         tracksUploadInProgress: false,
 
@@ -302,12 +334,14 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
 
             let nextTracks = state.tracks;
             let nextTrackFiles = state.trackFiles;
+            let nextTrackFilesMeta = state.trackFilesMeta;
             let nextUrls = state.trackAudioUrlsFromDb;
 
             if (nextMetadata.releaseType === "single") {
               const synced = syncStateForSingleRelease(state, nextMetadata);
               nextTracks = synced.tracks;
               nextTrackFiles = synced.trackFiles;
+              nextTrackFilesMeta = synced.trackFilesMeta;
               nextUrls = synced.trackAudioUrlsFromDb;
             }
 
@@ -317,12 +351,16 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
               state.trackFiles,
               nextTrackFiles
             );
+            const filesMetaSame = areTrackFilesMetaEqualLengthAndValues(
+              state.trackFilesMeta,
+              nextTrackFilesMeta
+            );
             const urlsSame = areTrackUrlsEqualLengthAndValues(
               state.trackAudioUrlsFromDb,
               nextUrls
             );
 
-            if (metadataSame && tracksSame && filesSame && urlsSame) {
+            if (metadataSame && tracksSame && filesSame && filesMetaSame && urlsSame) {
               return state;
             }
 
@@ -330,6 +368,7 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
               metadata: nextMetadata,
               tracks: nextTracks,
               trackFiles: nextTrackFiles,
+              trackFilesMeta: nextTrackFilesMeta,
               trackAudioUrlsFromDb: nextUrls,
               ...stamp()
             };
@@ -347,22 +386,69 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
             const prevUrls = state.trackAudioUrlsFromDb;
             const nextUrls = prevUrls.slice(0, tracks.length);
             while (nextUrls.length < tracks.length) nextUrls.push(null);
-            return { tracks, trackAudioUrlsFromDb: nextUrls, ...stamp() };
+            const prevMeta = state.trackFilesMeta;
+            const nextMeta = prevMeta.slice(0, tracks.length);
+            while (nextMeta.length < tracks.length) nextMeta.push(null);
+            return {
+              tracks,
+              trackAudioUrlsFromDb: nextUrls,
+              trackFilesMeta: nextMeta,
+              ...stamp()
+            };
           }),
         setTrackFile: (index, file) =>
           set((state) => {
             const prev = state.trackFiles;
+            const prevMeta = state.trackFilesMeta;
             const trackCount = state.tracks.length;
             const currentFile = prev[index] ?? null;
-            if (currentFile === file && prev.length >= trackCount) {
+            const currentMeta = prevMeta[index] ?? null;
+            const nextMetaItem = file
+              ? {
+                  name: file.name,
+                  size: file.size,
+                  type: file.type,
+                  lastModified: file.lastModified
+                }
+              : null;
+            const sameMeta =
+              (currentMeta == null && nextMetaItem == null) ||
+              (currentMeta != null &&
+                nextMetaItem != null &&
+                currentMeta.name === nextMetaItem.name &&
+                currentMeta.size === nextMetaItem.size &&
+                currentMeta.type === nextMetaItem.type &&
+                currentMeta.lastModified === nextMetaItem.lastModified);
+            if (
+              currentFile === file &&
+              sameMeta &&
+              prev.length >= trackCount &&
+              prevMeta.length >= trackCount
+            ) {
               return state;
             }
             const next = [...prev];
+            const nextMeta = [...prevMeta];
             while (next.length < trackCount) next.push(null);
+            while (nextMeta.length < trackCount) nextMeta.push(null);
             next[index] = file;
+            nextMeta[index] = nextMetaItem;
             return {
-              trackFiles: next
+              trackFiles: next,
+              trackFilesMeta: nextMeta
             };
+          }),
+        clearTrackFile: (index) =>
+          set((state) => {
+            const trackCount = state.tracks.length;
+            const nextFiles = [...state.trackFiles];
+            const nextMeta = [...state.trackFilesMeta];
+            while (nextFiles.length < trackCount) nextFiles.push(null);
+            while (nextMeta.length < trackCount) nextMeta.push(null);
+            if (nextFiles[index] == null && nextMeta[index] == null) return state;
+            nextFiles[index] = null;
+            nextMeta[index] = null;
+            return { trackFiles: nextFiles, trackFilesMeta: nextMeta };
           }),
         setTrackAudioUrlAt: (index, url) =>
           set((state) => {
@@ -384,11 +470,14 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
           }),
         syncTrackFilesLength: (len) =>
           set((state) => {
-            const prev = state.trackFiles;
-            if (prev.length === len) return state;
-            const next = prev.slice(0, len);
-            while (next.length < len) next.push(null);
-            return { trackFiles: next };
+            const prevFiles = state.trackFiles;
+            const prevMeta = state.trackFilesMeta;
+            if (prevFiles.length === len && prevMeta.length === len) return state;
+            const nextFiles = prevFiles.slice(0, len);
+            while (nextFiles.length < len) nextFiles.push(null);
+            const nextMeta = prevMeta.slice(0, len);
+            while (nextMeta.length < len) nextMeta.push(null);
+            return { trackFiles: nextFiles, trackFilesMeta: nextMeta };
           }),
 
         setSubmitStatus: (status) => set({ submitStatus: status }),
@@ -409,6 +498,7 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
             artworkFile: null,
             tracks: [{ title: "", explicit: false, lyrics: "", featuringArtistNames: [] }],
             trackFiles: [null],
+            trackFilesMeta: [null],
             trackAudioUrlsFromDb: [],
             tracksUploadInProgress: false,
             releaseArtistLinks: { ...EMPTY_ARTIST_LINKS },
@@ -429,6 +519,7 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
             artworkFile: null,
             tracks: [{ title: "", explicit: false, lyrics: "", featuringArtistNames: [] }],
             trackFiles: [null],
+            trackFilesMeta: [null],
             trackAudioUrlsFromDb: [],
             tracksUploadInProgress: false,
             releaseArtistLinks: { ...EMPTY_ARTIST_LINKS },
@@ -448,6 +539,7 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
             artworkFile: null,
             tracks: [{ title: "", explicit: false, lyrics: "", featuringArtistNames: [] }],
             trackFiles: [null],
+            trackFilesMeta: [null],
             trackAudioUrlsFromDb: [],
             tracksUploadInProgress: false,
             releaseArtistLinks: { ...EMPTY_ARTIST_LINKS },
@@ -495,6 +587,8 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
 
             const trackFiles: (File | null)[] = [];
             for (let i = 0; i < len; i += 1) trackFiles.push(null);
+            const trackFilesMeta: (TrackFileMeta | null)[] = [];
+            for (let i = 0; i < len; i += 1) trackFilesMeta.push(null);
 
             let trackAudioUrlsFromDb: (string | null)[];
             if (isSingle) {
@@ -518,6 +612,7 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
               tracks,
               artworkFile: null,
               trackFiles,
+              trackFilesMeta,
               trackAudioUrlsFromDb,
               tracksUploadInProgress: false,
               releaseArtistLinks: { ...payload.releaseArtistLinks },
@@ -620,7 +715,27 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
           ...persistSansLegacy,
           metadata: mergedMeta,
           releaseArtistLinks: mergedLinks,
-          tracks: mergedTracks
+          tracks: mergedTracks,
+          trackFilesMeta: Array.isArray(p.trackFilesMeta)
+            ? p.trackFilesMeta.slice(0, mergedTracks.length).map((item) => {
+                if (!item || typeof item !== "object") return null;
+                const meta = item as Partial<TrackFileMeta>;
+                if (
+                  typeof meta.name !== "string" ||
+                  typeof meta.size !== "number" ||
+                  typeof meta.type !== "string" ||
+                  typeof meta.lastModified !== "number"
+                ) {
+                  return null;
+                }
+                return {
+                  name: meta.name,
+                  size: meta.size,
+                  type: meta.type,
+                  lastModified: meta.lastModified
+                } satisfies TrackFileMeta;
+              })
+            : currentState.trackFilesMeta
         };
       },
       // artworkFile and trackFiles are intentionally excluded: File objects
@@ -631,6 +746,7 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
         metadata: state.metadata,
         artworkUrl: state.artworkUrl,
         tracks: state.tracks,
+        trackFilesMeta: state.trackFilesMeta,
         trackAudioUrlsFromDb: state.trackAudioUrlsFromDb,
         releaseArtistLinks: state.releaseArtistLinks,
         lastModified: state.lastModified,

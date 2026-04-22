@@ -291,10 +291,10 @@ export function FileUploader({
           x: magneticX,
           y: magneticY
         }}
-        className={`relative flex min-h-[140px] cursor-pointer flex-col items-center justify-center overflow-hidden rounded-[1.25rem] border-2 border-dashed px-4 py-5 text-center text-xs text-muted-foreground transition-[border-color,background-color,box-shadow] duration-200 focus-within:ring-1 focus-within:ring-[#818cf8]/40 focus-within:ring-offset-0 ${
+        className={`relative flex min-h-[140px] cursor-pointer flex-col items-center justify-center overflow-hidden rounded-[1.25rem] border-2 border-dashed px-4 py-5 text-center text-xs text-muted-foreground transition-[border-color,background-color,box-shadow] duration-200 focus-within:ring-1 focus-within:ring-[var(--ss-neon-blue)]/40 focus-within:ring-offset-0 ${
           invalid || error
             ? "border-red-500/55 bg-red-950/20 ring-2 ring-red-500/25 hover:border-red-400/60"
-            : "border-white/[0.08] bg-white/[0.03] ring-2 ring-transparent hover:border-[#818cf8]/35 hover:bg-white/[0.05]"
+            : "border-white/[0.08] bg-white/[0.03] ring-2 ring-transparent hover:border-[var(--ss-neon-blue)]/35 hover:bg-white/[0.05]"
         }`}
       >
         {type === "cover" && !previewUrl && (
@@ -305,7 +305,8 @@ export function FileUploader({
             <div
               className="scanner-line absolute left-0 right-0 h-[2px]"
               style={{
-                background: "linear-gradient(90deg, transparent, #818cf8, #c084fc, transparent)",
+                background:
+                  "linear-gradient(90deg, transparent, var(--ss-neon-blue), var(--ss-neon-pink), transparent)",
                 boxShadow: "0 0 24px rgba(129,140,248,0.4)"
               }}
             />

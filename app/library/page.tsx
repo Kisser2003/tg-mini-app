@@ -453,7 +453,8 @@ function LibraryPageInner() {
               aria-label="Новый релиз"
               className="flex h-10 w-10 items-center justify-center rounded-xl text-white pulse-glow"
               style={{
-                background: "linear-gradient(135deg, #818cf8, #c084fc)",
+                background:
+                  "linear-gradient(135deg, var(--ss-neon-blue), var(--ss-neon-pink))",
                 boxShadow: "0 0 20px rgba(129,140,248,0.25)"
               }}
             >
@@ -495,7 +496,10 @@ function LibraryPageInner() {
             <motion.button
               type="button"
               className="mt-6 rounded-xl px-6 py-3 text-sm font-bold text-white"
-              style={{ background: "linear-gradient(135deg, #818cf8, #c084fc)" }}
+              style={{
+                background:
+                  "linear-gradient(135deg, var(--ss-neon-blue), var(--ss-neon-pink))"
+              }}
               whileTap={{ scale: 0.95 }}
               onClick={() => void mutate(undefined, { revalidate: true })}
             >
@@ -520,7 +524,10 @@ function LibraryPageInner() {
               type="button"
               onClick={handleCreate}
               className="rounded-xl px-8 py-3.5 text-sm font-bold text-white pulse-glow"
-              style={{ background: "linear-gradient(135deg, #818cf8, #c084fc)" }}
+              style={{
+                background:
+                  "linear-gradient(135deg, var(--ss-neon-blue), var(--ss-neon-pink))"
+              }}
               whileTap={{ scale: 0.95 }}
             >
               Создать первый
@@ -555,7 +562,7 @@ function LibraryPageInner() {
                       }}
                       className={`shrink-0 rounded-full border px-3.5 py-1.5 text-[12px] font-medium transition-colors ${
                         active
-                          ? "border-[#818cf8]/50 bg-[#818cf8]/15 text-white"
+                          ? "border-[var(--ss-neon-blue)]/50 bg-[var(--ss-neon-blue)]/15 text-white"
                           : "border-white/15 bg-white/5 text-white/70 hover:bg-white/10"
                       }`}
                     >

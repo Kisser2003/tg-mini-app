@@ -78,6 +78,15 @@ npm run dev
 npm run lint && npm run typecheck && npm run build
 ```
 
+### E2E test profiles and deploy gate
+
+- `npm run test:e2e:smoke` - fast smoke subset (`@smoke`).
+- `npm run test:e2e:regression` - full regression suite (`@regression`).
+- `npm run test:e2e:full-submit` - mocked submit pipeline (`@full-submit`).
+- `npm run test:e2e:pre-release` - recommended release gate (`@smoke` + `@full-submit`).
+- `npm run test:gate` - lint + typecheck + unit + pre-release E2E gate.
+- `npm run deploy:preview` / `npm run deploy:prod` - always run `test:gate` before `vercel` deploy.
+
 Hook the dev or production URL as a Telegram WebApp URL in your bot, so that Telegram passes the user id which is stored with each release (`user_id`).
 
 ## API routes (Server-Side Validation)

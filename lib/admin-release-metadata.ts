@@ -1,5 +1,6 @@
 import type { ReleaseRecord, ReleaseTrackRow } from "@/repositories/releases/types";
 import { getReleaseDisplayTitle } from "@/repositories/releases/types";
+import { featuringNamesFromCollaboratorsJson } from "@/lib/collaborators";
 
 /** Строка `releases` + возможные доп. колонки из БД для админки. */
 export type AdminReleaseRow = ReleaseRecord & Record<string, unknown>;
@@ -93,6 +94,10 @@ export function buildReleaseMetadataSections(release: AdminReleaseRow, tracks: R
   pushString(ids, "Настроение (mood)", release.mood as string | undefined);
 
   const people: MetadataEntry[] = [];
+  const featuringNames = featuringNamesFromCollaboratorsJson(release.collaborators);
+  if (featuringNames.length > 0) {
+    people.push({ label: "Доп. артисты (feat.)", value: featuringNames.join(", ") });
+  }
   pushJson(people, "Участники (collaborators)", release.collaborators);
   pushJson(people, "Ссылки артиста (artist_links)", release.artist_links);
 

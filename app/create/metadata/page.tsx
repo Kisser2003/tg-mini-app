@@ -623,7 +623,8 @@ function CreateMetadataPageInner() {
                       style={
                         active
                           ? {
-                              background: "linear-gradient(135deg, #818cf8, #c084fc)",
+                              background:
+                                "linear-gradient(135deg, var(--ss-neon-blue), var(--ss-neon-pink))",
                               boxShadow: "0 0 24px rgba(129,140,248,0.3)"
                             }
                           : undefined

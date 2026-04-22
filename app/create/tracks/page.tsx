@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useFieldArray, useForm } from "react-hook-form";
 import { motion } from "framer-motion";
-import { UserPlus } from "lucide-react";
+import { CheckCircle2, UserPlus, X } from "lucide-react";
 import { MagneticButton } from "@/components/MagneticButton";
 import { CreateShell } from "@/features/release/createRelease/components/CreateShell";
 import { StepGate } from "@/features/release/createRelease/components/StepGate";
@@ -43,8 +43,10 @@ export default function CreateTracksPage() {
   const releaseTitle = useCreateReleaseDraftStore((s) => s.metadata.releaseTitle);
   const storeTracks = useCreateReleaseDraftStore((s) => s.tracks);
   const storeTrackFiles = useCreateReleaseDraftStore((s) => s.trackFiles);
+  const trackFilesMeta = useCreateReleaseDraftStore((s) => s.trackFilesMeta);
   const setTracks = useCreateReleaseDraftStore((s) => s.setTracks);
   const setTrackFile = useCreateReleaseDraftStore((s) => s.setTrackFile);
+  const clearTrackFile = useCreateReleaseDraftStore((s) => s.clearTrackFile);
   const setTrackAudioUrlAt = useCreateReleaseDraftStore((s) => s.setTrackAudioUrlAt);
   const syncTrackFilesLength = useCreateReleaseDraftStore((s) => s.syncTrackFilesLength);
   const submitError = useCreateReleaseDraftStore((s) => s.submitError);
@@ -445,74 +447,100 @@ export default function CreateTracksPage() {
                 ) : null}
               </div>
 
-              {/* Pass the stored File reference so the uploader shows "file selected"
-                  state when the user navigates back to this step within the session. */}
-              <FileUploader
-                label="WAV трека"
-                accept=".wav,audio/wav,audio/x-wav,audio/wave,audio/vnd.wave"
-                maxSizeMb={200}
-                type="wav"
-                initialFile={storeTrackFiles[index] ?? null}
-                onFileChange={(file) => {
-                  setTrackFile(index, file);
-                  setTrackAudioUrlAt(index, null);
-                  if (!file) {
-                    setTrackUploadProgress((prev) => {
-                      const next = { ...prev };
-                      delete next[index];
-                      return next;
-                    });
-                    return;
-                  }
-                  void (async () => {
-                    // Validate WAV spec before initiating upload
-                    const validation = await validateWavFile(file);
-                    if (!validation.ok) {
-                      setTrackFile(index, null);
-                      setSubmitError(validation.reason);
-                      toast.error(validation.reason);
-                      return;
-                    }
-
-                    setTrackUploadProgress((prev) => ({ ...prev, [index]: 0 }));
-                    const ok = await uploadTrackWavAtIndex({
-                      index,
-                      file,
-                      onProgress: (pct) => {
-                        setTrackUploadProgress((prev) => ({ ...prev, [index]: pct }));
-                      }
-                    });
-                    if (ok) {
-                      setTrackUploadProgress((prev) => ({ ...prev, [index]: 100 }));
-                      window.setTimeout(() => {
+              {trackFilesMeta[index] && !storeTrackFiles[index] ? (
+                <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--ss-green)]/15">
+                    <CheckCircle2 className="h-4 w-4 text-[var(--ss-green)]" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-white">
+                      {trackFilesMeta[index].name}
+                    </p>
+                    <p className="text-xs text-white/55">
+                      {(trackFilesMeta[index].size / 1024 / 1024).toFixed(1)} MB • Прикреплён
+                      ранее
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => clearTrackFile(index)}
+                    className="text-white/40 transition-colors hover:text-white/70"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : (
+                <>
+                  {/* Pass the stored File reference so the uploader shows "file selected"
+                      state when the user navigates back to this step within the session. */}
+                  <FileUploader
+                    label="WAV трека"
+                    accept=".wav,audio/wav,audio/x-wav,audio/wave,audio/vnd.wave"
+                    maxSizeMb={200}
+                    type="wav"
+                    initialFile={storeTrackFiles[index] ?? null}
+                    onFileChange={(file) => {
+                      setTrackFile(index, file);
+                      setTrackAudioUrlAt(index, null);
+                      if (!file) {
                         setTrackUploadProgress((prev) => {
                           const next = { ...prev };
                           delete next[index];
                           return next;
                         });
-                      }, 420);
-                    } else {
-                      setTrackUploadProgress((prev) => {
-                        const next = { ...prev };
-                        delete next[index];
-                        return next;
-                      });
+                        return;
+                      }
+                      void (async () => {
+                        // Validate WAV spec before initiating upload
+                        const validation = await validateWavFile(file);
+                        if (!validation.ok) {
+                          clearTrackFile(index);
+                          setSubmitError(validation.reason);
+                          toast.error(validation.reason);
+                          return;
+                        }
+
+                        setTrackUploadProgress((prev) => ({ ...prev, [index]: 0 }));
+                        const ok = await uploadTrackWavAtIndex({
+                          index,
+                          file,
+                          onProgress: (pct) => {
+                            setTrackUploadProgress((prev) => ({ ...prev, [index]: pct }));
+                          }
+                        });
+                        if (ok) {
+                          setTrackUploadProgress((prev) => ({ ...prev, [index]: 100 }));
+                          window.setTimeout(() => {
+                            setTrackUploadProgress((prev) => {
+                              const next = { ...prev };
+                              delete next[index];
+                              return next;
+                            });
+                          }, 420);
+                        } else {
+                          setTrackUploadProgress((prev) => {
+                            const next = { ...prev };
+                            delete next[index];
+                            return next;
+                          });
+                        }
+                        if (!ok) {
+                          const msg = useCreateReleaseDraftStore.getState().submitError;
+                          if (msg) toast.error(msg);
+                        }
+                      })();
+                    }}
+                    invalid={submitAttempted && !storeTrackFiles[index]}
+                    uploadProgressPercent={
+                      typeof trackUploadProgress[index] === "number"
+                        ? trackUploadProgress[index]!
+                        : isUploadingWav && activeUploadIndex === index
+                          ? (trackUploadProgress[index] ?? 0)
+                          : null
                     }
-                    if (!ok) {
-                      const msg = useCreateReleaseDraftStore.getState().submitError;
-                      if (msg) toast.error(msg);
-                    }
-                  })();
-                }}
-                invalid={submitAttempted && !storeTrackFiles[index]}
-                uploadProgressPercent={
-                  typeof trackUploadProgress[index] === "number"
-                    ? trackUploadProgress[index]!
-                    : isUploadingWav && activeUploadIndex === index
-                      ? (trackUploadProgress[index] ?? 0)
-                      : null
-                }
-              />
+                  />
+                </>
+              )}
               <FormFieldError
                 message={
                   submitAttempted && !storeTrackFiles[index]

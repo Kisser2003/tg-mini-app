@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
@@ -14,6 +15,16 @@ export function FAB() {
   const haptics = useHaptics();
   const fabVisible = useHideOnScrollDown();
   const isTelegram = useIsTelegramMiniApp();
+  /* On web desktop (lg+), sidebar has its own create CTA — FAB not needed */
+  /* We detect this via isTelegram: if not Telegram and screen is wide, hide */
+  /* Use a window width check after mount */
+  const [isDesktop, setIsDesktop] = useState(false);
+  useEffect(() => {
+    const check = () => setIsDesktop(window.innerWidth >= 1024);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
 
   if (pathname?.startsWith("/create")) {
     return null;
@@ -39,6 +50,8 @@ export function FAB() {
     return null;
   }
 
+  if (!isTelegram && isDesktop) return null;
+
   return (
     <AnimatePresence initial={false}>
       {fabVisible ? (
@@ -60,7 +73,8 @@ export function FAB() {
               ? "calc(var(--bottom-nav-height, 4.5rem) + 0.75rem + env(safe-area-inset-bottom, 0px))"
               : "2rem",
             right: isTelegram ? "1.25rem" : "2rem",
-            background: "linear-gradient(135deg, #818cf8, #c084fc)",
+            background:
+              "linear-gradient(135deg, var(--ss-neon-blue), var(--ss-neon-pink))",
             border: "0.5px solid rgba(255,255,255,0.15)"
           }}
           whileTap={{ scale: 0.85 }}

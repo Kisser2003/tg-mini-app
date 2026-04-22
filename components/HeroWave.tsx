@@ -33,7 +33,8 @@ export function HeroWave() {
               className="origin-bottom flex-1 rounded-full motion-safe:animate-hero-wave-bar motion-reduce:animate-none"
               style={
                 {
-                  background: "linear-gradient(to top, #818cf8, #c084fc)",
+                  background:
+                    "linear-gradient(to top, var(--ss-neon-blue), var(--ss-neon-pink))",
                   height: "100%",
                   ["--peak" as string]: peak,
                   ["--bar-dur" as string]: `${dur}s`,

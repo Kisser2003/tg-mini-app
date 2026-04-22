@@ -19,6 +19,7 @@ import { getReleaseStatusMeta, normalizeReleaseStatus } from "@/lib/release-stat
 import type { ReleaseRecord, ReleaseTrackRow } from "@/repositories/releases.repo";
 import { getReleaseDisplayTitle } from "@/repositories/releases/types";
 import { getTelegramUserId, initTelegramWebApp, triggerHaptic } from "@/lib/telegram";
+import { featuringNamesFromCollaboratorsJson } from "@/lib/collaborators";
 
 const ARTWORK_PREVIEW_SIZES = "(max-width: 768px) 100vw, min(480px, 45vw)";
 
@@ -173,6 +174,7 @@ export default function AdminReleaseDetailPage() {
   const audioItems = buildAudioItems(release, tracks);
   const canModerate = normalizeReleaseStatus(release.status) === "processing";
   const displayTitle = getReleaseDisplayTitle(release);
+  const featuringNames = featuringNamesFromCollaboratorsJson(release.collaborators);
 
   return (
     <div className="flex flex-col gap-4 pb-10">
@@ -213,6 +215,14 @@ export default function AdminReleaseDetailPage() {
               {displayTitle || release.track_name || "Релиз"}
             </h1>
             <p className="break-words text-sm text-white/60">{release.artist_name}</p>
+            {featuringNames.length > 0 ? (
+              <p
+                className="mt-1 break-words text-xs text-violet-200/85"
+                title={featuringNames.join(", ")}
+              >
+                feat: {featuringNames.join(", ")}
+              </p>
+            ) : null}
             <span
               className={`mt-2 inline-flex rounded-full border px-2 py-0.5 text-[10px] ${statusMeta.badgeClassName} ${statusMeta.badgeGlowClassName ?? ""} ${statusMeta.badgeShimmerClassName ?? ""}`}
             >

@@ -97,13 +97,13 @@ export function EmptyStateNeonWaveform({ className = "" }: { className?: string 
           <defs>
             <linearGradient id={gradId} x1="0%" y1="50%" x2="100%" y2="50%">
               <stop offset="0%" stopColor="#22d3ee" stopOpacity="0.85" />
-              <stop offset="35%" stopColor="#a78bfa" stopOpacity="1" />
-              <stop offset="70%" stopColor="#c084fc" stopOpacity="0.95" />
-              <stop offset="100%" stopColor="#818cf8" stopOpacity="0.75" />
+              <stop offset="35%" stopColor="var(--ss-neon-purple)" stopOpacity="1" />
+              <stop offset="70%" stopColor="var(--ss-neon-pink)" stopOpacity="0.95" />
+              <stop offset="100%" stopColor="var(--ss-neon-blue)" stopOpacity="0.75" />
             </linearGradient>
             <linearGradient id={gradSoftId} x1="0%" y1="0%" x2="100%" y2="0%">
               <stop offset="0%" stopColor="#6366f1" stopOpacity="0.28" />
-              <stop offset="100%" stopColor="#c084fc" stopOpacity="0.38" />
+              <stop offset="100%" stopColor="var(--ss-neon-pink)" stopOpacity="0.38" />
             </linearGradient>
             <filter id={glowId} x="-15%" y="-15%" width="130%" height="130%">
               <feGaussianBlur stdDeviation="1.4" result="blur" />
