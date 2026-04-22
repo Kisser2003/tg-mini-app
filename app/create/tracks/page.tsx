@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useFieldArray, useForm } from "react-hook-form";
 import { motion } from "framer-motion";
-import { CheckCircle2, UserPlus, X } from "lucide-react";
+import { CheckCircle2, ChevronDown, ChevronUp, UserPlus, X } from "lucide-react";
 import { MagneticButton } from "@/components/MagneticButton";
 import { CreateShell } from "@/features/release/createRelease/components/CreateShell";
 import { StepGate } from "@/features/release/createRelease/components/StepGate";
@@ -214,6 +214,19 @@ export default function CreateTracksPage() {
   const [trackUploadProgress, setTrackUploadProgress] = useState<Record<number, number>>({});
   const [activeUploadIndex, setActiveUploadIndex] = useState<number | null>(null);
   const [isUploadingWav, setIsUploadingWav] = useState(false);
+  const [showFeat, setShowFeat] = useState(false);
+  const [showLyrics, setShowLyrics] = useState(false);
+  const [expandedTracks, setExpandedTracks] = useState<boolean[]>([true]);
+
+  useEffect(() => {
+    if (isSingle) return;
+    setExpandedTracks((prev) => {
+      const next = prev.slice(0, fields.length);
+      while (next.length < fields.length) next.push(false);
+      if (next.length > 0 && !next.some(Boolean)) next[0] = true;
+      return next;
+    });
+  }, [fields.length, isSingle]);
 
   /** Локальный прогресс XHR + флаг стора — блокируем «Далее», пока идёт реальный аплоад. */
   const isWavTransferActive = useMemo(
@@ -342,229 +355,367 @@ export default function CreateTracksPage() {
               animate={{ opacity: 1, y: 0 }}
               className="glass-glow glass-glow-charged space-y-6 px-5 py-5"
             >
-              <div className="flex items-center justify-between gap-2">
-                <span className="min-w-0 truncate text-[11px] font-medium uppercase tracking-[0.18em] text-white/60">
-                  Трек {index + 1}
-                </span>
-                {canAddTrack && fields.length > 1 && (
+              {!isSingle ? (
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => {
-                      triggerHaptic("light");
-                      remove(index);
-                      syncTrackFilesLength(fields.length - 1);
-                    }}
-                    className="text-[11px] text-white/40"
+                    onClick={() =>
+                      setExpandedTracks((prev) => {
+                        const next = [...prev];
+                        while (next.length < fields.length) next.push(false);
+                        next[index] = !next[index];
+                        return next;
+                      })
+                    }
+                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
                   >
-                    Удалить
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/60">
+                      ТРЕК {index + 1}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-[12px] text-white/70">
+                      {(values.tracks[index]?.title ?? "").trim() || "Без названия"}
+                    </span>
+                    <span className="text-white/35">↕</span>
+                    {expandedTracks[index] ? (
+                      <ChevronUp className="h-4 w-4 text-white/55" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4 text-white/55" />
+                    )}
                   </button>
-                )}
-              </div>
-
-              {isSingle && index === 0 ? (
-                <div className="space-y-1.5">
-                  <label className={`mb-2.5 block ${WIZARD_FIELD_LABEL_CLASS}`}>Название трека</label>
-                  <p className="mb-1 text-[12px] leading-relaxed text-white/50">
-                    Обычно совпадает с названием релиза. Участников / фит укажите в блоке
-                    «Дополнительные артисты» ниже; при необходимости допишите отображаемое название
-                    трека здесь (как в сторе).
-                  </p>
-                  <input
-                    {...register(`tracks.${index}.title` as const, {
-                      onChange: (e) => {
-                        const v = e.target.value;
-                        singleTrackTitleTouchedRef.current = v.trim().length > 0;
-                      }
-                    })}
-                    placeholder={releaseTitle.trim() || "Как на обложке / в сторе"}
-                    className={`${WIZARD_INPUT_CLASS} ${
-                      errors.tracks?.[index]?.title && dirtyFields.tracks?.[index]?.title
-                        ? GLASS_FIELD_ERROR_STRONG
-                        : ""
-                    }`}
-                  />
-                  <FormFieldError message={errors.tracks?.[index]?.title?.message} />
+                  {canAddTrack && fields.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        triggerHaptic("light");
+                        remove(index);
+                        syncTrackFilesLength(fields.length - 1);
+                        setExpandedTracks((prev) => {
+                          const next = prev.filter((_, i) => i !== index);
+                          if (next.length > 0 && !next.some(Boolean)) next[0] = true;
+                          return next;
+                        });
+                      }}
+                      className="text-[12px] text-white/40 hover:text-white/70"
+                      aria-label={`Удалить трек ${index + 1}`}
+                    >
+                      🗑
+                    </button>
+                  )}
                 </div>
               ) : (
-                <div className="space-y-1.5">
-                  <label className={`mb-2.5 block ${WIZARD_FIELD_LABEL_CLASS}`}>
-                    Название трека
-                  </label>
-                  <input
-                    {...register(`tracks.${index}.title` as const)}
-                    placeholder="Например, Track 1"
-                    className={`${WIZARD_INPUT_CLASS} ${
-                      errors.tracks?.[index]?.title && dirtyFields.tracks?.[index]?.title
-                        ? GLASS_FIELD_ERROR_STRONG
-                        : ""
-                    }`}
-                  />
-                  <FormFieldError message={errors.tracks?.[index]?.title?.message} />
+                <div className="flex items-center justify-between gap-2">
+                  <span className="min-w-0 truncate text-[11px] font-medium uppercase tracking-[0.18em] text-white/60">
+                    Трек {index + 1}
+                  </span>
                 </div>
               )}
 
-              <div className="space-y-3 rounded-[14px] border border-white/[0.06] bg-white/[0.02] px-4 py-4">
-                <div>
-                  <label className={`mb-2 block ${WIZARD_FIELD_LABEL_CLASS}`}>
-                    Дополнительные артисты
-                  </label>
-                  <p className="text-[12px] leading-relaxed text-white/50">
-                    Если на этом треке есть фит или другой участник (кроме основного артиста из
-                    паспорта), нажмите «Добавить» и введите имя — имена со всех треков попадут в
-                    метаданные релиза для модерации.
-                  </p>
-                </div>
-                <ul className="space-y-2">
-                  {(values.tracks[index]?.featuringArtistNames ?? []).map((name, featIdx) => (
-                    <li key={`${field.id}-feat-${featIdx}`} className="flex items-center gap-2">
-                      <input
-                        value={name}
-                        onChange={(e) => setFeaturingAt(index, featIdx, e.target.value)}
-                        placeholder="Имя артиста"
-                        autoComplete="off"
-                        className={`${WIZARD_INPUT_CLASS} min-w-0 flex-1`}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeFeaturingAt(index, featIdx)}
-                        className="shrink-0 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-2 text-[11px] text-white/55 hover:bg-white/[0.08] hover:text-white/80"
-                      >
-                        Убрать
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-                {(values.tracks[index]?.featuringArtistNames ?? []).length <
-                MAX_FEATURING_ARTISTS ? (
-                  <button
-                    type="button"
-                    onClick={() => addFeaturingSlot(index)}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-violet-400/30 bg-violet-500/10 py-2.5 text-[13px] font-medium text-violet-100/95 hover:bg-violet-500/[0.16]"
-                  >
-                    <UserPlus className="h-4 w-4 shrink-0 opacity-90" />
-                    Добавить артиста
-                  </button>
-                ) : null}
-              </div>
-
-              {trackFilesMeta[index] && !storeTrackFiles[index] ? (
-                <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--ss-green)]/15">
-                    <CheckCircle2 className="h-4 w-4 text-[var(--ss-green)]" />
+              <div className="space-y-1.5">
+                <label className={`mb-2.5 block ${WIZARD_FIELD_LABEL_CLASS}`}>WAV ФАЙЛ</label>
+                {!isSingle && !expandedTracks[index] ? (
+                  <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-xs text-white/65">
+                    {storeTrackFiles[index] || trackFilesMeta[index]
+                      ? "WAV прикреплён"
+                      : "WAV не прикреплён"}
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-white">
-                      {trackFilesMeta[index].name}
-                    </p>
-                    <p className="text-xs text-white/55">
-                      {(trackFilesMeta[index].size / 1024 / 1024).toFixed(1)} MB • Прикреплён
-                      ранее
-                    </p>
+                ) : trackFilesMeta[index] && !storeTrackFiles[index] ? (
+                  <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--ss-green)]/15">
+                      <CheckCircle2 className="h-4 w-4 text-[var(--ss-green)]" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-white">
+                        {trackFilesMeta[index].name}
+                      </p>
+                      <p className="text-xs text-white/55">
+                        {(trackFilesMeta[index].size / 1024 / 1024).toFixed(1)} MB • Прикреплён
+                        ранее
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => clearTrackFile(index)}
+                      className="text-white/40 transition-colors hover:text-white/70"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => clearTrackFile(index)}
-                    className="text-white/40 transition-colors hover:text-white/70"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              ) : (
-                <>
-                  {/* Pass the stored File reference so the uploader shows "file selected"
-                      state when the user navigates back to this step within the session. */}
-                  <FileUploader
-                    label="WAV трека"
-                    accept=".wav,audio/wav,audio/x-wav,audio/wave,audio/vnd.wave"
-                    maxSizeMb={200}
-                    type="wav"
-                    initialFile={storeTrackFiles[index] ?? null}
-                    onFileChange={(file) => {
-                      setTrackFile(index, file);
-                      setTrackAudioUrlAt(index, null);
-                      if (!file) {
-                        setTrackUploadProgress((prev) => {
-                          const next = { ...prev };
-                          delete next[index];
-                          return next;
-                        });
-                        return;
-                      }
-                      void (async () => {
-                        // Validate WAV spec before initiating upload
-                        const validation = await validateWavFile(file);
-                        if (!validation.ok) {
-                          clearTrackFile(index);
-                          setSubmitError(validation.reason);
-                          toast.error(validation.reason);
-                          return;
-                        }
-
-                        setTrackUploadProgress((prev) => ({ ...prev, [index]: 0 }));
-                        const ok = await uploadTrackWavAtIndex({
-                          index,
-                          file,
-                          onProgress: (pct) => {
-                            setTrackUploadProgress((prev) => ({ ...prev, [index]: pct }));
-                          }
-                        });
-                        if (ok) {
-                          setTrackUploadProgress((prev) => ({ ...prev, [index]: 100 }));
-                          window.setTimeout(() => {
-                            setTrackUploadProgress((prev) => {
-                              const next = { ...prev };
-                              delete next[index];
-                              return next;
-                            });
-                          }, 420);
-                        } else {
+                ) : (
+                  <>
+                    <FileUploader
+                      label="WAV трека"
+                      accept=".wav,audio/wav,audio/x-wav,audio/wave,audio/vnd.wave"
+                      maxSizeMb={200}
+                      type="wav"
+                      initialFile={storeTrackFiles[index] ?? null}
+                      onFileChange={(file) => {
+                        setTrackFile(index, file);
+                        setTrackAudioUrlAt(index, null);
+                        if (!file) {
                           setTrackUploadProgress((prev) => {
                             const next = { ...prev };
                             delete next[index];
                             return next;
                           });
+                          return;
                         }
-                        if (!ok) {
-                          const msg = useCreateReleaseDraftStore.getState().submitError;
-                          if (msg) toast.error(msg);
-                        }
-                      })();
-                    }}
-                    invalid={submitAttempted && !storeTrackFiles[index]}
-                    uploadProgressPercent={
-                      typeof trackUploadProgress[index] === "number"
-                        ? trackUploadProgress[index]!
-                        : isUploadingWav && activeUploadIndex === index
-                          ? (trackUploadProgress[index] ?? 0)
-                          : null
-                    }
-                  />
+                        void (async () => {
+                          const validation = await validateWavFile(file);
+                          if (!validation.ok) {
+                            clearTrackFile(index);
+                            setSubmitError(validation.reason);
+                            toast.error(validation.reason);
+                            return;
+                          }
+                          setTrackUploadProgress((prev) => ({ ...prev, [index]: 0 }));
+                          const ok = await uploadTrackWavAtIndex({
+                            index,
+                            file,
+                            onProgress: (pct) => {
+                              setTrackUploadProgress((prev) => ({ ...prev, [index]: pct }));
+                            }
+                          });
+                          if (ok) {
+                            setTrackUploadProgress((prev) => ({ ...prev, [index]: 100 }));
+                            window.setTimeout(() => {
+                              setTrackUploadProgress((prev) => {
+                                const next = { ...prev };
+                                delete next[index];
+                                return next;
+                              });
+                            }, 420);
+                          } else {
+                            setTrackUploadProgress((prev) => {
+                              const next = { ...prev };
+                              delete next[index];
+                              return next;
+                            });
+                          }
+                          if (!ok) {
+                            const msg = useCreateReleaseDraftStore.getState().submitError;
+                            if (msg) toast.error(msg);
+                          }
+                        })();
+                      }}
+                      invalid={submitAttempted && !storeTrackFiles[index]}
+                      uploadProgressPercent={
+                        typeof trackUploadProgress[index] === "number"
+                          ? trackUploadProgress[index]!
+                          : isUploadingWav && activeUploadIndex === index
+                            ? (trackUploadProgress[index] ?? 0)
+                            : null
+                      }
+                    />
+                    <FormFieldError
+                      message={
+                        submitAttempted && !storeTrackFiles[index]
+                          ? "Загрузите WAV-файл для этого трека."
+                          : undefined
+                      }
+                    />
+                  </>
+                )}
+              </div>
+
+              {(isSingle || expandedTracks[index]) && (
+                <>
+                  {isSingle && index === 0 ? (
+                    <div className="space-y-1.5">
+                      <label className={`mb-2.5 block ${WIZARD_FIELD_LABEL_CLASS}`}>Название трека</label>
+                      <p className="mb-1 text-[12px] leading-relaxed text-white/50">
+                        Обычно совпадает с названием релиза. Участников / фит укажите в блоке
+                        «Дополнительные артисты» ниже; при необходимости допишите отображаемое
+                        название трека здесь (как в сторе).
+                      </p>
+                      <input
+                        {...register(`tracks.${index}.title` as const, {
+                          onChange: (e) => {
+                            const v = e.target.value;
+                            singleTrackTitleTouchedRef.current = v.trim().length > 0;
+                          }
+                        })}
+                        placeholder={releaseTitle.trim() || "Как на обложке / в сторе"}
+                        className={`${WIZARD_INPUT_CLASS} ${
+                          errors.tracks?.[index]?.title && dirtyFields.tracks?.[index]?.title
+                            ? GLASS_FIELD_ERROR_STRONG
+                            : ""
+                        }`}
+                      />
+                      <FormFieldError message={errors.tracks?.[index]?.title?.message} />
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <label className={`mb-2.5 block ${WIZARD_FIELD_LABEL_CLASS}`}>
+                        Название трека
+                      </label>
+                      <input
+                        {...register(`tracks.${index}.title` as const)}
+                        placeholder="Например, Track 1"
+                        className={`${WIZARD_INPUT_CLASS} ${
+                          errors.tracks?.[index]?.title && dirtyFields.tracks?.[index]?.title
+                            ? GLASS_FIELD_ERROR_STRONG
+                            : ""
+                        }`}
+                      />
+                      <FormFieldError message={errors.tracks?.[index]?.title?.message} />
+                    </div>
+                  )}
+
+                  {isSingle ? (
+                    <div className="space-y-3 rounded-[14px] border border-white/[0.06] bg-white/[0.02] px-4 py-4">
+                      <button
+                        type="button"
+                        onClick={() => setShowFeat((v) => !v)}
+                        className="flex w-full items-center justify-between text-left"
+                      >
+                        <label className={`mb-0 block ${WIZARD_FIELD_LABEL_CLASS}`}>
+                          Дополнительные артисты
+                        </label>
+                        {showFeat ? (
+                          <ChevronUp className="h-4 w-4 text-white/55" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4 text-white/55" />
+                        )}
+                      </button>
+                      {showFeat && (
+                        <>
+                          <p className="text-[12px] leading-relaxed text-white/50">
+                            Если на этом треке есть фит или другой участник (кроме основного артиста
+                            из паспорта), нажмите «Добавить» и введите имя — имена со всех треков
+                            попадут в метаданные релиза для модерации.
+                          </p>
+                          <ul className="space-y-2">
+                            {(values.tracks[index]?.featuringArtistNames ?? []).map((name, featIdx) => (
+                              <li key={`${field.id}-feat-${featIdx}`} className="flex items-center gap-2">
+                                <input
+                                  value={name}
+                                  onChange={(e) => setFeaturingAt(index, featIdx, e.target.value)}
+                                  placeholder="Имя артиста"
+                                  autoComplete="off"
+                                  className={`${WIZARD_INPUT_CLASS} min-w-0 flex-1`}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => removeFeaturingAt(index, featIdx)}
+                                  className="shrink-0 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-2 text-[11px] text-white/55 hover:bg-white/[0.08] hover:text-white/80"
+                                >
+                                  Убрать
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                          {(values.tracks[index]?.featuringArtistNames ?? []).length <
+                          MAX_FEATURING_ARTISTS ? (
+                            <button
+                              type="button"
+                              onClick={() => addFeaturingSlot(index)}
+                              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-violet-400/30 bg-violet-500/10 py-2.5 text-[13px] font-medium text-violet-100/95 hover:bg-violet-500/[0.16]"
+                            >
+                              <UserPlus className="h-4 w-4 shrink-0 opacity-90" />
+                              Добавить артиста
+                            </button>
+                          ) : null}
+                        </>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-3 rounded-[14px] border border-white/[0.06] bg-white/[0.02] px-4 py-4">
+                      <div>
+                        <label className={`mb-2 block ${WIZARD_FIELD_LABEL_CLASS}`}>
+                          Дополнительные артисты
+                        </label>
+                        <p className="text-[12px] leading-relaxed text-white/50">
+                          Если на этом треке есть фит или другой участник (кроме основного артиста из
+                          паспорта), нажмите «Добавить» и введите имя — имена со всех треков попадут в
+                          метаданные релиза для модерации.
+                        </p>
+                      </div>
+                      <ul className="space-y-2">
+                        {(values.tracks[index]?.featuringArtistNames ?? []).map((name, featIdx) => (
+                          <li key={`${field.id}-feat-${featIdx}`} className="flex items-center gap-2">
+                            <input
+                              value={name}
+                              onChange={(e) => setFeaturingAt(index, featIdx, e.target.value)}
+                              placeholder="Имя артиста"
+                              autoComplete="off"
+                              className={`${WIZARD_INPUT_CLASS} min-w-0 flex-1`}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => removeFeaturingAt(index, featIdx)}
+                              className="shrink-0 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-2 text-[11px] text-white/55 hover:bg-white/[0.08] hover:text-white/80"
+                            >
+                              Убрать
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                      {(values.tracks[index]?.featuringArtistNames ?? []).length <
+                      MAX_FEATURING_ARTISTS ? (
+                        <button
+                          type="button"
+                          onClick={() => addFeaturingSlot(index)}
+                          className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-violet-400/30 bg-violet-500/10 py-2.5 text-[13px] font-medium text-violet-100/95 hover:bg-violet-500/[0.16]"
+                        >
+                          <UserPlus className="h-4 w-4 shrink-0 opacity-90" />
+                          Добавить артиста
+                        </button>
+                      ) : null}
+                    </div>
+                  )}
+
+                  {isSingle ? (
+                    <div className="space-y-3 rounded-[14px] border border-white/[0.06] bg-white/[0.02] px-4 py-4">
+                      <button
+                        type="button"
+                        onClick={() => setShowLyrics((v) => !v)}
+                        className="flex w-full items-center justify-between text-left"
+                      >
+                        <label
+                          htmlFor={`track-${field.id}-lyrics`}
+                          className={`mb-0 block ${WIZARD_FIELD_LABEL_CLASS}`}
+                        >
+                          Текст песни (лирика)
+                        </label>
+                        {showLyrics ? (
+                          <ChevronUp className="h-4 w-4 text-white/55" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4 text-white/55" />
+                        )}
+                      </button>
+                      {showLyrics && (
+                        <>
+                          <textarea
+                            id={`track-${field.id}-lyrics`}
+                            {...register(`tracks.${index}.lyrics` as const)}
+                            rows={5}
+                            placeholder="Необязательно. Можно заполнить во время загрузки WAV — текст сохранится вместе с треком."
+                            className={`${WIZARD_INPUT_CLASS} min-h-[120px] resize-y py-3`}
+                          />
+                          <FormFieldError message={errors.tracks?.[index]?.lyrics?.message} />
+                        </>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <label
+                        htmlFor={`track-${field.id}-lyrics`}
+                        className={`mb-2.5 block ${WIZARD_FIELD_LABEL_CLASS}`}
+                      >
+                        Текст песни (лирика)
+                      </label>
+                      <textarea
+                        id={`track-${field.id}-lyrics`}
+                        {...register(`tracks.${index}.lyrics` as const)}
+                        rows={5}
+                        placeholder="Необязательно. Можно заполнить во время загрузки WAV — текст сохранится вместе с треком."
+                        className={`${WIZARD_INPUT_CLASS} min-h-[120px] resize-y py-3`}
+                      />
+                      <FormFieldError message={errors.tracks?.[index]?.lyrics?.message} />
+                    </div>
+                  )}
                 </>
               )}
-              <FormFieldError
-                message={
-                  submitAttempted && !storeTrackFiles[index]
-                    ? "Загрузите WAV-файл для этого трека."
-                    : undefined
-                }
-              />
-
-              <div className="space-y-1.5">
-                <label
-                  htmlFor={`track-${field.id}-lyrics`}
-                  className={`mb-2.5 block ${WIZARD_FIELD_LABEL_CLASS}`}
-                >
-                  Текст песни (лирика)
-                </label>
-                <textarea
-                  id={`track-${field.id}-lyrics`}
-                  {...register(`tracks.${index}.lyrics` as const)}
-                  rows={5}
-                  placeholder="Необязательно. Можно заполнить во время загрузки WAV — текст сохранится вместе с треком."
-                  className={`${WIZARD_INPUT_CLASS} min-h-[120px] resize-y py-3`}
-                />
-                <FormFieldError message={errors.tracks?.[index]?.lyrics?.message} />
-              </div>
             </motion.div>
           ))}
 
@@ -574,6 +725,7 @@ export default function CreateTracksPage() {
               onClick={() => {
                 triggerHaptic("light");
                 append({ title: "", explicit: false, lyrics: "", featuringArtistNames: [] });
+                setExpandedTracks((prev) => [...prev, true]);
                 syncTrackFilesLength(fields.length + 1);
               }}
               className="inline-flex h-[44px] w-full items-center justify-center rounded-xl border border-white/[0.06] bg-white/[0.03] text-[13px] font-medium text-white/70 transition-colors hover:bg-white/[0.06] hover:text-white"

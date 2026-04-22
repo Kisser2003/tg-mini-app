@@ -28,7 +28,7 @@ type LibraryView = "all" | "drafts" | "moderation";
 const STATUS_FILTER_CHIPS: { id: LibraryStatusFilter; label: string }[] = [
   { id: "all", label: "Все" },
   { id: "processing", label: "В проверке" },
-  { id: "ready", label: "Отгружено" },
+  { id: "ready", label: "Одобрено" },
   { id: "failed", label: "Отклонены" }
 ];
 
@@ -344,21 +344,14 @@ function LibraryPageInner() {
               meta={releaseMeta}
               coverUrl={release.artwork_url ?? undefined}
               index={listIndex}
+              rejectionReason={effectiveErrorText}
+              onFix={() => {
+                hapticMap.impactLight();
+                router.push(`/create/metadata?from=failed&releaseId=${release.id}`);
+              }}
               onClick={onCardClick}
             />
           </div>
-          <AnimatePresence>
-            {isExpanded && (
-              <motion.div
-                initial={{ opacity: 0, y: -4 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -4 }}
-                className="rounded-xl border border-red-500/30 bg-red-950/40 px-3 py-2 font-mono text-[11px] leading-relaxed text-red-400/80"
-              >
-                {effectiveErrorText}
-              </motion.div>
-            )}
-          </AnimatePresence>
           <div className="flex flex-wrap items-center justify-end gap-2 px-1">
             <button
               type="button"
@@ -376,16 +369,6 @@ function LibraryPageInner() {
               }}
             >
               Комментарий модератора
-            </button>
-            <button
-              type="button"
-              className="text-[11px] font-medium text-red-300 underline underline-offset-2"
-              onClick={() => {
-                hapticMap.impactLight();
-                router.push(`/create/metadata?from=failed&releaseId=${release.id}`);
-              }}
-            >
-              Исправить
             </button>
           </div>
         </div>
@@ -543,9 +526,13 @@ function LibraryPageInner() {
                     ? "Ваши релизы · Модерация"
                     : "Ваши релизы"}
               </h2>
-              <span className="text-[10px] font-medium tracking-wider text-white/20">
-                {filteredReleases.length} из {viewFilteredReleases.length}
-              </span>
+              <button
+                onClick={() => router.push("/create/metadata")}
+                className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition-all duration-200 hover:bg-white/10 hover:text-white"
+              >
+                <Plus className="h-4 w-4" />
+                Новый релиз
+              </button>
             </div>
 
             {hasReleasesInView && error == null && selectedView === "all" && (

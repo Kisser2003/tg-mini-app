@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Music } from "lucide-react";
+import { AlertCircle, Music } from "lucide-react";
 
 export type ReleaseStatus = "draft" | "processing" | "ready" | "error";
 
@@ -13,6 +13,8 @@ export type ReleaseCardProps = {
   coverUrl?: string;
   index?: number;
   onClick?: () => void;
+  rejectionReason?: string;
+  onFix?: () => void;
 };
 
 const statusConfig: Record<ReleaseStatus, { label: string; ledClass: string }> = {
@@ -30,7 +32,9 @@ export function ReleaseCard({
   meta = [],
   coverUrl,
   index = 0,
-  onClick
+  onClick,
+  rejectionReason,
+  onFix
 }: ReleaseCardProps) {
   const cfg = statusConfig[status];
 
@@ -70,6 +74,23 @@ export function ReleaseCard({
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold tracking-tight text-white/90">{title}</p>
         <p className="mt-0.5 truncate text-xs text-white/30">{artist}</p>
+        {rejectionReason && (
+          <div className="mt-2 flex items-start gap-2">
+            <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--ss-red)]" />
+            <p className="line-clamp-2 flex-1 text-xs text-white/60">{rejectionReason}</p>
+            {onFix && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onFix();
+                }}
+                className="shrink-0 text-xs font-medium text-[var(--ss-neon-blue)] transition-colors hover:text-white"
+              >
+                Исправить →
+              </button>
+            )}
+          </div>
+        )}
         {meta.length > 0 ? (
           <div className="mt-2 flex flex-wrap gap-1.5">
             {meta.map((item) => (
@@ -77,7 +98,7 @@ export function ReleaseCard({
                 key={item}
                 className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] font-medium tracking-wide text-white/55"
               >
-                {item}
+                {item.startsWith("Type: ") ? item.slice(6) : item}
               </span>
             ))}
           </div>

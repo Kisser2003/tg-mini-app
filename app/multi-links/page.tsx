@@ -2,7 +2,8 @@
 
 import { Suspense, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Link2, Search } from "lucide-react";
+import { Link2, Plus, Search } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { AuthGuard } from "@/components/AuthGuard";
 import { MultiLinkReleaseRow } from "@/components/MultiLinkReleaseRow";
 import { PullRefreshBrand } from "@/components/PullRefreshBrand";
@@ -22,6 +23,7 @@ function normalizeSearch(s: string): string {
 
 function MultiLinksPageInner() {
   const isTelegram = useIsTelegramMiniApp();
+  const router = useRouter();
   const {
     authReady,
     userId,
@@ -147,6 +149,15 @@ function MultiLinksPageInner() {
               Ссылку добавляет модерация после одобрения релиза. Здесь отображаются только активные
               мультиссылки.
             </p>
+            {withLinks.length === 0 && (
+              <button
+                onClick={() => router.push("/create/metadata")}
+                className="mt-4 inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-5 py-2.5 text-sm font-medium text-white/80 transition-all hover:bg-white/10 hover:text-white"
+              >
+                <Plus className="h-4 w-4" />
+                Загрузить новый релиз
+              </button>
+            )}
           </div>
         ) : (
           <div className="flex flex-col gap-3">
