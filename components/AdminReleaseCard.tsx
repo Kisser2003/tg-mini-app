@@ -146,6 +146,16 @@ function AdminReleaseCardInner({
             >
               {statusMeta.label}
             </span>
+            {showModerationActions && (release.smart_link ?? "").trim().length === 0 ? (
+              <span className="inline-flex rounded-full border border-amber-300/35 bg-amber-500/15 px-2 py-0.5 text-[10px] text-amber-100/90">
+                Нет smart-link
+              </span>
+            ) : null}
+            {(release.error_message ?? "").trim().length > 0 ? (
+              <span className="inline-flex rounded-full border border-rose-300/35 bg-rose-500/15 px-2 py-0.5 text-[10px] text-rose-100/90">
+                Ошибка
+              </span>
+            ) : null}
           </div>
           <p className="truncate text-[11px] text-white/45" title={release.genre ?? undefined}>
             {showModerationActions ? "Отправлено" : "Создан"}:{" "}
