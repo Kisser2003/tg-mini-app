@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, type Variants } from "framer-motion";
-import { BarChart3, RefreshCcw, TrendingUp } from "lucide-react";
+import { BarChart3, History, RefreshCcw, TrendingUp } from "lucide-react";
 import useSWR from "swr";
 import { toast } from "sonner";
 import { AdminApproveSmartLinkModal } from "@/components/AdminApproveSmartLinkModal";
@@ -225,6 +226,16 @@ export default function AdminPage() {
           Счётчики: {statsErrorMessage}
         </div>
       )}
+
+      <div className="mb-8">
+        <Link
+          href="/admin/history"
+          className="flex w-full items-center justify-center gap-2 rounded-2xl border border-violet-400/30 bg-gradient-to-r from-violet-500/15 to-fuchsia-500/10 py-3.5 text-sm font-semibold text-violet-100 shadow-[0_0_20px_rgba(139,92,246,0.12)] transition-colors hover:border-violet-400/45 hover:from-violet-500/22"
+        >
+          <History className="h-4 w-4 shrink-0 opacity-90" />
+          История решений — все одобренные и отклонённые
+        </Link>
+      </div>
 
       <AdminApproveSmartLinkModal
         releaseId={approveModalReleaseId}

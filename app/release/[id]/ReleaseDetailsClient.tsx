@@ -6,29 +6,88 @@ import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowLeft, Check, ExternalLink, Link2, ShieldCheck } from "lucide-react";
 import { GlassCard } from "@/components/GlassCard";
+import { parseCollaboratorsFromDb } from "@/lib/collaborators";
 import { debugInit } from "@/lib/debug";
 import { openSmartLink } from "@/lib/open-smart-link";
+import { PERFORMANCE_LANGUAGE_LABELS, parsePerformanceLanguage } from "@/lib/performance-language";
 import { getReleaseStatusMeta, normalizeReleaseStatus } from "@/lib/release-status";
 import { shouldShowSmartLinkCta } from "@/lib/smart-link-cta";
 import { isAdminUi } from "@/lib/admin";
 import { USER_REQUEST_TIMEOUT_MESSAGE } from "@/lib/errors";
 import { supabase } from "@/lib/supabase";
 import { getTelegramUserId, initTelegramWebApp } from "@/lib/telegram";
+import { getReleaseDisplayTitle } from "@/repositories/releases/types";
+
+type ReleaseDetailsTrackRow = {
+  title: string;
+  explicit: boolean;
+  duration: number | null;
+  index: number;
+};
 
 type ReleaseDetailsRow = {
   id: string;
   user_id: number | string;
   artist_name: string;
   track_name: string;
+  title?: string | null;
   artwork_url: string | null;
   audio_url: string | null;
   release_type: string;
   genre: string;
+  sub_genre?: string | null;
   status: string;
   error_message: string | null;
   created_at: string;
   smart_link: string | null;
+  release_date?: string | null;
+  explicit?: boolean | null;
+  is_explicit?: boolean | null;
+  performance_language?: string | null;
+  isrc?: string | null;
+  upc?: string | null;
+  collaborators?: unknown;
+  music_author?: string | null;
+  tracks: ReleaseDetailsTrackRow[];
 };
+
+function formatReleaseTypeLabel(type: string | null | undefined): string {
+  const t = (type ?? "").toLowerCase();
+  if (t === "single") return "Сингл";
+  if (t === "ep") return "EP";
+  if (t === "album") return "Альбом";
+  const s = (type ?? "").trim();
+  return s.length > 0 ? s.toUpperCase() : "—";
+}
+
+function formatReleaseDateRu(d: string | null | undefined): string | null {
+  if (d == null) return null;
+  const raw = String(d).trim();
+  if (!raw) return null;
+  const parsed = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? new Date(`${raw}T12:00:00`) : new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return raw;
+  return parsed.toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" });
+}
+
+function formatTrackDurationSec(sec: number | null | undefined): string | null {
+  if (sec == null || !Number.isFinite(Number(sec))) return null;
+  const n = Math.floor(Number(sec));
+  const s = n % 60;
+  const m = Math.floor(n / 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function formatFeaturingProducers(collaboratorsRaw: unknown): string | null {
+  const list = parseCollaboratorsFromDb(collaboratorsRaw);
+  const parts: string[] = [];
+  for (const c of list) {
+    const name = c.name.trim();
+    if (!name) continue;
+    if (c.role === "featuring") parts.push(`${name} (фит)`);
+    else if (c.role === "producer") parts.push(`${name} (продюсер)`);
+  }
+  return parts.length > 0 ? parts.join(", ") : null;
+}
 
 const RELEASE_DETAILS_TIMEOUT_MS = 12000;
 const ARTWORK_SIZES = "(max-width: 768px) 100vw, 33vw";
@@ -79,7 +138,7 @@ export default function ReleaseDetailsClient() {
         const base = supabase
           .from("releases")
           .select(
-            "id, user_id, artist_name, track_name, artwork_url, audio_url, release_type, genre, status, error_message, created_at, smart_link"
+            "id, user_id, artist_name, track_name, title, artwork_url, audio_url, release_type, genre, sub_genre, status, error_message, created_at, smart_link, release_date, explicit, is_explicit, performance_language, isrc, upc, collaborators, music_author"
           )
           .eq("id", params.id);
         const filtered = isAdminView
@@ -106,7 +165,22 @@ export default function ReleaseDetailsClient() {
 
         if (dbError) throw dbError;
         if (!cancelled) {
-          setRelease((data as ReleaseDetailsRow | null) ?? null);
+          if (!data) {
+            setRelease(null);
+          } else {
+            const { data: trackRows } = await supabase
+              .from("tracks")
+              .select("title, explicit, duration, index")
+              .eq("release_id", params.id)
+              .order("index", { ascending: true });
+            const tracks: ReleaseDetailsTrackRow[] = (trackRows ?? []).map((row) => ({
+              title: typeof row.title === "string" ? row.title : "",
+              explicit: Boolean(row.explicit),
+              duration: row.duration ?? null,
+              index: row.index ?? 0
+            }));
+            setRelease({ ...(data as Omit<ReleaseDetailsRow, "tracks">), tracks });
+          }
         }
         debugInit("release/details", "load success", {
           releaseId: params.id,
@@ -182,6 +256,31 @@ export default function ReleaseDetailsClient() {
   const statusMeta = getReleaseStatusMeta(release.status);
 
   const isReady = normalizeReleaseStatus(release.status) === "ready";
+  const displayTitle = getReleaseDisplayTitle(release);
+  const genreLine = [release.genre?.trim(), release.sub_genre?.trim()].filter(Boolean).join(" · ");
+  const releaseDateLabel = formatReleaseDateRu(release.release_date ?? null);
+  const langLabel = PERFORMANCE_LANGUAGE_LABELS[parsePerformanceLanguage(release.performance_language)];
+  const isExplicit = Boolean(release.explicit ?? release.is_explicit);
+  const featuringLine = formatFeaturingProducers(release.collaborators);
+  const sortedTracks = [...release.tracks].sort((a, b) => a.index - b.index);
+
+  const aboutRows: { label: string; value: string }[] = [
+    { label: "Формат", value: formatReleaseTypeLabel(release.release_type) }
+  ];
+  if (genreLine.length > 0) aboutRows.push({ label: "Жанр", value: genreLine });
+  if (releaseDateLabel) aboutRows.push({ label: "Дата выхода", value: releaseDateLabel });
+  aboutRows.push({
+    label: "Мат / 18+",
+    value: isExplicit ? "Да (explicit)" : "Нет"
+  });
+  aboutRows.push({ label: "Язык исполнения", value: langLabel });
+  const isrc = release.isrc?.trim();
+  if (isrc) aboutRows.push({ label: "ISRC", value: isrc });
+  const upc = release.upc?.trim();
+  if (upc) aboutRows.push({ label: "UPC", value: upc });
+  const musicAuthor = release.music_author?.trim();
+  if (musicAuthor) aboutRows.push({ label: "Автор музыки", value: musicAuthor });
+  if (featuringLine) aboutRows.push({ label: "Фиты и продюсеры", value: featuringLine });
 
   return (
     <div className="flex flex-col gap-4 pb-10">
@@ -202,7 +301,7 @@ export default function ReleaseDetailsClient() {
             <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-2xl border border-white/15">
               <Image
                 src={release.artwork_url}
-                alt={release.track_name}
+                alt={displayTitle}
                 fill
                 sizes={ARTWORK_SIZES}
                 className="object-cover"
@@ -215,34 +314,66 @@ export default function ReleaseDetailsClient() {
             </div>
           )}
           <div className="min-w-0">
-            <h1 className="truncate text-xl font-semibold">{release.track_name}</h1>
+            <h1 className="truncate text-xl font-semibold">{displayTitle}</h1>
             <p className="text-sm text-white/60">{release.artist_name}</p>
           </div>
         </div>
       </GlassCard>
 
       <GlassCard className="p-5">
-        <div className="mb-3 flex items-center justify-between">
-          <p className="text-sm font-medium tracking-tight text-white/85">Параметры релиза</p>
-          <p className="text-sm font-semibold">{release.release_type}</p>
-        </div>
+        <p className="mb-3 text-sm font-medium tracking-tight text-white/85">О релизе</p>
         <div className="space-y-2 rounded-2xl border border-white/10 bg-black/25 p-3 text-sm text-white/75">
-          <p>Жанр: {release.genre}</p>
-          <p>Создан: {new Date(release.created_at).toLocaleString("ru-RU")}</p>
-          <p>ID: {release.id}</p>
+          {aboutRows.map((row) => (
+            <p key={row.label}>
+              <span className="text-white/50">{row.label}: </span>
+              {row.value}
+            </p>
+          ))}
         </div>
+        {sortedTracks.length > 0 ? (
+          <div className="mt-4">
+            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-white/45">
+              {sortedTracks.length > 1 ? `Треки (${sortedTracks.length})` : "Трек"}
+            </p>
+            <ul className="space-y-2">
+              {sortedTracks.map((t, i) => {
+                const dur = formatTrackDurationSec(t.duration);
+                const name = t.title.trim() || "Без названия";
+                return (
+                  <li
+                    key={`${t.index}-${i}`}
+                    className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white/80"
+                  >
+                    {sortedTracks.length > 1 ? (
+                      <span className="w-5 shrink-0 tabular-nums text-white/40">{i + 1}.</span>
+                    ) : null}
+                    <span className="min-w-0 flex-1 font-medium text-white/85">{name}</span>
+                    {t.explicit ? (
+                      <span className="shrink-0 rounded border border-amber-500/35 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-200/90">
+                        E
+                      </span>
+                    ) : null}
+                    {dur ? <span className="shrink-0 tabular-nums text-white/45">{dur}</span> : null}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ) : null}
       </GlassCard>
 
       <GlassCard className="p-5">
-        <p className="mb-2 inline-flex items-center gap-2 text-sm text-white/75">
-          <ShieldCheck className="h-4 w-4" />
-          Статус модерации
-        </p>
-        <span
-          className={`inline-flex rounded-full border px-3 py-1 text-xs ${statusMeta.badgeClassName} ${statusMeta.badgeGlowClassName ?? ""} ${statusMeta.badgeShimmerClassName ?? ""}`}
-        >
-          {statusMeta.label}
-        </span>
+        <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-2">
+          <div className="flex min-w-0 items-center gap-2 text-sm text-white/75">
+            <ShieldCheck className="h-4 w-4 shrink-0" aria-hidden />
+            <span className="min-w-0">Статус модерации</span>
+          </div>
+          <span
+            className={`inline-flex shrink-0 rounded-full border px-3 py-1 text-xs ${statusMeta.badgeClassName} ${statusMeta.badgeGlowClassName ?? ""} ${statusMeta.badgeShimmerClassName ?? ""}`}
+          >
+            {statusMeta.label}
+          </span>
+        </div>
         <p className="mt-3 text-sm text-white/70">
           {release.error_message?.trim()
             ? release.error_message

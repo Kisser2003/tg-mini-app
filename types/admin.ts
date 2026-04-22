@@ -1,6 +1,6 @@
 import type { ReleaseRecord, ReleaseTrackRow } from "@/repositories/releases.repo";
 
-/** Ответ GET /api/admin/moderation-queue */
+/** Строка очереди или истории: релиз + треки (GET moderation-queue / moderation-history). */
 export type ModerationQueueApiRow = {
   release: ReleaseRecord;
   tracks: ReleaseTrackRow[];

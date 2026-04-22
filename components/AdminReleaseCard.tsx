@@ -59,6 +59,8 @@ type AdminReleaseCardProps = {
   detailHref?: string;
   /** LCP / приоритет загрузки для первых карточек в списке */
   artworkPriority?: boolean;
+  /** Показать кнопки «Одобрить» / «Отклонить» (очередь). В истории — false. */
+  showModerationActions?: boolean;
 };
 
 const ARTWORK_SIZES = "(max-width: 768px) 100vw, 33vw";
@@ -72,7 +74,8 @@ function AdminReleaseCardInner({
   onOpenApprove,
   onOpenReject,
   detailHref,
-  artworkPriority = false
+  artworkPriority = false,
+  showModerationActions = true
 }: AdminReleaseCardProps) {
   const statusMeta = getReleaseStatusMeta(release.status);
   const displayTitle = getReleaseDisplayTitle(release);
@@ -135,7 +138,7 @@ function AdminReleaseCardInner({
             </span>
           </div>
           <p className="truncate text-[11px] text-white/45" title={release.genre ?? undefined}>
-            Отправлено:{" "}
+            {showModerationActions ? "Отправлено" : "Создан"}:{" "}
             {new Date(release.created_at).toLocaleString("ru-RU", {
               day: "2-digit",
               month: "2-digit",
@@ -166,38 +169,40 @@ function AdminReleaseCardInner({
         )}
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-2">
-        <motion.button
-          type="button"
-          disabled={busy}
-          onClick={() => {
-            triggerHaptic("light");
-            onOpenApprove();
-          }}
-          whileHover={{ scale: 0.99 }}
-          whileTap={{ scale: 0.98 }}
-          transition={{ type: "spring", stiffness: 320, damping: 22 }}
-          className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-300/40 bg-emerald-500/20 px-3 py-2.5 text-sm font-medium text-emerald-100 shadow-[0_0_25px_rgba(16,185,129,0.35)] disabled:opacity-60"
-        >
-          <CheckCircle2 className="h-4 w-4 shrink-0" />
-          Одобрить
-        </motion.button>
-        <motion.button
-          type="button"
-          disabled={busy}
-          onClick={() => {
-            triggerHaptic("light");
-            onOpenReject();
-          }}
-          whileHover={{ scale: 0.99 }}
-          whileTap={{ scale: 0.98 }}
-          transition={{ type: "spring", stiffness: 320, damping: 22 }}
-          className="inline-flex items-center justify-center gap-2 rounded-xl border border-rose-300/40 bg-rose-500/20 px-3 py-2.5 text-sm font-medium text-rose-100 shadow-[0_0_25px_rgba(244,63,94,0.35)] disabled:opacity-60"
-        >
-          <XCircle className="h-4 w-4 shrink-0" />
-          Отклонить
-        </motion.button>
-      </div>
+      {showModerationActions ? (
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <motion.button
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              triggerHaptic("light");
+              onOpenApprove();
+            }}
+            whileHover={{ scale: 0.99 }}
+            whileTap={{ scale: 0.98 }}
+            transition={{ type: "spring", stiffness: 320, damping: 22 }}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-300/40 bg-emerald-500/20 px-3 py-2.5 text-sm font-medium text-emerald-100 shadow-[0_0_25px_rgba(16,185,129,0.35)] disabled:opacity-60"
+          >
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
+            Одобрить
+          </motion.button>
+          <motion.button
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              triggerHaptic("light");
+              onOpenReject();
+            }}
+            whileHover={{ scale: 0.99 }}
+            whileTap={{ scale: 0.98 }}
+            transition={{ type: "spring", stiffness: 320, damping: 22 }}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-rose-300/40 bg-rose-500/20 px-3 py-2.5 text-sm font-medium text-rose-100 shadow-[0_0_25px_rgba(244,63,94,0.35)] disabled:opacity-60"
+          >
+            <XCircle className="h-4 w-4 shrink-0" />
+            Отклонить
+          </motion.button>
+        </div>
+      ) : null}
     </motion.div>
   );
 }
