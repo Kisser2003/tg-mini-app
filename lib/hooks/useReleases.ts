@@ -41,6 +41,8 @@ export type ReleaseListRow = Pick<
 
 const RELEASES_LIST_TIMEOUT_MS = 15000;
 const TELEGRAM_ID_POLL_INTERVAL_MS = 100;
+const TELEGRAM_INIT_DATA_WAIT_MS = 1500;
+const TELEGRAM_INIT_DATA_WAIT_STEP_MS = 75;
 
 function isValidTelegramUserId(value: string | null): value is string {
   if (value == null) return false;
@@ -51,6 +53,40 @@ function isValidTelegramUserId(value: string | null): value is string {
 type ReleasesSwrKey =
   | readonly ["releases", "telegram", string]
   | readonly ["releases", "web", string];
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+async function buildTelegramRequestHeaders(uidCandidate?: number): Promise<Record<string, string>> {
+  const uid =
+    Number.isFinite(uidCandidate ?? NaN) && (uidCandidate ?? 0) > 0
+      ? Math.trunc(uidCandidate as number)
+      : getTelegramUserIdForSupabaseRequests();
+  const deadline = Date.now() + TELEGRAM_INIT_DATA_WAIT_MS;
+
+  // Critical: evaluate Telegram initData dynamically right before request execution.
+  while (true) {
+    const initData = getTelegramInitDataForApiHeader();
+    const baseHeaders = getTelegramApiAuthHeaders(uid != null ? { userId: uid } : undefined);
+    const headers: Record<string, string> = {
+      ...(uid != null && uid > 0 ? { "x-telegram-user-id": String(uid) } : {}),
+      ...baseHeaders
+    };
+
+    if (
+      !isTelegramClientShell() ||
+      initData.length > 0 ||
+      Date.now() >= deadline
+    ) {
+      return headers;
+    }
+
+    await sleep(TELEGRAM_INIT_DATA_WAIT_STEP_MS);
+  }
+}
 
 async function fetchReleasesTelegram([, , uid]: readonly ["releases", "telegram", string]): Promise<
   ReleaseListRow[]
@@ -71,15 +107,13 @@ async function fetchReleasesTelegram([, , uid]: readonly ["releases", "telegram"
   };
 
   const run = async () => {
+    const telegramHeaders = await buildTelegramRequestHeaders(numericUid);
     const res = await fetch("/api/releases/my", {
       method: "GET",
       credentials: "include",
       headers: {
         Accept: "application/json",
-        ...(numericUid > 0 ? { "x-telegram-user-id": String(numericUid) } : {}),
-        ...getTelegramApiAuthHeaders(
-          Number.isFinite(numericUid) && numericUid > 0 ? { userId: numericUid } : undefined
-        )
+        ...telegramHeaders
       },
       cache: "no-store"
     });
@@ -102,10 +136,11 @@ async function fetchReleasesWeb([, , _authUid]: readonly ["releases", "web", str
   ReleaseListRow[]
 > {
   const run = async () => {
+    const telegramHeaders = isTelegramClientShell() ? await buildTelegramRequestHeaders() : {};
     const res = await fetch("/api/releases/my", {
       method: "GET",
       credentials: "include",
-      headers: { Accept: "application/json" },
+      headers: { Accept: "application/json", ...telegramHeaders },
       cache: "no-store"
     });
     const json = (await res.json()) as { ok?: boolean; rows?: ReleaseListRow[]; error?: string };
