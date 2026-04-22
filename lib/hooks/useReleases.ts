@@ -10,6 +10,7 @@ import {
   isTelegramClientShell,
   getTelegramWebApp,
   getTelegramUserIdForSupabaseRequests,
+  getTelegramInitDataForApiHeader,
   initTelegramWebApp,
   type TelegramUser
 } from "@/lib/telegram";
@@ -134,6 +135,7 @@ export function useReleases() {
   const [user, setUser] = useState<TelegramUser | null>(null);
   const [greetingName, setGreetingName] = useState<string>("Артист");
   const [hasResolvedInitialFetch, setHasResolvedInitialFetch] = useState(false);
+  const [telegramInitDataReady, setTelegramInitDataReady] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -156,6 +158,7 @@ export function useReleases() {
       setAuthMode("telegram");
       const tg = getTelegramWebApp()?.initDataUnsafe?.user;
       setGreetingName((prev) => tg?.first_name?.trim() || tg?.username?.trim() || prev || "Артист");
+      setTelegramInitDataReady(getTelegramInitDataForApiHeader().length > 0);
       setAuthReady(tid != null);
     };
 
@@ -174,6 +177,7 @@ export function useReleases() {
           return;
         }
         initTelegramWebApp(); // ensure cookie is set before SWR fires
+        setTelegramInitDataReady(getTelegramInitDataForApiHeader().length > 0);
         const tid = getTelegramUserIdForSupabaseRequests();
         console.log("[TG-DEBUG] poll tick", { tid });
 
@@ -255,12 +259,17 @@ export function useReleases() {
   const swrKey: ReleasesSwrKey | null = useMemo(() => {
     console.log("[TG-DEBUG] swrKey computed", { authReady, userId, authMode });
     if (!authReady || userId == null || authMode == null) return null;
-    if (authMode === "telegram" && !isValidTelegramUserId(userId)) return null;
+    if (
+      authMode === "telegram" &&
+      (!isValidTelegramUserId(userId) || !telegramInitDataReady)
+    ) {
+      return null;
+    }
     if (authMode === "telegram") {
       return ["releases", "telegram", userId];
     }
     return ["releases", "web", userId];
-  }, [authReady, userId, authMode]);
+  }, [authReady, userId, authMode, telegramInitDataReady]);
 
   const swr = useSWR(swrKey, fetchReleases, {
     ...SWR_LIST_OPTIONS,
@@ -301,9 +310,11 @@ export function useReleases() {
 
   const waitingForTelegramIdentity =
     authMode === "telegram" && !isValidTelegramUserId(userId);
+  const waitingForTelegramInitData = authMode === "telegram" && !telegramInitDataReady;
   const isBootstrapping =
     !authReady ||
     waitingForTelegramIdentity ||
+    waitingForTelegramInitData ||
     (swrKey != null &&
       !hasResolvedInitialFetch &&
       (swr.isLoading || swr.isValidating || (swr.data === undefined && swr.error == null)));
