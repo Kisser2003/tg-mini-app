@@ -117,38 +117,46 @@ export default function AdminPage() {
   });
 
   const moderationQueue = useMemo(() => data ?? [], [data]);
-  const moderationQueueFilteredByPreset = moderationQueue.filter((row) => {
-    const smartLink = (row.release.smart_link ?? "").trim();
-    const hasSmartLink = smartLink.length > 0;
-    const hasError = (row.release.error_message ?? "").trim().length > 0;
+  const moderationQueueFilteredByPreset = useMemo(
+    () =>
+      moderationQueue.filter((row) => {
+        const smartLink = (row.release.smart_link ?? "").trim();
+        const hasSmartLink = smartLink.length > 0;
+        const hasError = (row.release.error_message ?? "").trim().length > 0;
 
-    if (activeFilter === "needs_smart_link") return !hasSmartLink;
-    if (activeFilter === "with_errors") return hasError;
-    return true;
-  });
+        if (activeFilter === "needs_smart_link") return !hasSmartLink;
+        if (activeFilter === "with_errors") return hasError;
+        return true;
+      }),
+    [moderationQueue, activeFilter]
+  );
   const filterCounts: Record<QueueFilterKey, number> = {
     all: moderationQueue.length,
     needs_smart_link: moderationQueue.filter((row) => (row.release.smart_link ?? "").trim().length === 0).length,
     with_errors: moderationQueue.filter((row) => (row.release.error_message ?? "").trim().length > 0).length
   };
   const searchNeedle = searchQuery.trim().toLowerCase();
-  const moderationQueueFiltered = moderationQueueFilteredByPreset.filter((row) => {
-    if (!searchNeedle) return true;
-    const id = row.release.id.toLowerCase();
-    const artist = row.release.artist_name.toLowerCase();
-    const title = (
-      (typeof row.release.title === "string" && row.release.title.trim()) ||
-      (typeof row.release.track_name === "string" && row.release.track_name.trim()) ||
-      ""
-    ).toLowerCase();
-    const smartLink = (row.release.smart_link ?? "").toLowerCase();
-    return (
-      id.includes(searchNeedle) ||
-      artist.includes(searchNeedle) ||
-      title.includes(searchNeedle) ||
-      smartLink.includes(searchNeedle)
-    );
-  });
+  const moderationQueueFiltered = useMemo(
+    () =>
+      moderationQueueFilteredByPreset.filter((row) => {
+        if (!searchNeedle) return true;
+        const id = row.release.id.toLowerCase();
+        const artist = row.release.artist_name.toLowerCase();
+        const title = (
+          (typeof row.release.title === "string" && row.release.title.trim()) ||
+          (typeof row.release.track_name === "string" && row.release.track_name.trim()) ||
+          ""
+        ).toLowerCase();
+        const smartLink = (row.release.smart_link ?? "").toLowerCase();
+        return (
+          id.includes(searchNeedle) ||
+          artist.includes(searchNeedle) ||
+          title.includes(searchNeedle) ||
+          smartLink.includes(searchNeedle)
+        );
+      }),
+    [moderationQueueFilteredByPreset, searchNeedle]
+  );
   const errorMessage = errorToUserString(error);
   const statsErrorMessage = errorToUserString(statsError);
   const selectedRows = moderationQueueFiltered.filter((row) =>
@@ -164,9 +172,13 @@ export default function AdminPage() {
   }, [mutate, mutateStats]);
 
   useEffect(() => {
-    setSelectedReleaseIds((prev) =>
-      prev.filter((id) => moderationQueueFiltered.some((row) => row.release.id === id))
-    );
+    setSelectedReleaseIds((prev) => {
+      const next = prev.filter((id) => moderationQueueFiltered.some((row) => row.release.id === id));
+      if (next.length === prev.length && next.every((id, idx) => id === prev[idx])) {
+        return prev;
+      }
+      return next;
+    });
   }, [moderationQueueFiltered]);
 
   const handlePublishSmartLink = useCallback(
