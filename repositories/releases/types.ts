@@ -11,7 +11,8 @@ export { RELEASE_STATUS_VALUES, RELEASE_TYPE_VALUES };
 /** Лимиты и допустимые MIME (строгая проверка до загрузки в Storage) */
 export const RELEASE_FILE_LIMITS = {
   audioMaxMb: 200,
-  artworkMaxMb: 20
+  /** PNG 3000×3000 без сильного сжатия часто > 20 МБ; лимит согласован с клиентом и Storage. */
+  artworkMaxMb: 35
 } as const;
 
 /** WAV: только явные audio-типы или пустой type с расширением .wav */

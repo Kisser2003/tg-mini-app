@@ -11,6 +11,7 @@ import {
   saveDraftAction,
   uploadArtworkForDraft
 } from "@/features/release/createRelease/actions";
+import { RELEASE_FILE_LIMITS } from "@/repositories/releases/types";
 import { useCreateReleaseDraftStore } from "@/features/release/createRelease/store";
 import { FileUploader } from "@/components/FileUploader";
 import { FormFieldError } from "@/components/FormFieldError";
@@ -137,7 +138,7 @@ export default function CreateAssetsPage() {
               <FileUploader
                 label="Artwork (JPG/PNG)"
                 accept=".jpg,.jpeg,.png"
-                maxSizeMb={20}
+                maxSizeMb={RELEASE_FILE_LIMITS.artworkMaxMb}
                 type="cover"
                 initialFile={artworkFile}
                 initialPreviewUrl={artworkUrl}

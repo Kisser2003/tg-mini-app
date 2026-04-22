@@ -91,14 +91,37 @@ function validateAudioFileStrict(file: File, maxSizeMb: number): void {
   );
 }
 
+function artworkLooksLikePngOrJpeg(file: File): boolean {
+  const mime = file.type.trim().toLowerCase();
+  const name = file.name.toLowerCase();
+  const png =
+    mime === "image/png" || name.endsWith(".png");
+  const jpeg =
+    mime === "image/jpeg" ||
+    mime === "image/jpg" ||
+    name.endsWith(".jpg") ||
+    name.endsWith(".jpeg");
+  if (png || jpeg) return true;
+  if (mime === "" || mime === "application/octet-stream") {
+    return name.endsWith(".png") || name.endsWith(".jpg") || name.endsWith(".jpeg");
+  }
+  return ALLOWED_ARTWORK_MIME.has(mime);
+}
+
+function artworkExtFromFile(file: File): "png" | "jpg" {
+  const mime = file.type.trim().toLowerCase();
+  if (mime === "image/png") return "png";
+  if (file.name.toLowerCase().endsWith(".png")) return "png";
+  return "jpg";
+}
+
 function validateArtworkFileStrict(file: File, maxSizeMb: number): void {
   const sizeMb = file.size / (1024 * 1024);
   if (sizeMb > maxSizeMb) {
     throw new Error(`Обложка слишком большая. Максимум ${maxSizeMb} МБ.`);
   }
-  const mime = file.type.trim().toLowerCase();
-  if (!ALLOWED_ARTWORK_MIME.has(mime)) {
-    throw new Error("Обложка: допустимы только image/jpeg или image/png.");
+  if (!artworkLooksLikePngOrJpeg(file)) {
+    throw new Error("Обложка: допустимы только JPEG или PNG.");
   }
 }
 
@@ -144,7 +167,7 @@ export async function uploadReleaseArtwork(params: {
 }): Promise<string> {
   validateArtworkFileStrict(params.file, RELEASE_FILE_LIMITS.artworkMaxMb);
 
-  const ext = params.file.type === "image/png" ? "png" : "jpg";
+  const ext = artworkExtFromFile(params.file);
   const path = getReleaseArtworkPath(params.userId, params.releaseId, ext);
 
   const otherExt = ext === "png" ? "jpg" : "png";

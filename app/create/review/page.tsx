@@ -92,6 +92,7 @@ export default function CreateReviewPage() {
   const submitProgress = useCreateReleaseDraftStore((s) => s.submitProgress);
   const tracksWavSyncedToDb = useCreateReleaseDraftStore(selectTracksWavFullySynced);
   const tracksUploadInProgress = useCreateReleaseDraftStore((s) => s.tracksUploadInProgress);
+  const featuringArtistNames = useCreateReleaseDraftStore((s) => s.featuringArtistNames);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [progressDismissed, setProgressDismissed] = useState(false);
@@ -127,6 +128,14 @@ export default function CreateReviewPage() {
 
   const releaseTitle = metadata.releaseTitle?.trim() || "Релиз";
   const artistName = metadata.primaryArtist?.trim() || "Артист";
+  const featuringLine = useMemo(
+    () =>
+      featuringArtistNames
+        .map((n) => n.trim())
+        .filter(Boolean)
+        .join(", "),
+    [featuringArtistNames]
+  );
 
   useEffect(() => {
     if (submitStatus === "success") {
@@ -382,6 +391,12 @@ export default function CreateReviewPage() {
                       </span>
                     ) : null}
                   </div>
+                  {featuringLine ? (
+                    <p className="mt-3 text-[13px] text-white/70">
+                      <span className="font-medium text-white/85">Доп. артисты: </span>
+                      {featuringLine}
+                    </p>
+                  ) : null}
                 </section>
 
                 <SectionDivider />

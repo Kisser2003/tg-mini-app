@@ -49,7 +49,11 @@ import { selectTracksWavFullySynced, useCreateReleaseDraftStore } from "./store"
 import { createSupabaseBrowser, supabase } from "@/lib/supabase";
 import { stableNumericIdFromAuthUserId } from "@/lib/stable-web-user-id";
 import { parseArtistLinksFromJson } from "@/lib/artist-links";
-import { parseCollaboratorsFromDb } from "@/lib/collaborators";
+import {
+  buildCollaboratorsPayloadForDb,
+  featuringNamesFromCollaboratorsJson,
+  parseCollaboratorsFromDb
+} from "@/lib/collaborators";
 import { parsePerformanceLanguage } from "@/lib/performance-language";
 import { celebrateReleaseSubmission } from "@/lib/confetti-release-success";
 import { refreshReleasesListAfterSubmit } from "@/lib/releases-swr-cache";
@@ -642,7 +646,8 @@ export async function resumeDraftFromRelease(releaseId: string): Promise<string 
       artworkUrl: existing.artwork_url ?? null,
       tracks,
       trackAudioUrlsFromDb,
-      releaseArtistLinks: parseArtistLinksFromJson(existing.artist_links)
+      releaseArtistLinks: parseArtistLinksFromJson(existing.artist_links),
+      featuringArtistNames: featuringNamesFromCollaboratorsJson(existing.collaborators)
     });
 
     const next = getResumeCreatePath({
@@ -688,6 +693,7 @@ export async function hydrateFromReleaseId(releaseId: string): Promise<void> {
     store.setMetadata(metadata);
     store.setArtworkUrl(existing.artwork_url ?? null);
     store.setReleaseArtistLinks(parseArtistLinksFromJson(existing.artist_links));
+    store.setFeaturingArtistNames(featuringNamesFromCollaboratorsJson(existing.collaborators));
     store.setSubmitError(null);
   } catch (e: unknown) {
     useCreateReleaseDraftStore
@@ -883,7 +889,9 @@ export async function uploadArtworkForDraft(file: File): Promise<string | null> 
 /** Поля паспорта → колонки `releases` (как в `saveDraftAction`, без строгой Zod-проверки). */
 function buildReleaseRowPatchFromMetadata(
   m: CreateMetadata,
-  artworkUrl: string | null
+  artworkUrl: string | null,
+  featuringArtistNames: string[],
+  existingCollaboratorsFromDb?: unknown
 ): Record<string, unknown> {
   const mainArtist = m.primaryArtist ?? "";
   return {
@@ -893,6 +901,11 @@ function buildReleaseRowPatchFromMetadata(
     genre: m.genre,
     release_date: m.releaseDate,
     explicit: m.explicit,
+    collaborators: buildCollaboratorsPayloadForDb(
+      mainArtist,
+      featuringArtistNames,
+      existingCollaboratorsFromDb
+    ),
     ...(artworkUrl ? { artwork_url: artworkUrl } : {})
   };
 }
@@ -915,7 +928,11 @@ export async function syncPassportFormToReleaseDraft(
   const store = useCreateReleaseDraftStore.getState();
   const rid = store.releaseId;
   if (!rid) return false;
-  const patch = buildReleaseRowPatchFromMetadata(metadata, store.artworkUrl);
+  const patch = buildReleaseRowPatchFromMetadata(
+    metadata,
+    store.artworkUrl,
+    store.featuringArtistNames
+  );
   return saveDraftPatchViaServiceApi(rid, patch, options?.keepalive ? { keepalive: true } : undefined);
 }
 
@@ -969,7 +986,13 @@ export async function saveDraftAction(
     }
     const m = parsed.data;
     const latest = useCreateReleaseDraftStore.getState();
-    const finalData = buildReleaseRowPatchFromMetadata(m, latest.artworkUrl);
+    const currentRow = await getReleaseById(rid);
+    const finalData = buildReleaseRowPatchFromMetadata(
+      m,
+      latest.artworkUrl,
+      latest.featuringArtistNames,
+      currentRow.collaborators
+    );
 
     try {
       const viaService = await saveDraftPatchViaServiceApi(rid, finalData);
@@ -1450,9 +1473,10 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
   let uploadTrackIndex: number | null = null;
 
   try {
+    let existing: ReleaseRecord;
     try {
       uploadPhase = "preparing";
-      const existing = await getReleaseById(releaseId);
+      existing = await getReleaseById(releaseId);
       if (existing.status === "failed") {
         await updateRelease(releaseId, { status: "draft", error_message: null });
       }
@@ -1607,6 +1631,23 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
       const storeAfterUpload = useCreateReleaseDraftStore.getState();
       storeAfterUpload.setSubmitStage("finalizing");
       storeAfterUpload.setSubmitProgress(92);
+
+      const parsedMetaForSubmit = metadataSchema.safeParse(storeAfterUpload.metadata);
+      if (parsedMetaForSubmit.success) {
+        await withRequestTimeout(
+          updateRelease(
+            releaseId,
+            buildReleaseRowPatchFromMetadata(
+              parsedMetaForSubmit.data,
+              storeAfterUpload.artworkUrl,
+              storeAfterUpload.featuringArtistNames,
+              existing.collaborators
+            ) as Parameters<typeof updateRelease>[1]
+          ),
+          SUPABASE_DB_OP_TIMEOUT_MS,
+          USER_REQUEST_TIMEOUT_MESSAGE
+        );
+      }
 
       const precheck = await requestReleaseSubmitPrecheck({
         releaseId,

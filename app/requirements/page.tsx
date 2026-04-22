@@ -14,7 +14,8 @@ export default function RequirementsPage() {
               FAQ
             </h1>
             <p className="mt-1 text-sm text-white/45">
-              Краткая памятка по подготовке релиза перед отправкой.
+              Реальные правила OMF: файлы, даты, фиты, модерация — то, с чем вы столкнётесь в
+              кабинете.
             </p>
           </div>
           <LibraryWebAside />

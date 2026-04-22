@@ -200,12 +200,24 @@ export function FileUploader({
     }
 
     if (type === "cover") {
+      const mime = selected.type.trim().toLowerCase();
+      const lowerName = selected.name.toLowerCase();
+      const isPng = mime === "image/png" || lowerName.endsWith(".png");
+      const isJpg =
+        mime === "image/jpeg" ||
+        mime === "image/jpg" ||
+        lowerName.endsWith(".jpg") ||
+        lowerName.endsWith(".jpeg");
+      const isOctet = mime === "application/octet-stream";
       const isJpgOrPng =
-        selected.type === "image/jpeg" ||
-        selected.type === "image/jpg" ||
-        selected.type === "image/png";
+        isPng ||
+        isJpg ||
+        ((mime === "" || isOctet) &&
+          (lowerName.endsWith(".png") ||
+            lowerName.endsWith(".jpg") ||
+            lowerName.endsWith(".jpeg")));
       if (!isJpgOrPng) {
-        setError("Допустимы только JPG или PNG");
+        setError("Допустимы только JPG или PNG (проверьте расширение файла).");
         setFile(null);
         onFileChange(null);
         if (previewUrl) {

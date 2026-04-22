@@ -5,6 +5,7 @@ import { resolveReleaseActor } from "@/lib/api/resolve-submit-actor";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
 import { formatErrorMessage } from "@/lib/errors";
 import { isReleaseActorOwner } from "@/lib/release-ownership.server";
+import { mergeFormCollaboratorsWithExistingDb } from "@/lib/collaborators";
 
 const bodySchema = z.object({
   releaseId: z.string().uuid(),
@@ -42,7 +43,7 @@ async function handleSaveDraftPatch(request: NextRequest): Promise<Response> {
 
   const { data: row, error: loadErr } = await admin
     .from("releases")
-    .select("id, user_id, telegram_id, user_uuid")
+    .select("id, user_id, telegram_id, user_uuid, collaborators")
     .eq("id", releaseId)
     .maybeSingle();
 
@@ -60,9 +61,21 @@ async function handleSaveDraftPatch(request: NextRequest): Promise<Response> {
     return NextResponse.json({ ok: false, error: "Нет доступа к этому релизу." }, { status: 403 });
   }
 
+  const patchObj = patch as Record<string, unknown>;
+  let updatePayload: Record<string, unknown> = patchObj;
+  if (Object.prototype.hasOwnProperty.call(patchObj, "collaborators")) {
+    updatePayload = {
+      ...patchObj,
+      collaborators: mergeFormCollaboratorsWithExistingDb(
+        patchObj.collaborators,
+        rowObj.collaborators
+      )
+    };
+  }
+
   const { data: updated, error: upErr } = await admin
     .from("releases")
-    .update(patch as Record<string, unknown>)
+    .update(updatePayload)
     .eq("id", releaseId)
     .select("*");
 
