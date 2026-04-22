@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { motion } from "framer-motion";
 import { AlertCircle, Music } from "lucide-react";
 
@@ -64,8 +65,15 @@ export function ReleaseCard({
     >
       <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/[0.06] bg-white/[0.04]">
         {coverUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element -- remote Supabase/CDN URLs
-          <img src={coverUrl} alt={title} className="h-full w-full object-cover" />
+          <Image
+            src={coverUrl}
+            alt={title}
+            width={56}
+            height={56}
+            sizes="56px"
+            className="h-full w-full object-cover"
+            loading="lazy"
+          />
         ) : (
           <Music size={20} className="text-white/20" aria-hidden />
         )}

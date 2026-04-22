@@ -1,13 +1,11 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import dynamic from "next/dynamic";
 import { Plus, RefreshCw, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { HeroWave } from "@/components/HeroWave";
 import { PullRefreshBrand } from "@/components/PullRefreshBrand";
 import { ReleaseCard, type ReleaseStatus } from "@/components/ReleaseCard";
-import { EmptyStateNeonWaveform } from "@/components/EmptyStateNeonWaveform";
 import { LibraryReleaseSkeletonGrid, LibraryStatsSkeletonRow } from "@/components/ui/LibrarySkeleton";
 import { resumeDraftFromRelease } from "@/features/release/createRelease/actions";
 import { useCreateReleaseDraftStore } from "@/features/release/createRelease/store";
@@ -21,6 +19,15 @@ import { useIsTelegramMiniApp } from "@/lib/hooks/useIsTelegramMiniApp";
 import { pickProfileGreetingName, useAuthProfile } from "@/lib/hooks/useAuthProfile";
 import { cn } from "@/lib/utils";
 import { getTelegramInitDataForApiHeader, getTelegramUserIdForSupabaseRequests } from "@/lib/telegram";
+
+const HeroWave = dynamic(
+  () => import("@/components/HeroWave").then((m) => m.HeroWave),
+  { ssr: false }
+);
+const EmptyStateNeonWaveform = dynamic(
+  () => import("@/components/EmptyStateNeonWaveform").then((m) => m.EmptyStateNeonWaveform),
+  { ssr: false }
+);
 
 type LibraryStatusFilter = "all" | "processing" | "ready" | "failed";
 type LibraryView = "all" | "drafts" | "moderation";
@@ -383,16 +390,10 @@ function LibraryPageInner() {
         <div>
           <div className={cn("min-w-0", isWeb ? "xl:max-w-none" : "mx-auto w-full max-w-lg")}>
         {/* Hero — действия в правом верхнем углу карточки */}
-        <motion.div
-          className="glass-glow glass-glow-charged relative mb-12 min-h-[140px] overflow-hidden p-8 pr-24 sm:pr-28"
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-        >
+        <div className="glass-glow glass-glow-charged relative mb-12 min-h-[140px] overflow-hidden p-8 pr-24 sm:pr-28">
           <div className="absolute right-4 top-4 z-20 flex gap-2 sm:right-6 sm:top-6">
-            <motion.button
+            <button
               type="button"
-              whileTap={{ scale: 0.94 }}
               onClick={() => {
                 hapticMap.impactLight();
                 void mutate(undefined, { revalidate: true });
@@ -402,10 +403,9 @@ function LibraryPageInner() {
               className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.06] text-white/80 backdrop-blur-md transition-colors hover:bg-white/[0.1] hover:text-white disabled:opacity-40"
             >
               <RefreshCw className={`h-[18px] w-[18px] ${isValidating ? "animate-spin" : ""}`} />
-            </motion.button>
-            <motion.button
+            </button>
+            <button
               type="button"
-              whileTap={{ scale: 0.94 }}
               onClick={handleCreate}
               aria-label="Новый релиз"
               className="flex h-10 w-10 items-center justify-center rounded-xl text-white pulse-glow"
@@ -416,7 +416,7 @@ function LibraryPageInner() {
               }}
             >
               <Plus className="h-[22px] w-[22px]" strokeWidth={2.5} />
-            </motion.button>
+            </button>
           </div>
           <HeroWave />
           <div className="relative z-10 max-w-xl">
@@ -427,7 +427,7 @@ function LibraryPageInner() {
               Привет, {artistFirstName}
             </h1>
           </div>
-        </motion.div>
+        </div>
 
         {!hasReleases && (showAuthWait || showListSkeleton) ? (
           <div className="glass-glow glass-glow-charged space-y-4 px-4 py-5">
@@ -441,35 +441,25 @@ function LibraryPageInner() {
             <LibraryReleaseSkeletonGrid count={6} />
           </div>
         ) : !showListSkeleton && error != null ? (
-          <motion.div
-            className="glass-glow glass-glow-charged flex flex-col items-center p-10 text-center"
-            initial={{ opacity: 0, scale: 0.96 }}
-            animate={{ opacity: 1, scale: 1 }}
-          >
+          <div className="glass-glow glass-glow-charged flex flex-col items-center p-10 text-center">
             <p className="font-display text-lg font-bold text-white/85">Не удалось загрузить</p>
             <p className="mt-2 text-sm text-white/35">
               {error instanceof Error ? error.message : String(error)}
             </p>
-            <motion.button
+            <button
               type="button"
               className="mt-6 rounded-xl px-6 py-3 text-sm font-bold text-white"
               style={{
                 background:
                   "linear-gradient(135deg, var(--ss-neon-blue), var(--ss-neon-pink))"
               }}
-              whileTap={{ scale: 0.95 }}
               onClick={() => void mutate(undefined, { revalidate: true })}
             >
               Повторить
-            </motion.button>
-          </motion.div>
+            </button>
+          </div>
         ) : showEmptyState && isEmpty ? (
-          <motion.div
-            className="glass-glow glass-glow-charged flex flex-col items-center p-12 text-center"
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.4 }}
-          >
+          <div className="glass-glow glass-glow-charged flex flex-col items-center p-12 text-center">
             <EmptyStateNeonWaveform />
             <p className="mb-2 font-display text-xl font-bold tracking-tight text-white/80">
               Пока нет релизов
@@ -477,7 +467,7 @@ function LibraryPageInner() {
             <p className="mb-8 max-w-[220px] text-sm font-light text-white/25">
               Загрузите первый трек — это займёт пару минут.
             </p>
-            <motion.button
+            <button
               type="button"
               onClick={handleCreate}
               className="rounded-xl px-8 py-3.5 text-sm font-bold text-white pulse-glow"
@@ -485,11 +475,10 @@ function LibraryPageInner() {
                 background:
                   "linear-gradient(135deg, var(--ss-neon-blue), var(--ss-neon-pink))"
               }}
-              whileTap={{ scale: 0.95 }}
             >
               Создать первый
-            </motion.button>
-          </motion.div>
+            </button>
+          </div>
         ) : (
           <>
             <div className="mb-6 flex items-center justify-between">
@@ -556,24 +545,17 @@ function LibraryPageInner() {
         </div>
       </div>
 
-      <AnimatePresence>
-        {adminNotesModal && (
-          <motion.div
+      {adminNotesModal && (
+          <div
             key="admin-notes-modal"
             className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 p-4 backdrop-blur-[2px] sm:items-center"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
             onClick={() => setAdminNotesModal(null)}
           >
-            <motion.div
+            <div
               role="dialog"
               aria-modal="true"
               aria-labelledby="admin-notes-title"
               className="w-full max-w-[400px] rounded-[22px] border border-white/[0.1] bg-[#141416]/95 p-5 shadow-[0_24px_60px_rgba(0,0,0,0.85)] backdrop-blur-2xl"
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 10 }}
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-start justify-between gap-3">
@@ -595,10 +577,9 @@ function LibraryPageInner() {
               <p className="mt-3 truncate text-[11px] text-white/40" title={adminNotesModal.title}>
                 {adminNotesModal.title}
               </p>
-            </motion.div>
-          </motion.div>
+            </div>
+          </div>
         )}
-      </AnimatePresence>
     </div>
   );
 }

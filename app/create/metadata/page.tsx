@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useMemo, useState, useCallback } from "react";
+import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { Controller, useForm, type FieldErrors } from "react-hook-form";
@@ -8,7 +9,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, Calendar, Disc, Languages, Mic2, Music2 } from "lucide-react";
 import { FormFieldError } from "@/components/FormFieldError";
-import { ArtistProfileLinksSection } from "@/features/release/createRelease/components/ArtistProfileLinksSection";
 import { MetadataSelectField } from "@/features/release/createRelease/components/MetadataSelectField";
 import { CreateShell } from "@/features/release/createRelease/components/CreateShell";
 import {
@@ -49,6 +49,14 @@ import {
   WIZARD_INPUT_CLASS
 } from "@/lib/glass-form-classes";
 import type { ReleaseType } from "@/lib/db-enums";
+
+const ArtistProfileLinksSection = dynamic(
+  () =>
+    import("@/features/release/createRelease/components/ArtistProfileLinksSection").then(
+      (m) => m.ArtistProfileLinksSection
+    ),
+  { ssr: false }
+);
 
 const RELEASE_TYPE_SEGMENTS: { value: ReleaseType; label: string }[] = [
   { value: "single", label: "Single" },

@@ -40,9 +40,11 @@ export type ReleaseListRow = Pick<
 >;
 
 const RELEASES_LIST_TIMEOUT_MS = 15000;
-const TELEGRAM_ID_POLL_INTERVAL_MS = 100;
+const TELEGRAM_ID_POLL_INTERVAL_MS = 250;
 const TELEGRAM_INIT_DATA_WAIT_MS = 1500;
 const TELEGRAM_INIT_DATA_WAIT_STEP_MS = 75;
+const FALLBACK_TELEGRAM_DETECTION_POLL_MS = 250;
+const DEBUG_TELEGRAM_AUTH = process.env.NODE_ENV !== "production";
 
 function isValidTelegramUserId(value: string | null): value is string {
   if (value == null) return false;
@@ -178,15 +180,19 @@ export function useReleases() {
   useEffect(() => {
     let cancelled = false;
     let telegramModeLocked = false;
-    console.log("[TG-DEBUG] useEffect start", {
-      isTelegramClientShell: isTelegramClientShell(),
-      tidNow: getTelegramUserIdForSupabaseRequests()
-    });
+    if (DEBUG_TELEGRAM_AUTH) {
+      console.log("[TG-DEBUG] useEffect start", {
+        isTelegramClientShell: isTelegramClientShell(),
+        tidNow: getTelegramUserIdForSupabaseRequests()
+      });
+    }
     initTelegramWebApp();
     initUserContextInStore();
 
     const applyTelegramMode = (tid: number | null) => {
-      console.log("[TG-DEBUG] applyTelegramMode", { tid });
+      if (DEBUG_TELEGRAM_AUTH) {
+        console.log("[TG-DEBUG] applyTelegramMode", { tid });
+      }
       if (cancelled) return;
       if (tid != null) {
         telegramModeLocked = true;
@@ -217,7 +223,9 @@ export function useReleases() {
         initTelegramWebApp(); // ensure cookie is set before SWR fires
         setTelegramInitDataReady(getTelegramInitDataForApiHeader().length > 0);
         const tid = getTelegramUserIdForSupabaseRequests();
-        console.log("[TG-DEBUG] poll tick", { tid });
+        if (DEBUG_TELEGRAM_AUTH) {
+          console.log("[TG-DEBUG] poll tick", { tid });
+        }
 
         if (tid != null) {
           window.clearInterval(poll);
@@ -298,7 +306,7 @@ export function useReleases() {
       if (isTelegramClientShell()) {
         applyTelegramMode(null);
       }
-    }, 50);
+    }, FALLBACK_TELEGRAM_DETECTION_POLL_MS);
 
     return () => {
       cancelled = true;
@@ -308,7 +316,9 @@ export function useReleases() {
   }, []);
 
   const swrKey: ReleasesSwrKey | null = useMemo(() => {
-    console.log("[TG-DEBUG] swrKey computed", { authReady, userId, authMode });
+    if (DEBUG_TELEGRAM_AUTH) {
+      console.log("[TG-DEBUG] swrKey computed", { authReady, userId, authMode });
+    }
     if (!authReady || userId == null || authMode == null) return null;
     if (
       authMode === "telegram" &&
@@ -370,15 +380,17 @@ export function useReleases() {
       !hasResolvedInitialFetch &&
       (swr.isLoading || swr.isValidating || (swr.data === undefined && swr.error == null)));
 
-  console.log("[TG-DEBUG] useReleases return", {
-    authReady,
-    userId,
-    swrKey,
-    isLoading: swr.isLoading,
-    isValidating: swr.isValidating,
-    dataLength: swr.data?.length ?? "undefined",
-    error: swr.error
-  });
+  if (DEBUG_TELEGRAM_AUTH) {
+    console.log("[TG-DEBUG] useReleases return", {
+      authReady,
+      userId,
+      swrKey,
+      isLoading: swr.isLoading,
+      isValidating: swr.isValidating,
+      dataLength: swr.data?.length ?? "undefined",
+      error: swr.error
+    });
+  }
 
   return {
     userId,

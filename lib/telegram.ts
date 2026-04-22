@@ -74,6 +74,8 @@ export function getTelegramWebApp(): TelegramWebApp | null {
 
 /** sessionStorage: редиректы Next сбрасывают `#tgWebApp…`, маркер остаётся на всю вкладку. */
 const TG_SHELL_SESSION_KEY = "__omf_tg_mini_shell";
+const TG_SHELL_CACHE_TTL_MS = 1000;
+let telegramShellCache: { value: boolean; expiresAt: number } | null = null;
 
 /**
  * Сохраняет признак Mini App из hash/query (один раз на вкладку).
@@ -86,6 +88,7 @@ export function persistTelegramShellSignalsFromUrl(): void {
     const search = window.location.search ?? "";
     if (/tgWebApp/i.test(hash) || /[?&]tgWebApp/i.test(search)) {
       sessionStorage.setItem(TG_SHELL_SESSION_KEY, "1");
+      telegramShellCache = { value: true, expiresAt: Date.now() + TG_SHELL_CACHE_TTL_MS };
     }
   } catch {
     /* ignore */
@@ -116,6 +119,16 @@ export function appendCurrentTelegramHash(path: string): string {
  */
 export function isTelegramClientShell(): boolean {
   if (typeof window === "undefined") return false;
+  const now = Date.now();
+  if (telegramShellCache && telegramShellCache.expiresAt > now) {
+    return telegramShellCache.value;
+  }
+  const computed = computeTelegramClientShell();
+  telegramShellCache = { value: computed, expiresAt: now + TG_SHELL_CACHE_TTL_MS };
+  return computed;
+}
+
+function computeTelegramClientShell(): boolean {
   try {
     if (sessionStorage.getItem(TG_SHELL_SESSION_KEY) === "1") return true;
   } catch {
@@ -212,6 +225,7 @@ export function initTelegramWebApp() {
       const encoded = encodeURIComponent(webApp.initData);
       const secure = window.location.protocol === "https:" ? "; Secure" : "";
       document.cookie = `tg_init_data=${encoded}; Path=/; Max-Age=86400; SameSite=Lax${secure}`;
+      telegramShellCache = { value: true, expiresAt: Date.now() + TG_SHELL_CACHE_TTL_MS };
     }
   } catch {
     // ignore API errors in regular browser

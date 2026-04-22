@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useCallback, useEffect, useRef } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -20,8 +21,6 @@ import {
   submitTracksAndFinalize
 } from "@/features/release/createRelease/actions";
 import { getTelegramApiAuthHeaders, getTelegramInitDataForApiHeader } from "@/lib/telegram";
-import { UploadProgress } from "@/components/UploadProgress";
-import { FullScreenLoader } from "@/components/FullScreenLoader";
 import { logClientError } from "@/lib/logger";
 import {
   acquireTelegramClosingConfirmation,
@@ -33,6 +32,15 @@ import {
   type PerformanceLanguage
 } from "@/lib/performance-language";
 import { unionFeaturingNamesFromTracks } from "@/lib/collaborators";
+
+const UploadProgress = dynamic(
+  () => import("@/components/UploadProgress").then((m) => m.UploadProgress),
+  { ssr: false }
+);
+const FullScreenLoader = dynamic(
+  () => import("@/components/FullScreenLoader").then((m) => m.FullScreenLoader),
+  { ssr: false }
+);
 
 function SectionDivider() {
   return <div className="my-4 h-px w-full bg-white/10" aria-hidden />;

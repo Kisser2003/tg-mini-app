@@ -1731,7 +1731,8 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
         celebrateReleaseSubmission();
       }
 
-      await refreshReleasesListAfterSubmit(verified).catch(() => {});
+      // Cache refresh is best-effort and must not block success navigation.
+      void refreshReleasesListAfterSubmit(verified).catch(() => {});
 
       const storeOk = useCreateReleaseDraftStore.getState();
       storeOk.setSubmitStatus("success");

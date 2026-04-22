@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useFieldArray, useForm } from "react-hook-form";
@@ -18,7 +19,6 @@ import {
   uploadTrackWavAtIndex,
   uploadTracksForDraftStep
 } from "@/features/release/createRelease/actions";
-import { FileUploader } from "@/components/FileUploader";
 import { FormFieldError } from "@/components/FormFieldError";
 import {
   GLASS_FIELD_ERROR_STRONG,
@@ -32,6 +32,11 @@ import {
 } from "@/lib/telegram";
 import { validateWavFile } from "@/lib/wav-validator";
 import { toast } from "sonner";
+
+const FileUploader = dynamic(
+  () => import("@/components/FileUploader").then((m) => m.FileUploader),
+  { ssr: false }
+);
 
 const MAX_FEATURING_ARTISTS = 12;
 

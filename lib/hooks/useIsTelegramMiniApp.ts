@@ -31,7 +31,7 @@ function subscribe(onStoreChange: () => void) {
       window.clearInterval(id);
       onStoreChange();
     }
-  }, 50);
+  }, 150);
   return () => {
     cancelled = true;
     window.clearInterval(id);

@@ -1,9 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { motion, type Variants } from "framer-motion";
 import { ArrowLeft, History, RefreshCcw } from "lucide-react";
 import useSWR from "swr";
 import { AdminReleaseCard } from "@/components/AdminReleaseCard";
@@ -23,31 +22,18 @@ type HistoryRow = {
   tracks: ReleaseTrackRow[];
 };
 
-const HISTORY_LIMIT = 500;
+const HISTORY_LIMIT = 300;
 const ADMIN_HISTORY_TIMEOUT_MS = 20000;
-
-const historyContainer: Variants = {
-  hidden: { opacity: 0 },
-  show: {
-    opacity: 1,
-    transition: { staggerChildren: 0.04 }
-  }
-};
-
-const historyItem: Variants = {
-  hidden: { opacity: 0, y: 12 },
-  show: {
-    opacity: 1,
-    y: 0,
-    transition: { type: "spring", stiffness: 280, damping: 24 }
-  }
-};
+const INITIAL_VISIBLE_ROWS = 40;
+const VISIBLE_ROWS_CHUNK = 40;
+const NEAR_BOTTOM_OFFSET_PX = 900;
 
 export default function AdminModerationHistoryPage() {
   const router = useRouter();
   const [userId, setUserId] = useState<number | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminResolved, setAdminResolved] = useState(false);
+  const [visibleRowsCount, setVisibleRowsCount] = useState(INITIAL_VISIBLE_ROWS);
 
   useEffect(() => {
     debugInit("admin/history", "init start");
@@ -84,10 +70,40 @@ export default function AdminModerationHistoryPage() {
     }
   );
 
-  const rows = data?.rows ?? [];
+  const rows = useMemo(() => data?.rows ?? [], [data?.rows]);
+  const visibleRows = useMemo(
+    () => rows.slice(0, Math.min(visibleRowsCount, rows.length)),
+    [rows, visibleRowsCount]
+  );
+  const hasMoreRows = visibleRows.length < rows.length;
   const listTruncated = data?.truncated === true;
   const errorMessage = errorToUserString(error);
   const showSkeleton = isLoading && data === undefined;
+
+  useEffect(() => {
+    setVisibleRowsCount(INITIAL_VISIBLE_ROWS);
+  }, [rows.length]);
+
+  useEffect(() => {
+    if (!hasMoreRows) return;
+    let ticking = false;
+    const onScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      window.requestAnimationFrame(() => {
+        ticking = false;
+        const nearBottom =
+          window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - NEAR_BOTTOM_OFFSET_PX;
+        if (nearBottom) {
+          setVisibleRowsCount((prev) => Math.min(prev + VISIBLE_ROWS_CHUNK, rows.length));
+        }
+      });
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+    };
+  }, [hasMoreRows, rows.length]);
 
   if (adminResolved && !isAdmin) {
     return null;
@@ -114,23 +130,18 @@ export default function AdminModerationHistoryPage() {
           <ArrowLeft className="h-4 w-4 shrink-0" />
           К очереди
         </Link>
-        <motion.button
+        <button
           type="button"
-          whileTap={{ scale: 0.94 }}
           onClick={() => void mutate(undefined, { revalidate: true })}
           disabled={isValidating}
           aria-label="Обновить"
           className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04] text-white/70 backdrop-blur-md disabled:opacity-50"
         >
           <RefreshCcw className={`h-[18px] w-[18px] ${isValidating ? "animate-spin" : ""}`} />
-        </motion.button>
+        </button>
       </div>
 
-      <motion.div
-        className="mb-6 flex items-center gap-3"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-      >
+      <div className="mb-6 flex items-center gap-3">
         <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-violet-400/25 bg-violet-500/10 text-violet-200">
           <History className="h-5 w-5" />
         </div>
@@ -138,7 +149,7 @@ export default function AdminModerationHistoryPage() {
           <h1 className="font-display text-2xl font-bold tracking-tight text-white/80">История решений</h1>
           <p className="text-sm text-white/45">Одобренные и отклонённые релизы</p>
         </div>
-      </motion.div>
+      </div>
 
       {listTruncated && rows.length > 0 && (
         <div className="glass-glow glass-glow-charged mb-4 p-3 text-xs text-amber-100/85">
@@ -160,30 +171,36 @@ export default function AdminModerationHistoryPage() {
       )}
 
       {rows.length > 0 && (
-        <motion.div
-          className="flex flex-col gap-3"
-          variants={historyContainer}
-          initial="hidden"
-          animate="show"
-        >
-          {rows.map((row, index) => (
-            <motion.div key={row.release.id} variants={historyItem} initial="hidden" animate="show">
-              <AdminReleaseCard
-                release={row.release}
-                tracks={row.tracks}
-                index={index}
-                listVariants={undefined}
-                busy={false}
-                onOpenApprove={() => {}}
-                onOpenReject={() => {}}
-                showModerationActions={false}
-                showAudioPreview={false}
-                detailHref={`/admin/release/${row.release.id}`}
-                artworkPriority={index < 4}
-              />
-            </motion.div>
+        <div className="flex flex-col gap-3">
+          {visibleRows.map((row, index) => (
+            <AdminReleaseCard
+              key={row.release.id}
+              release={row.release}
+              tracks={row.tracks}
+              index={index}
+              listVariants={undefined}
+              busy={false}
+              onOpenApprove={() => {}}
+              onOpenReject={() => {}}
+              showModerationActions={false}
+              showAudioPreview={false}
+              detailHref={`/admin/release/${row.release.id}`}
+              artworkPriority={index < 4}
+            />
           ))}
-        </motion.div>
+        </div>
+      )}
+
+      {hasMoreRows && (
+        <div className="mt-4 flex justify-center">
+          <button
+            type="button"
+            onClick={() => setVisibleRowsCount((prev) => Math.min(prev + VISIBLE_ROWS_CHUNK, rows.length))}
+            className="inline-flex items-center justify-center rounded-xl border border-white/[0.1] bg-white/[0.03] px-4 py-2 text-sm text-white/70 transition-colors hover:bg-white/[0.08]"
+          >
+            Показать еще ({visibleRows.length}/{rows.length})
+          </button>
+        </div>
       )}
     </div>
   );

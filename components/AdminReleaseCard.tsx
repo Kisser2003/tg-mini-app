@@ -1,6 +1,6 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { motion, type Variants } from "framer-motion";
@@ -83,8 +83,23 @@ function AdminReleaseCardInner({
 }: AdminReleaseCardProps) {
   const statusMeta = getReleaseStatusMeta(release.status);
   const displayTitle = getReleaseDisplayTitle(release);
-  const audioItems = buildAudioItems(release, tracks);
-  const featuringNames = featuringNamesFromCollaboratorsJson(release.collaborators);
+  const audioItems = useMemo(() => buildAudioItems(release, tracks), [release, tracks]);
+  const featuringNames = useMemo(
+    () => featuringNamesFromCollaboratorsJson(release.collaborators),
+    [release.collaborators]
+  );
+  const featuringLabel = useMemo(() => featuringNames.join(", "), [featuringNames]);
+  const createdAtLabel = useMemo(
+    () =>
+      new Date(release.created_at).toLocaleString("ru-RU", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+      }),
+    [release.created_at]
+  );
 
   return (
     <motion.div
@@ -135,9 +150,9 @@ function AdminReleaseCardInner({
           {featuringNames.length > 0 ? (
             <p
               className="truncate text-[12px] text-violet-200/85"
-              title={featuringNames.join(", ")}
+              title={featuringLabel}
             >
-              feat: {featuringNames.join(", ")}
+              feat: {featuringLabel}
             </p>
           ) : null}
           <div className="flex min-w-0 flex-wrap items-center gap-2 pt-0.5">
@@ -162,13 +177,7 @@ function AdminReleaseCardInner({
           </div>
           <p className="truncate text-[11px] text-white/45" title={release.genre ?? undefined}>
             {showModerationActions ? "Отправлено" : "Создан"}:{" "}
-            {new Date(release.created_at).toLocaleString("ru-RU", {
-              day: "2-digit",
-              month: "2-digit",
-              year: "numeric",
-              hour: "2-digit",
-              minute: "2-digit"
-            })}
+            {createdAtLabel}
             {release.genre ? ` · ${release.genre}` : ""}
           </p>
         </div>

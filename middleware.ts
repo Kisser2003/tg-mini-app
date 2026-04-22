@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { createSupabaseMiddleware } from "@/lib/supabase";
 
 /** Документные префиксы Mini App (совпадают с клиентским `TelegramBootstrap` / guards). */
 function isTelegramMiniAppShellPath(p: string): boolean {
@@ -81,30 +80,19 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Для остальных веб-маршрутов проверяем auth через cookies
-  const response = NextResponse.next();
-  const supabase = createSupabaseMiddleware(request, response);
+  // Для остальных веб-маршрутов выполняем легкую проверку наличия auth-cookie.
+  // Полная валидация сессии остается в API и RLS.
+  const hasSupabaseAuthCookie = request.cookies
+    .getAll()
+    .some((cookie) => /^sb-.*auth-token(?:\.\d+)?$/.test(cookie.name) || cookie.name === "sb-access-token");
 
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-
-    // Если нет сессии - редирект на login
-    if (!session) {
-      const redirectUrl = request.nextUrl.clone();
-      redirectUrl.pathname = "/login";
-      // Сохраняем куда пользователь хотел попасть
-      redirectUrl.searchParams.set("redirect", pathname);
-      return NextResponse.redirect(redirectUrl);
-    }
-
-    return response;
-  } catch (error) {
-    console.error("[middleware] Auth check error:", error);
-    // В случае ошибки редиректим на login
+  if (!hasSupabaseAuthCookie) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/login";
+    redirectUrl.searchParams.set("redirect", pathname);
     return NextResponse.redirect(redirectUrl);
   }
+  return NextResponse.next();
 }
 
 export const config = {

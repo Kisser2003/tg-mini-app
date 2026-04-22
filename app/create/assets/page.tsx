@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useCallback, useEffect } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { MagneticButton } from "@/components/MagneticButton";
 import { CreateShell } from "@/features/release/createRelease/components/CreateShell";
@@ -13,7 +14,6 @@ import {
 } from "@/features/release/createRelease/actions";
 import { RELEASE_FILE_LIMITS } from "@/repositories/releases/types";
 import { useCreateReleaseDraftStore } from "@/features/release/createRelease/store";
-import { FileUploader } from "@/components/FileUploader";
 import { FormFieldError } from "@/components/FormFieldError";
 import { debugInit } from "@/lib/debug";
 import { logClientError } from "@/lib/logger";
@@ -23,6 +23,11 @@ import {
   triggerHaptic
 } from "@/lib/telegram";
 import { toast } from "sonner";
+
+const FileUploader = dynamic(
+  () => import("@/components/FileUploader").then((m) => m.FileUploader),
+  { ssr: false }
+);
 
 export default function CreateAssetsPage() {
   const router = useRouter();
