@@ -177,6 +177,7 @@ export default function AdminModerationHistoryPage() {
                 onOpenApprove={() => {}}
                 onOpenReject={() => {}}
                 showModerationActions={false}
+                showAudioPreview={false}
                 detailHref={`/admin/release/${row.release.id}`}
                 artworkPriority={index < 4}
               />

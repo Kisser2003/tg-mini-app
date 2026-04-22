@@ -535,6 +535,7 @@ export default function AdminPage() {
                 busy={busyId === row.release.id}
                 onOpenApprove={() => setApproveModalReleaseId(row.release.id)}
                 onOpenReject={() => setRejectModalReleaseId(row.release.id)}
+                showAudioPreview={false}
                 detailHref={`/admin/release/${row.release.id}`}
                 artworkPriority={index < 3}
               />

@@ -62,6 +62,8 @@ type AdminReleaseCardProps = {
   artworkPriority?: boolean;
   /** Показать кнопки «Одобрить» / «Отклонить» (очередь). В истории — false. */
   showModerationActions?: boolean;
+  /** Показать встроенный блок прослушивания на карточке списка. */
+  showAudioPreview?: boolean;
 };
 
 const ARTWORK_SIZES = "(max-width: 768px) 100vw, 33vw";
@@ -76,7 +78,8 @@ function AdminReleaseCardInner({
   onOpenReject,
   detailHref,
   artworkPriority = false,
-  showModerationActions = true
+  showModerationActions = true,
+  showAudioPreview = true
 }: AdminReleaseCardProps) {
   const statusMeta = getReleaseStatusMeta(release.status);
   const displayTitle = getReleaseDisplayTitle(release);
@@ -171,23 +174,25 @@ function AdminReleaseCardInner({
         </div>
       </div>
 
-      <div className="mt-3 space-y-1.5">
-        <div className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-[0.12em] text-white/40">
-          <Headphones className="h-3 w-3" />
-          Прослушать
-        </div>
-        {audioItems.length === 0 ? (
-          <p className="rounded-lg border border-white/10 bg-black/20 px-2.5 py-1.5 text-[11px] text-white/50">
-            Аудио пока недоступно для прослушивания.
-          </p>
-        ) : (
-          <div className="space-y-1.5">
-            {audioItems.map((item) => (
-              <AudioPlayerLazy key={item.key} src={item.src} label={item.label} variant="admin" />
-            ))}
+      {showAudioPreview ? (
+        <div className="mt-3 space-y-1.5">
+          <div className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-[0.12em] text-white/40">
+            <Headphones className="h-3 w-3" />
+            Прослушать
           </div>
-        )}
-      </div>
+          {audioItems.length === 0 ? (
+            <p className="rounded-lg border border-white/10 bg-black/20 px-2.5 py-1.5 text-[11px] text-white/50">
+              Аудио пока недоступно для прослушивания.
+            </p>
+          ) : (
+            <div className="space-y-1.5">
+              {audioItems.map((item) => (
+                <AudioPlayerLazy key={item.key} src={item.src} label={item.label} variant="admin" />
+              ))}
+            </div>
+          )}
+        </div>
+      ) : null}
 
       {showModerationActions ? (
         <div className="mt-4 grid grid-cols-2 gap-2">
