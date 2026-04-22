@@ -152,10 +152,33 @@ export function useReleases() {
       };
     }
     if (isTelegramClientShell()) {
-      // Не блокируем список релизов ожиданием user.id: API сам определит Telegram actor по initData/cookie.
-      applyTelegramMode(null);
+      const MAX_WAIT_MS = 3000;
+      const POLL_INTERVAL_MS = 50;
+      let elapsed = 0;
+
+      const poll = window.setInterval(() => {
+        if (cancelled) {
+          window.clearInterval(poll);
+          return;
+        }
+        elapsed += POLL_INTERVAL_MS;
+        const tid = getTelegramUserIdForSupabaseRequests();
+
+        if (tid != null) {
+          window.clearInterval(poll);
+          applyTelegramMode(tid);
+          return;
+        }
+
+        if (elapsed >= MAX_WAIT_MS) {
+          window.clearInterval(poll);
+          applyTelegramMode(null);
+        }
+      }, POLL_INTERVAL_MS);
+
       return () => {
         cancelled = true;
+        window.clearInterval(poll);
       };
     }
 
