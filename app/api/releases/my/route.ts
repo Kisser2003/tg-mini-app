@@ -56,18 +56,20 @@ async function handleGetMyReleases(request: NextRequest): Promise<Response> {
 
   if (actor.kind === "telegram") {
     const tid = String(actor.telegramUserId);
-    let profileUuid: string | null = null;
-    const { data: profile } = await admin
+    const { data: profiles } = await admin
       .from("users")
       .select("id")
       .eq("telegram_id", tid)
-      .maybeSingle();
-    if (profile && typeof (profile as { id?: unknown }).id === "string") {
-      profileUuid = (profile as { id: string }).id;
-    }
+      .limit(10);
+    const profileUuids = Array.isArray(profiles)
+      ? profiles
+          .map((p) => (typeof (p as { id?: unknown }).id === "string" ? (p as { id: string }).id : null))
+          .filter((id): id is string => id != null)
+      : [];
     const orParts = [`user_id.eq.${tid}`, `telegram_id.eq.${tid}`];
-    if (profileUuid) {
-      orParts.push(`user_uuid.eq.${profileUuid}`);
+    if (profileUuids.length > 0) {
+      // Support multi-linked/legacy rows: include all matching profile UUIDs.
+      orParts.push(`user_uuid.in.(${profileUuids.join(",")})`);
     }
     query = query.or(orParts.join(","));
   } else {
@@ -79,6 +81,11 @@ async function handleGetMyReleases(request: NextRequest): Promise<Response> {
     console.error("[releases/my] fetch:", error.message);
     return NextResponse.json({ ok: false, error: "Не удалось загрузить релизы." }, { status: 500 });
   }
+
+  console.log("[API-DEBUG] releases/my rows", {
+    actorKind: actor.kind,
+    rows: Array.isArray(data) ? data.length : 0
+  });
 
   return NextResponse.json({ ok: true, rows: (data ?? []) as ReleaseRecord[] });
 }
