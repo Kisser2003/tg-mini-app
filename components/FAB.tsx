@@ -26,6 +26,10 @@ export function FAB() {
   if (pathname === "/" || pathname === "/library") {
     return null;
   }
+  /* Карточка релиза: только просмотр, новый релиз из FAB не нужен */
+  if (pathname?.startsWith("/release/")) {
+    return null;
+  }
   /* FAQ / мультиссылки: на телефоне FAB перекрывает контент и нижнюю навигацию */
   if (pathname === "/requirements" || pathname === "/multi-links") {
     return null;

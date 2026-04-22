@@ -59,6 +59,8 @@ export default function CreateTracksPage() {
 
   const isSingle = releaseType === "single";
   const canAddTrack = !isSingle;
+  /** Пока false — при смене названия релиза подставляем его в трек; после правки трека не перетираем (фиты / совместные названия). */
+  const singleTrackTitleTouchedRef = useRef(false);
 
   // Compute initial tracks respecting the release-type constraint at mount time.
   // useState initializer runs once, so this captures the correct store snapshot
@@ -67,12 +69,10 @@ export default function CreateTracksPage() {
     const { tracks, metadata } = useCreateReleaseDraftStore.getState();
     const base = tracks.length > 0 ? tracks : [{ title: "", explicit: false, lyrics: "" }];
     if (metadata.releaseType === "single") {
-      return [
-        {
-          ...(base[0] ?? { title: "", explicit: false, lyrics: "" }),
-          title: metadata.releaseTitle
-        }
-      ];
+      const row = base[0] ?? { title: "", explicit: false, lyrics: "" };
+      const trackT = (row.title ?? "").trim();
+      const releaseT = (metadata.releaseTitle ?? "").trim();
+      return [{ ...row, title: trackT || releaseT }];
     }
     return base;
   });
@@ -117,28 +117,41 @@ export default function CreateTracksPage() {
         ? [
             {
               ...(base[0] ?? { title: "", explicit: false, lyrics: "" }),
-              title: storedReleaseTitle
+              title: (() => {
+                const trackT = (base[0]?.title ?? "").trim();
+                const releaseT = (storedReleaseTitle ?? "").trim();
+                return trackT || releaseT;
+              })()
             }
           ]
         : base;
 
     reset({ tracks: freshTracks }, { keepDirty: false });
 
+    if (storedType === "single") {
+      const t0 = (freshTracks[0]?.title ?? "").trim();
+      const rt = (storedReleaseTitle ?? "").trim();
+      singleTrackTitleTouchedRef.current = t0.length > 0 && t0 !== rt;
+    }
+
     // If the cap trimmed the track list, sync the store immediately.
     if (storedType === "single" && storedTracks.length > 1) {
+      const trackT = (base[0]?.title ?? "").trim();
+      const releaseT = (storedReleaseTitle ?? "").trim();
       setTracks([
         {
           ...(base[0] ?? { title: "", explicit: false, lyrics: "" }),
-          title: storedReleaseTitle
+          title: trackT || releaseT
         }
       ]);
       syncTrackFilesLength(1);
     }
   }, [reset, setTracks, syncTrackFilesLength]);
 
-  // Сингл: название трека = название релиза из стора (в т.ч. после правок на «Паспорте»).
+  // Сингл: по умолчанию название трека = название релиза; если пользователь уже ввёл своё (feat и т.д.) — не затираем.
   useEffect(() => {
     if (!isSingle) return;
+    if (singleTrackTitleTouchedRef.current) return;
     setValue("tracks.0.title", releaseTitle, { shouldValidate: true, shouldDirty: false });
   }, [isSingle, releaseTitle, setValue]);
 
@@ -276,18 +289,27 @@ export default function CreateTracksPage() {
               </div>
 
               {isSingle && index === 0 ? (
-                <div className="space-y-3">
-                  <div className="rounded-[14px] border border-white/10 bg-white/[0.04] px-3 py-2 text-[12px] leading-relaxed text-white/65">
-                    Для синглов название трека совпадает с названием релиза.
-                  </div>
-                  <div className="rounded-[16px] border border-white/[0.08] bg-black/20 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                    <span className="block text-[11px] font-medium uppercase tracking-[0.18em] text-white/50">
-                      Название трека
-                    </span>
-                    <p className="mt-1.5 break-words text-[15px] font-medium leading-snug text-white/95">
-                      {releaseTitle.trim() ? releaseTitle : "Как в паспорте релиза"}
-                    </p>
-                  </div>
+                <div className="space-y-1.5">
+                  <label className={`mb-2.5 block ${WIZARD_FIELD_LABEL_CLASS}`}>Название трека</label>
+                  <p className="mb-1 text-[12px] leading-relaxed text-white/50">
+                    Обычно совпадает с названием релиза. Для фита или совместного трека укажите полное
+                    название так, как оно должно отображаться в сторе (например, с «feat.» или вторым
+                    артистом).
+                  </p>
+                  <input
+                    {...register(`tracks.${index}.title` as const, {
+                      onChange: (e) => {
+                        const v = e.target.value;
+                        singleTrackTitleTouchedRef.current = v.trim().length > 0;
+                      }
+                    })}
+                    placeholder={releaseTitle.trim() || "Как на обложке / в сторе"}
+                    className={`${WIZARD_INPUT_CLASS} ${
+                      errors.tracks?.[index]?.title && dirtyFields.tracks?.[index]?.title
+                        ? GLASS_FIELD_ERROR_STRONG
+                        : ""
+                    }`}
+                  />
                   <FormFieldError message={errors.tracks?.[index]?.title?.message} />
                 </div>
               ) : (

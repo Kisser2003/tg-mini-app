@@ -225,9 +225,11 @@ function CreateMetadataPageInner() {
     if (values.releaseType !== "single") return;
     const tracks = useCreateReleaseDraftStore.getState().tracks;
     if (tracks.length <= 1) return;
-    const title = values.releaseTitle?.trim() ?? "";
+    const releaseTitleTrim = values.releaseTitle?.trim() ?? "";
     const base = tracks[0] ?? { title: "", explicit: false };
-    setTracks([{ ...base, title: title || base.title }]);
+    const trackTitleTrim = typeof base.title === "string" ? base.title.trim() : "";
+    // Сохраняем уже введённое название трека (фит / полное имя), иначе — название релиза.
+    setTracks([{ ...base, title: trackTitleTrim || releaseTitleTrim }]);
     syncTrackFilesLength(1);
   }, [values.releaseType, values.releaseTitle, setTracks, syncTrackFilesLength]);
 
