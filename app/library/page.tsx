@@ -311,10 +311,6 @@ function LibraryPageInner() {
       formatReleaseTypeLabel(release.release_type ?? null)
     ].filter((item): item is string => Boolean(item));
 
-    const hasErrorText = Boolean(release.error_message?.trim());
-    const effectiveErrorText = hasErrorText
-      ? release.error_message!
-      : "Причина ошибки не указана";
     const onCardClick = () => {
       if (isResumingDraft) return;
       if (isDraft) {
@@ -342,16 +338,11 @@ function LibraryPageInner() {
         <div key={release.id} className={isResumingDraft ? "pointer-events-none opacity-70" : ""}>
           <ReleaseCard
             title={displayTitle}
-            artist={artistLine}
+            artist={`${artistLine} · ${statusMeta.label}`}
             status="error"
             meta={releaseMeta}
             coverUrl={release.artwork_url ?? undefined}
             index={listIndex}
-            rejectionReason={effectiveErrorText}
-            onFix={() => {
-              hapticMap.impactLight();
-              router.push(`/create/metadata?from=failed&releaseId=${release.id}`);
-            }}
             onClick={onCardClick}
           />
         </div>
