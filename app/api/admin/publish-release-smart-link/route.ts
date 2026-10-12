@@ -6,7 +6,8 @@ import { getTelegramAuthContextFromRequest } from "@/lib/api/with-telegram-auth"
 import { assertHttpsUrl, mapAdminPublishStatusToDb } from "@/lib/admin-release-publish";
 import { getReleaseDisplayTitle, type ReleaseRecord } from "@/repositories/releases.repo";
 import { escapeHtml } from "@/lib/telegram-bot.server";
-import { sendTelegramNotification } from "@/lib/telegram-notifications";
+import { notifyArtist } from "@/lib/server/artist-notify";
+import { invalidateMyReleasesCache } from "@/lib/server/release-list-cache";
 
 const bodySchema = z.object({
   releaseId: z.string().uuid(),
@@ -15,18 +16,12 @@ const bodySchema = z.object({
 });
 
 async function notifyArtistSmartLink(record: ReleaseRecord, smartLink: string): Promise<void> {
-  const tid =
-    record.telegram_id != null && String(record.telegram_id).trim() !== ""
-      ? String(record.telegram_id)
-      : null;
-  if (!tid) return;
-
   const titleRaw = getReleaseDisplayTitle(record);
   const title = escapeHtml(titleRaw.length > 0 ? titleRaw : "релиз");
   const linkEsc = escapeHtml(smartLink);
 
-  await sendTelegramNotification(
-    tid,
+  await notifyArtist(
+    record,
     `✅ <b>Релиз «${title}» одобрен модерацией.</b>\n\n🔗 Вот ваша Smart Link: <a href="${linkEsc}">открыть</a>`
   );
 }
@@ -101,7 +96,8 @@ async function handlePublishReleaseSmartLink(request: NextRequest): Promise<Resp
     .update({
       status: "ready",
       smart_link: normalizedUrl,
-      error_message: null
+      error_message: null,
+      admin_notes: null
     })
     .eq("id", releaseId)
     .select("*")
@@ -127,6 +123,7 @@ async function handlePublishReleaseSmartLink(request: NextRequest): Promise<Resp
   }
 
   const rec = updated as ReleaseRecord;
+  await invalidateMyReleasesCache(rec as Record<string, unknown>);
   await notifyArtistSmartLink(rec, normalizedUrl);
   return NextResponse.json({ ok: true, record: rec });
 }

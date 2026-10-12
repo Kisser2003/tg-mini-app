@@ -6,12 +6,15 @@ import { getTelegramAuthContextFromRequest } from "@/lib/api/with-telegram-auth"
 import { getReleaseDisplayTitle, type ReleaseRecord } from "@/repositories/releases.repo";
 import { deleteApprovedReleaseAudio } from "@/lib/release-audio-cleanup.server";
 import { escapeHtml } from "@/lib/telegram-bot.server";
-import { sendTelegramNotification } from "@/lib/telegram-notifications";
+import { notifyArtist } from "@/lib/server/artist-notify";
+import { isMissingReleasesColumnError } from "@/lib/errors";
+import { invalidateMyReleasesCache } from "@/lib/server/release-list-cache";
 
 const bodySchema = z.object({
   releaseId: z.string().uuid(),
   action: z.enum(["approve", "reject"]),
-  comment: z.string().optional()
+  comment: z.string().max(2000).optional(),
+  reasonKeys: z.array(z.string().max(40)).max(10).optional()
 });
 
 async function notifyArtistOnModerationResult(
@@ -19,27 +22,21 @@ async function notifyArtistOnModerationResult(
   action: "approve" | "reject",
   comment?: string
 ): Promise<void> {
-  const tid =
-    record.telegram_id != null && String(record.telegram_id).trim() !== ""
-      ? String(record.telegram_id)
-      : null;
-  if (!tid) return;
-
   const titleRaw = getReleaseDisplayTitle(record);
   const title = escapeHtml(titleRaw.length > 0 ? titleRaw : "релиз");
 
   if (action === "approve") {
-    await sendTelegramNotification(
-      tid,
+    await notifyArtist(
+      record,
       `✅ <b>Релиз «${title}» одобрен модерацией!</b>\n\nОн принят в дистрибуцию.`
     );
     return;
   }
 
   const reason = escapeHtml((comment && comment.trim()) || "Отклонено модератором");
-  await sendTelegramNotification(
-    tid,
-    `❌ <b>Релиз «${title}» отклонён модерацией.</b>\n\nПричина: ${reason}`
+  await notifyArtist(
+    record,
+    `❌ <b>Релиз «${title}» отклонён модерацией.</b>\n\nПричина: ${reason}\n\nОткрой релиз в приложении и нажми «Исправить и отправить снова» — файлы уже загружены.`
   );
 }
 
@@ -65,7 +62,7 @@ async function handleUpdateReleaseStatus(
     return NextResponse.json({ ok: false, error: "Некорректное тело запроса." }, { status: 400 });
   }
 
-  const { releaseId, action, comment } = parsed.data;
+  const { releaseId, action, comment, reasonKeys } = parsed.data;
 
   const { data: row, error: loadErr } = await supabase
     .from("releases")
@@ -96,7 +93,8 @@ async function handleUpdateReleaseStatus(
       .from("releases")
       .update({
         status: "ready",
-        error_message: null
+        error_message: null,
+        admin_notes: null
       })
       .eq("id", releaseId)
       .select("*")
@@ -109,6 +107,7 @@ async function handleUpdateReleaseStatus(
     if (!updated) {
       return NextResponse.json({ ok: false, error: "Не удалось обновить релиз." }, { status: 500 });
     }
+    await invalidateMyReleasesCache(updated as Record<string, unknown>);
     await notifyArtistOnModerationResult(updated as ReleaseRecord, "approve");
     await deleteApprovedReleaseAudio(supabase, releaseId);
     return NextResponse.json({ ok: true, record: updated as ReleaseRecord });
@@ -116,15 +115,34 @@ async function handleUpdateReleaseStatus(
 
   const msg = (comment && comment.trim()) || "Отклонено модератором";
 
-  const { data: updated, error: updErr } = await supabase
+  const rejectPayload: Record<string, unknown> = {
+    status: "failed",
+    error_message: msg,
+    admin_notes: msg,
+    rejection_reasons: reasonKeys ?? [],
+    rejection_count: Number((row as { rejection_count?: number | null }).rejection_count ?? 0) + 1
+  };
+  let { data: updated, error: updErr } = await supabase
     .from("releases")
-    .update({
-      status: "failed",
-      error_message: msg
-    })
+    .update(rejectPayload)
     .eq("id", releaseId)
     .select("*")
     .maybeSingle();
+
+  // Миграция с rejection_* может быть ещё не применена — отклоняем без этих полей.
+  if (
+    updErr &&
+    (isMissingReleasesColumnError(updErr, "rejection_reasons") ||
+      isMissingReleasesColumnError(updErr, "rejection_count"))
+  ) {
+    const { rejection_reasons: _r, rejection_count: _c, ...legacy } = rejectPayload;
+    ({ data: updated, error: updErr } = await supabase
+      .from("releases")
+      .update(legacy)
+      .eq("id", releaseId)
+      .select("*")
+      .maybeSingle());
+  }
 
   if (updErr) {
     console.error("[admin/update-release-status] reject:", updErr.message);
@@ -134,6 +152,7 @@ async function handleUpdateReleaseStatus(
     return NextResponse.json({ ok: false, error: "Не удалось обновить релиз." }, { status: 500 });
   }
 
+  await invalidateMyReleasesCache(updated as Record<string, unknown>);
   await notifyArtistOnModerationResult(updated as ReleaseRecord, "reject", msg);
   return NextResponse.json({ ok: true, record: updated as ReleaseRecord });
 }

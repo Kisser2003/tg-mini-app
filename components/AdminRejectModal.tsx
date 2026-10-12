@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
 import { hapticMap } from "@/lib/haptic-map";
@@ -25,6 +26,24 @@ export const ADMIN_REJECT_PRESETS = [
       "Есть сомнения в правах на распространение. Пришлите, пожалуйста, подтверждающие материалы в поддержку."
   },
   {
+    key: "title",
+    label: "Название и имена",
+    message:
+      "Поправьте название релиза, треков или имя артиста: уберите эмодзи, лишние символы и промо-слова (например, «FREE DOWNLOAD»)."
+  },
+  {
+    key: "explicit",
+    label: "Метка explicit",
+    message:
+      "Метка explicit не соответствует содержанию: отметьте нецензурные треки или уберите метку, если мата нет."
+  },
+  {
+    key: "links",
+    label: "Ссылки артиста",
+    message:
+      "Ссылки на профили артиста указаны неверно или не открываются. Проверьте и исправьте их."
+  },
+  {
     key: "artwork",
     label: "Обложка",
     message:
@@ -37,11 +56,13 @@ type Props = {
   busy: boolean;
   onClose: () => void;
   /** Вызывается сразу после выбора пресета */
-  onSelectReason: (releaseId: string, reason: string) => void;
+  onSelectReason: (releaseId: string, reason: string, reasonKey?: string) => void;
 };
 
 export function AdminRejectModal({ releaseId, busy, onClose, onSelectReason }: Props) {
   const open = releaseId != null;
+  const [custom, setCustom] = useState("");
+  const customTrimmed = custom.trim();
 
   return (
     <AnimatePresence>
@@ -98,7 +119,7 @@ export function AdminRejectModal({ releaseId, busy, onClose, onSelectReason }: P
                   onClick={() => {
                     if (releaseId == null) return;
                     hapticMap.impactLight();
-                    onSelectReason(releaseId, p.message);
+                    onSelectReason(releaseId, p.message, p.key);
                   }}
                   className="omf-focus border-t border-omf-line py-3.5 text-left transition-colors hover:bg-omf-surface-2 disabled:opacity-50"
                 >
@@ -106,6 +127,35 @@ export function AdminRejectModal({ releaseId, busy, onClose, onSelectReason }: P
                   <span className="mt-0.5 block text-[14px] leading-snug text-omf-graphite">{p.message}</span>
                 </button>
               ))}
+            </div>
+
+            <div className="border-t border-omf-line pt-3.5">
+              <label htmlFor="admin-reject-custom" className="block text-[14px] font-medium text-omf-ink">
+                Своя причина
+              </label>
+              <textarea
+                id="admin-reject-custom"
+                value={custom}
+                onChange={(e) => setCustom(e.target.value)}
+                maxLength={1000}
+                rows={3}
+                disabled={busy}
+                placeholder="Что именно нужно исправить"
+                className="omf-focus mt-2 w-full rounded-control border border-omf-line bg-omf-surface-2 px-3 py-2.5 text-[15px] text-omf-ink outline-none placeholder:text-omf-faint focus:border-omf-ultra"
+              />
+              <button
+                type="button"
+                disabled={busy || releaseId == null || customTrimmed.length < 5}
+                onClick={() => {
+                  if (releaseId == null) return;
+                  hapticMap.impactLight();
+                  onSelectReason(releaseId, customTrimmed, "custom");
+                  setCustom("");
+                }}
+                className="omf-btn-secondary mt-2 w-full disabled:opacity-50"
+              >
+                Вернуть с этой причиной
+              </button>
             </div>
 
             {busy && <p className="mt-4 text-center text-[14px] text-omf-graphite">Отправляем артисту…</p>}

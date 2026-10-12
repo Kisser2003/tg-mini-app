@@ -41,10 +41,90 @@ async function handleAdminStats(request: NextRequest): Promise<Response> {
     return NextResponse.json({ ok: false, error: "Failed to count ready today" }, { status: 500 });
   }
 
+  // Расширенная статистика — best effort: ошибки не должны ломать счётчики очереди.
+  const since30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  let oldestWaitHours: number | null = null;
+  let ready30 = 0;
+  let failed30 = 0;
+  const reasonCounts = new Map<string, number>();
+  try {
+    const [{ data: queueRows }, { count: r30 }, { data: failedRows }] = await Promise.all([
+      supabase.from("releases").select("id").eq("status", "processing").limit(500),
+      supabase
+        .from("releases")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "ready")
+        .gte("created_at", since30),
+      supabase
+        .from("releases")
+        .select("rejection_reasons")
+        .eq("status", "failed")
+        .gte("created_at", since30)
+        .limit(1000)
+    ]);
+    ready30 = r30 ?? 0;
+    failed30 = failedRows?.length ?? 0;
+    for (const row of failedRows ?? []) {
+      const keys = (row as { rejection_reasons?: string[] | null }).rejection_reasons ?? [];
+      for (const k of keys) reasonCounts.set(k, (reasonCounts.get(k) ?? 0) + 1);
+    }
+    const ids = (queueRows ?? []).map((r) => (r as { id: string }).id);
+    if (ids.length > 0) {
+      const { data: logRows } = await supabase
+        .from("release_logs")
+        .select("created_at")
+        .eq("stage", "finalize")
+        .in("release_id", ids)
+        .order("created_at", { ascending: true })
+        .limit(1);
+      const first = (logRows?.[0] as { created_at?: string } | undefined)?.created_at;
+      if (first) {
+        oldestWaitHours = Math.max(0, Math.round((Date.now() - new Date(first).getTime()) / 36e5));
+      }
+    }
+  } catch (e) {
+    console.error("[admin/stats] extended:", e instanceof Error ? e.message : e);
+  }
+
+  const funnel: { step: string; users: number }[] = [];
+  try {
+    const { data: ev } = await supabase
+      .from("funnel_events")
+      .select("anon_id, event, step")
+      .gte("created_at", since30)
+      .limit(20000);
+    const buckets = new Map<string, Set<string>>();
+    for (const r of ev ?? []) {
+      const row = r as { anon_id: string; event: string; step: string | null };
+      const k =
+        row.event === "wizard_step_view" && row.step
+          ? row.step
+          : row.event === "submit_success"
+            ? "submitted"
+            : null;
+      if (!k) continue;
+      if (!buckets.has(k)) buckets.set(k, new Set());
+      buckets.get(k)!.add(row.anon_id);
+    }
+    for (const step of ["metadata", "assets", "tracks", "review", "submitted"]) {
+      funnel.push({ step, users: buckets.get(step)?.size ?? 0 });
+    }
+  } catch (e) {
+    console.error("[admin/stats] funnel:", e instanceof Error ? e.message : e);
+  }
+
   const body: AdminStatsResponse = {
     ok: true,
     pending_queue: pendingQueue ?? 0,
-    ready_today: readyToday ?? 0
+    ready_today: readyToday ?? 0,
+    oldest_wait_hours: oldestWaitHours,
+    ready_30d: ready30,
+    failed_30d: failed30,
+    funnel_30d: funnel,
+    top_reject_reasons: Array.from(reasonCounts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([key, count]) => ({ key, count }))
   };
 
   return NextResponse.json(body);

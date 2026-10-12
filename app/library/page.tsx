@@ -6,11 +6,12 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { PullRefreshBrand } from "@/components/PullRefreshBrand";
 import { ReleaseCard } from "@/components/ReleaseCard";
 import { LibraryReleaseSkeletonGrid } from "@/components/ui/LibrarySkeleton";
-import { resumeDraftFromRelease } from "@/features/release/createRelease/actions";
+import { reopenRejectedRelease, resumeDraftFromRelease } from "@/features/release/createRelease/actions";
 import { useCreateReleaseDraftStore } from "@/features/release/createRelease/store";
 import { normalizeReleaseStatus } from "@/lib/release-status";
 import { getReleaseDisplayTitle } from "@/repositories/releases.repo";
 import { useReleases, type ReleaseListRow } from "@/lib/hooks/useReleases";
+import { isUnseenDecision, markStatusSeen, readSeenStatuses } from "@/lib/seen-release-status";
 import { hapticMap } from "@/lib/haptic-map";
 import { toast } from "sonner";
 import { AuthGuard } from "@/components/AuthGuard";
@@ -77,12 +78,14 @@ function LibraryPageInner() {
   const isWeb = !isTelegram;
 
   const [resumingId, setResumingId] = useState<string | null>(null);
+  /** Версия локального хранилища «просмотрено» — пересчитываем метки «Новое» после открытия релиза. */
+  const [seenVersion, setSeenVersion] = useState(0);
   const [statusFilter, setStatusFilter] = useState<LibraryStatusFilter>("all");
   const didRetryInitialEmptyRef = useRef(false);
   const didRetryStuckInitialLoadRef = useRef(false);
   const didHardReloadRef = useRef(false);
   const [telegramInitialEmptyRetries, setTelegramInitialEmptyRetries] = useState(0);
-  const [adminNotesModal, setAdminNotesModal] = useState<{ title: string; body: string } | null>(
+  const [adminNotesModal, setAdminNotesModal] = useState<{ id: string; title: string; body: string } | null>(
     null
   );
   const selectedView = parseLibraryView(searchParams.get("view"));
@@ -246,6 +249,34 @@ function LibraryPageInner() {
     [router]
   );
 
+  const handleFixRejected = useCallback(
+    async (releaseId: string) => {
+      hapticMap.impactLight();
+      setResumingId(releaseId);
+      try {
+        const path = await reopenRejectedRelease(releaseId);
+        if (!path) {
+          toast.error(
+            useCreateReleaseDraftStore.getState().submitError ?? "Не удалось открыть релиз для правок."
+          );
+          return;
+        }
+        setAdminNotesModal(null);
+        void mutate(undefined, { revalidate: true });
+        router.push(path);
+      } finally {
+        setResumingId(null);
+      }
+    },
+    [mutate, router]
+  );
+
+  const seenStatuses = useMemo(
+    () => readSeenStatuses(releases.map((r) => r.id)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [releases, seenVersion]
+  );
+
   const hasReleases = releases.length > 0;
   const hasReleasesInView = viewFilteredReleases.length > 0;
   const telegramIdentityReady =
@@ -312,8 +343,14 @@ function LibraryPageInner() {
       .filter(Boolean)
       .join(" · ");
 
+    const isNew = isUnseenDecision(normalized, seenStatuses[release.id]);
+
     const onCardClick = () => {
       if (isResumingDraft) return;
+      if (isNew) {
+        markStatusSeen(release.id, normalized);
+        setSeenVersion((v) => v + 1);
+      }
       if (isDraft) {
         void handleResumeDraft(release);
         return;
@@ -322,11 +359,12 @@ function LibraryPageInner() {
         hapticMap.notificationError();
         const notes = release.admin_notes?.trim();
         setAdminNotesModal({
+          id: release.id,
           title: displayTitle,
           body:
             notes && notes.length > 0
               ? notes
-              : "Модератор не оставил комментарий. Напиши в поддержку, чтобы узнать причину."
+              : "Модератор не оставил комментарий. Открой «Помощь», чтобы написать в поддержку."
         });
         return;
       }
@@ -345,6 +383,7 @@ function LibraryPageInner() {
         coverUrl={release.artwork_url}
         priority={listIndex < 4}
         busy={isResumingDraft}
+        isNew={isNew}
         onClick={onCardClick}
       />
     );
@@ -520,10 +559,18 @@ function LibraryPageInner() {
             </p>
             <button
               type="button"
-              className="omf-btn-secondary mt-5 w-full"
+              className="omf-btn-primary mt-5 w-full disabled:opacity-50"
+              disabled={resumingId === adminNotesModal.id}
+              onClick={() => void handleFixRejected(adminNotesModal.id)}
+            >
+              {resumingId === adminNotesModal.id ? "Открываем…" : "Исправить и отправить снова"}
+            </button>
+            <button
+              type="button"
+              className="omf-btn-secondary mt-3 w-full"
               onClick={() => setAdminNotesModal(null)}
             >
-              Понятно
+              Закрыть
             </button>
           </div>
         </div>

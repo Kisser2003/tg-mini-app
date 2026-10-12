@@ -51,6 +51,9 @@ export type CreateReleaseDraftState = {
   /** Ссылки на карточки артиста на DSP (глобально на релиз). */
   releaseArtistLinks: ArtistLinksState;
 
+  /** Замечания модератора к отклонённому релизу, который артист исправляет (показываем баннер в мастере). */
+  moderatorNotes: string | null;
+
   // submission / status
   submitError: string | null;
   submitStatus: SubmissionStatus;
@@ -146,6 +149,8 @@ export type ResumeDraftPayload = {
   /** Параллельно индексам `tracks`; для подсказок после резюме. */
   trackAudioUrlsFromDb: (string | null)[];
   releaseArtistLinks: ArtistLinksState;
+  /** Замечания модератора, если релиз возвращён после отклонения. */
+  moderatorNotes?: string | null;
 };
 
 const EMPTY_METADATA: CreateMetadata = {
@@ -298,6 +303,7 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
 
         releaseArtistLinks: { ...EMPTY_ARTIST_LINKS },
 
+        moderatorNotes: null,
         submitError: null,
         submitStatus: "idle",
         submitStage: "idle",
@@ -502,6 +508,7 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
             trackAudioUrlsFromDb: [],
             tracksUploadInProgress: false,
             releaseArtistLinks: { ...EMPTY_ARTIST_LINKS },
+            moderatorNotes: null,
             submitError: null,
             submitStatus: "idle",
             submitStage: "idle",
@@ -523,6 +530,7 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
             trackAudioUrlsFromDb: [],
             tracksUploadInProgress: false,
             releaseArtistLinks: { ...EMPTY_ARTIST_LINKS },
+            moderatorNotes: null,
             submitError: null,
             submitStatus: "idle",
             submitStage: "idle",
@@ -543,6 +551,7 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
             trackAudioUrlsFromDb: [],
             tracksUploadInProgress: false,
             releaseArtistLinks: { ...EMPTY_ARTIST_LINKS },
+            moderatorNotes: null,
             submitError: null,
             lastModified: null,
             hasHydrated: true
@@ -616,6 +625,7 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
               trackAudioUrlsFromDb,
               tracksUploadInProgress: false,
               releaseArtistLinks: { ...payload.releaseArtistLinks },
+              moderatorNotes: payload.moderatorNotes?.trim() || null,
               submitError: null,
               submitStatus: "idle" as SubmissionStatus,
               submitStage: "idle" as SubmissionStage,
@@ -749,6 +759,7 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
         trackFilesMeta: state.trackFilesMeta,
         trackAudioUrlsFromDb: state.trackAudioUrlsFromDb,
         releaseArtistLinks: state.releaseArtistLinks,
+        moderatorNotes: state.moderatorNotes,
         lastModified: state.lastModified,
         successSummary: state.successSummary
       })

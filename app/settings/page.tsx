@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import useSWR from "swr";
 import { getTelegramApiAuthHeaders } from "@/lib/telegram";
 import { toast } from "sonner";
+import { useIsTelegramMiniApp } from "@/lib/hooks/useIsTelegramMiniApp";
 import { useLogout, useWebAuth } from "@/lib/hooks/useWebAuth";
 import type { UserPreferences } from "@/app/api/settings/preferences/route";
 
@@ -83,11 +84,12 @@ function ToggleRow({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
+  const isTelegramContext = useIsTelegramMiniApp();
   const {
     data: prefs,
     isLoading,
     mutate
-  } = useSWR("settings-preferences", fetchPreferences, {
+  } = useSWR(isTelegramContext ? "settings-preferences" : null, fetchPreferences, {
     revalidateOnFocus: false
   });
 
@@ -118,7 +120,15 @@ export default function SettingsPage() {
       <h1 className="text-[40px] font-extrabold leading-[0.92] tracking-[-0.045em]">Настройки</h1>
 
       <div className="mt-6">
-        {isLoading ? (
+        {!isTelegramContext ? (
+          <div className="border-b border-omf-line py-4">
+            <p className="text-[16px] text-omf-ink">Уведомления</p>
+            <p className="mt-0.5 text-[14px] text-omf-graphite">
+              В веб-версии решения модератора отмечены меткой «Новое» в списке релизов. Сообщения в
+              Telegram приходят, если открыть приложение из бота.
+            </p>
+          </div>
+        ) : isLoading ? (
           <div className="flex items-center justify-between border-b border-omf-line py-4" aria-busy="true">
             <div className="h-4 w-40 animate-pulse rounded bg-omf-surface" />
             <div className="h-8 w-[52px] animate-pulse rounded-full bg-omf-surface" />

@@ -69,6 +69,8 @@ export type ReleaseRecord = {
   error_message?: string | null;
   /** Комментарий модератора при отклонении (показ в библиотеке). */
   admin_notes?: string | null;
+  rejection_reasons?: string[] | null;
+  rejection_count?: number | null;
   /** Пользователь начал загрузку WAV, не довёл до конца. */
   draft_upload_started?: boolean;
   /** У пользователя уже есть страницы артиста на DSP. */

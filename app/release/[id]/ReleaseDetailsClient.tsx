@@ -11,6 +11,7 @@ import { openSmartLink } from "@/lib/open-smart-link";
 import { PERFORMANCE_LANGUAGE_LABELS, parsePerformanceLanguage } from "@/lib/performance-language";
 import { normalizeReleaseStatus } from "@/lib/release-status";
 import { shouldShowSmartLinkCta } from "@/lib/smart-link-cta";
+import { markStatusSeen } from "@/lib/seen-release-status";
 import { isAdminUi } from "@/lib/admin";
 import { USER_REQUEST_TIMEOUT_MESSAGE } from "@/lib/errors";
 import { supabase } from "@/lib/supabase";
@@ -229,6 +230,12 @@ export default function ReleaseDetailsClient() {
     </button>
   );
 
+  useEffect(() => {
+    if (!release) return;
+    const st = normalizeReleaseStatus(release.status);
+    if (st === "ready" || st === "failed") markStatusSeen(release.id, st);
+  }, [release]);
+
   if (!identityResolved || loading) {
     return shell(
       <div aria-busy="true">
@@ -312,7 +319,7 @@ export default function ReleaseDetailsClient() {
     },
     processing: {
       title: "На проверке",
-      body: "Модератор проверяет паспорт, обложку и аудио. Когда проверка закончится, статус обновится здесь."
+      body: "Модератор проверяет паспорт, обложку и аудио. Обычно это занимает до 24 часов. Когда решение будет принято, статус обновится здесь и мы напишем в Telegram."
     },
     ready: {
       title: "Одобрен",

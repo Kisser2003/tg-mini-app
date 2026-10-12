@@ -16,6 +16,7 @@ import { useIsTelegramMiniApp } from "@/lib/hooks/useIsTelegramMiniApp";
 import { useTelegramBackButton } from "@/lib/hooks/useTelegramBackButton";
 import { getTelegramWebApp } from "@/lib/telegram";
 import { cn } from "@/lib/utils";
+import { trackFunnel } from "@/lib/funnel-analytics";
 
 export function CreateShell({
   children,
@@ -34,6 +35,7 @@ export function CreateShell({
   const primaryArtist = useCreateReleaseDraftStore((st) => st.metadata.primaryArtist);
   const artworkUrl = useCreateReleaseDraftStore((st) => st.artworkUrl);
   const releaseId = useCreateReleaseDraftStore((st) => st.releaseId);
+  const moderatorNotes = useCreateReleaseDraftStore((st) => st.moderatorNotes);
 
   /** Нативная MainButton Telegram скрыта — в мастере используются только кнопки в интерфейсе. */
   useEffect(() => {
@@ -67,6 +69,11 @@ export function CreateShell({
     haptics.impactLight();
     router.push(getCreateBackPath(pathname));
   };
+
+  const stepKey = CREATE_FLOW_STEPS[activeIndex]?.key;
+  useEffect(() => {
+    if (stepKey) trackFunnel("wizard_step_view", { step: stepKey });
+  }, [stepKey]);
 
   const stepCount = CREATE_FLOW_STEPS.length - 1;
   const isSuccess = activeIndex >= stepCount;
@@ -132,6 +139,24 @@ export function CreateShell({
                 />
               ))}
             </div>
+
+            {moderatorNotes ? (
+              <aside
+                role="note"
+                className="mt-5 rounded-control border border-omf-red p-4"
+                aria-labelledby="moderator-notes-title"
+              >
+                <p id="moderator-notes-title" className="text-[13px] font-bold text-omf-red">
+                  Замечания модератора
+                </p>
+                <p className="mt-1.5 whitespace-pre-wrap break-words text-[14px] leading-relaxed text-omf-ink">
+                  {moderatorNotes}
+                </p>
+                <p className="mt-2 text-[13px] text-omf-graphite">
+                  Файлы уже загружены. Исправь нужное и отправь релиз на проверку снова.
+                </p>
+              </aside>
+            ) : null}
           </header>
         ) : null}
 

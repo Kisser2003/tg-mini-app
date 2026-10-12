@@ -41,10 +41,9 @@ export type ReleaseListRow = Pick<
 
 const RELEASES_LIST_TIMEOUT_MS = 15000;
 const TELEGRAM_ID_POLL_INTERVAL_MS = 250;
-const TELEGRAM_INIT_DATA_WAIT_MS = 1500;
-const TELEGRAM_INIT_DATA_WAIT_STEP_MS = 75;
 const FALLBACK_TELEGRAM_DETECTION_POLL_MS = 250;
 const DEBUG_TELEGRAM_AUTH = process.env.NODE_ENV !== "production";
+const RELEASES_LOCAL_CACHE_PREFIX = "releases:list:v1";
 
 function isValidTelegramUserId(value: string | null): value is string {
   if (value == null) return false;
@@ -56,10 +55,37 @@ type ReleasesSwrKey =
   | readonly ["releases", "telegram", string]
   | readonly ["releases", "web", string];
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    window.setTimeout(resolve, ms);
-  });
+function getSWRStorageKey(key: ReleasesSwrKey): string {
+  return `${RELEASES_LOCAL_CACHE_PREFIX}:${key[1]}:${key[2]}`;
+}
+
+function readCachedReleaseRows(key: ReleasesSwrKey | null): ReleaseListRow[] | undefined {
+  if (key == null || typeof window === "undefined") return undefined;
+  try {
+    const raw = window.localStorage.getItem(getSWRStorageKey(key));
+    if (!raw) return undefined;
+    const parsed = JSON.parse(raw) as { rows?: ReleaseListRow[]; updatedAt?: number };
+    if (!Array.isArray(parsed.rows)) return undefined;
+    // 10 minutes local stale cache for instant warm starts.
+    if (typeof parsed.updatedAt === "number" && Date.now() - parsed.updatedAt > 10 * 60_000) {
+      return undefined;
+    }
+    return parsed.rows;
+  } catch {
+    return undefined;
+  }
+}
+
+function writeCachedReleaseRows(key: ReleasesSwrKey | null, rows: ReleaseListRow[] | undefined): void {
+  if (key == null || typeof window === "undefined" || !Array.isArray(rows)) return;
+  try {
+    window.localStorage.setItem(
+      getSWRStorageKey(key),
+      JSON.stringify({ rows, updatedAt: Date.now() })
+    );
+  } catch {
+    // ignore quota/private mode errors
+  }
 }
 
 async function buildTelegramRequestHeaders(uidCandidate?: number): Promise<Record<string, string>> {
@@ -67,27 +93,13 @@ async function buildTelegramRequestHeaders(uidCandidate?: number): Promise<Recor
     Number.isFinite(uidCandidate ?? NaN) && (uidCandidate ?? 0) > 0
       ? Math.trunc(uidCandidate as number)
       : getTelegramUserIdForSupabaseRequests();
-  const deadline = Date.now() + TELEGRAM_INIT_DATA_WAIT_MS;
-
-  // Critical: evaluate Telegram initData dynamically right before request execution.
-  while (true) {
-    const initData = getTelegramInitDataForApiHeader();
-    const baseHeaders = getTelegramApiAuthHeaders(uid != null ? { userId: uid } : undefined);
-    const headers: Record<string, string> = {
-      ...(uid != null && uid > 0 ? { "x-telegram-user-id": String(uid) } : {}),
-      ...baseHeaders
-    };
-
-    if (
-      !isTelegramClientShell() ||
-      initData.length > 0 ||
-      Date.now() >= deadline
-    ) {
-      return headers;
-    }
-
-    await sleep(TELEGRAM_INIT_DATA_WAIT_STEP_MS);
-  }
+  const initData = getTelegramInitDataForApiHeader();
+  const baseHeaders = getTelegramApiAuthHeaders(uid != null ? { userId: uid } : undefined);
+  return {
+    ...(uid != null && uid > 0 ? { "x-telegram-user-id": String(uid) } : {}),
+    ...(initData.length > 0 ? { "x-telegram-init-data": initData } : {}),
+    ...baseHeaders
+  };
 }
 
 async function fetchReleasesTelegram([, , uid]: readonly ["releases", "telegram", string]): Promise<
@@ -175,7 +187,6 @@ export function useReleases() {
   const [user, setUser] = useState<TelegramUser | null>(null);
   const [greetingName, setGreetingName] = useState<string>("Артист");
   const [hasResolvedInitialFetch, setHasResolvedInitialFetch] = useState(false);
-  const [telegramInitDataReady, setTelegramInitDataReady] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -202,7 +213,6 @@ export function useReleases() {
       setAuthMode("telegram");
       const tg = getTelegramWebApp()?.initDataUnsafe?.user;
       setGreetingName((prev) => tg?.first_name?.trim() || tg?.username?.trim() || prev || "Артист");
-      setTelegramInitDataReady(getTelegramInitDataForApiHeader().length > 0);
       setAuthReady(tid != null);
     };
 
@@ -221,7 +231,6 @@ export function useReleases() {
           return;
         }
         initTelegramWebApp(); // ensure cookie is set before SWR fires
-        setTelegramInitDataReady(getTelegramInitDataForApiHeader().length > 0);
         const tid = getTelegramUserIdForSupabaseRequests();
         if (DEBUG_TELEGRAM_AUTH) {
           console.log("[TG-DEBUG] poll tick", { tid });
@@ -257,7 +266,6 @@ export function useReleases() {
           // Telegram context is present but user id is not resolved yet: don't fall back to web actor.
           setAuthMode("telegram");
           setAuthReady(false);
-          setTelegramInitDataReady(true);
         }
         return;
       }
@@ -320,25 +328,29 @@ export function useReleases() {
       console.log("[TG-DEBUG] swrKey computed", { authReady, userId, authMode });
     }
     if (!authReady || userId == null || authMode == null) return null;
-    if (
-      authMode === "telegram" &&
-      (!isValidTelegramUserId(userId) || !telegramInitDataReady)
-    ) {
+    if (authMode === "telegram" && !isValidTelegramUserId(userId)) {
       return null;
     }
     if (authMode === "telegram") {
       return ["releases", "telegram", userId];
     }
     return ["releases", "web", userId];
-  }, [authReady, userId, authMode, telegramInitDataReady]);
+  }, [authReady, userId, authMode]);
+
+  const fallbackRows = useMemo(() => readCachedReleaseRows(swrKey), [swrKey]);
 
   const swr = useSWR(swrKey, fetchReleases, {
     ...SWR_LIST_OPTIONS,
     revalidateOnFocus: true,
     refreshInterval: (latestData: ReleaseListRow[] | undefined) =>
       latestData?.some((r) => normalizeReleaseStatus(r.status) === "processing") ? 7000 : 0,
-    keepPreviousData: false
+    keepPreviousData: true,
+    fallbackData: fallbackRows
   });
+
+  useEffect(() => {
+    writeCachedReleaseRows(swrKey, swr.data);
+  }, [swrKey, swr.data]);
 
   /**
    * "Первичная загрузка завершена" = получили данные или ошибку для активного ключа.
@@ -371,11 +383,9 @@ export function useReleases() {
 
   const waitingForTelegramIdentity =
     authMode === "telegram" && !isValidTelegramUserId(userId);
-  const waitingForTelegramInitData = authMode === "telegram" && !telegramInitDataReady;
   const isBootstrapping =
     !authReady ||
     waitingForTelegramIdentity ||
-    waitingForTelegramInitData ||
     (swrKey != null &&
       !hasResolvedInitialFetch &&
       (swr.isLoading || swr.isValidating || (swr.data === undefined && swr.error == null)));

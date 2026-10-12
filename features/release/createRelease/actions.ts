@@ -59,6 +59,7 @@ import { parsePerformanceLanguage } from "@/lib/performance-language";
 import { celebrateReleaseSubmission } from "@/lib/confetti-release-success";
 import { refreshReleasesListAfterSubmit } from "@/lib/releases-swr-cache";
 import { toast } from "sonner";
+import { trackFunnel } from "@/lib/funnel-analytics";
 
 /** Таймаут коротких операций Supabase (insert/upsert в БД). Загрузка WAV идёт напрямую в Storage без лимита. */
 const SUPABASE_DB_OP_TIMEOUT_MS = 15000;
@@ -657,7 +658,8 @@ export async function resumeDraftFromRelease(releaseId: string): Promise<string 
       artworkUrl: existing.artwork_url ?? null,
       tracks,
       trackAudioUrlsFromDb,
-      releaseArtistLinks: parseArtistLinksFromJson(existing.artist_links)
+      releaseArtistLinks: parseArtistLinksFromJson(existing.artist_links),
+      moderatorNotes: existing.admin_notes ?? null
     });
 
     const next = getResumeCreatePath({
@@ -670,6 +672,38 @@ export async function resumeDraftFromRelease(releaseId: string): Promise<string 
     useCreateReleaseDraftStore
       .getState()
       .setSubmitError(formatErrorMessage(e, "Не удалось открыть черновик."));
+    return null;
+  }
+}
+
+/**
+ * Отклонённый релиз → снова в работу: сервер переводит failed → pending (файлы остаются),
+ * затем открываем мастер с замечаниями модератора. Возвращает путь шага или null при ошибке.
+ */
+export async function reopenRejectedRelease(releaseId: string): Promise<string | null> {
+  try {
+    initUserContextInStore();
+    const res = await fetch("/api/releases/reopen-rejected", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json", ...getCreateReleaseApiAuthHeaders() },
+      body: JSON.stringify({ releaseId })
+    });
+    const json: unknown = await res.json().catch(() => null);
+    if (!res.ok || (json as { ok?: boolean } | null)?.ok !== true) {
+      const msg =
+        typeof (json as { error?: unknown } | null)?.error === "string"
+          ? (json as { error: string }).error
+          : "Не удалось открыть релиз для правок.";
+      useCreateReleaseDraftStore.getState().setSubmitError(msg);
+      return null;
+    }
+    trackFunnel("reopen_rejected", { releaseId });
+    return await resumeDraftFromRelease(releaseId);
+  } catch (e: unknown) {
+    useCreateReleaseDraftStore
+      .getState()
+      .setSubmitError(formatErrorMessage(e, "Не удалось открыть релиз для правок."));
     return null;
   }
 }
@@ -1474,6 +1508,7 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
   }
 
   submitTracksInFlight = true;
+  trackFunnel("submit_attempt", { releaseId: store.releaseId, step: "review" });
   store.setSubmitStatus("submitting");
   store.setSubmitStage("preparing");
   store.setSubmitProgress(5);
@@ -1623,6 +1658,7 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
         cleanupFailed = true;
       }
 
+      trackFunnel("submit_error", { releaseId: useCreateReleaseDraftStore.getState().releaseId, step: "upload" });
       useCreateReleaseDraftStore.getState().setSubmitStatus("error");
       useCreateReleaseDraftStore.getState().setSubmitStage("error");
       const detail = e instanceof Error ? e.message : JSON.stringify(e);
@@ -1682,6 +1718,7 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
         declaredTrackCount: totalTracks
       });
       if (!precheck.ok) {
+        trackFunnel("submit_error", { releaseId: storeAfterUpload.releaseId, step: "precheck" });
         storeAfterUpload.setSubmitStatus("error");
         storeAfterUpload.setSubmitStage("error");
         storeAfterUpload.setSubmitError(precheck.message);
@@ -1735,6 +1772,7 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
       void refreshReleasesListAfterSubmit(verified).catch(() => {});
 
       const storeOk = useCreateReleaseDraftStore.getState();
+      trackFunnel("submit_success", { releaseId: storeOk.releaseId, step: "review" });
       storeOk.setSubmitStatus("success");
       storeOk.setSubmitStage("done");
       storeOk.setSubmitProgress(100);
@@ -1760,6 +1798,7 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
       });
       console.error("[submitTracksAndFinalize] finalize error (full)", e);
       const storeFail = useCreateReleaseDraftStore.getState();
+      trackFunnel("submit_error", { releaseId: storeFail.releaseId, step: "finalize" });
       storeFail.setSubmitStatus("error");
       storeFail.setSubmitStage("error");
       const detail = e instanceof Error ? e.message : JSON.stringify(e);

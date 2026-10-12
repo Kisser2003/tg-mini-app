@@ -11,30 +11,25 @@ import {
 import { formatErrorMessage } from "@/lib/errors";
 import { escapeHtml } from "@/lib/telegram-bot.server";
 import { notifyAdminReleaseSubmitted } from "@/lib/admin-notify.server";
-import { sendTelegramNotification } from "@/lib/telegram-notifications";
+import { notifyArtist } from "@/lib/server/artist-notify";
+import { invalidateMyReleasesCache } from "@/lib/server/release-list-cache";
 import { getReleaseDisplayTitle, type ReleaseRecord } from "@/repositories/releases.repo";
 import { runAiMetadataPrecheckForRelease } from "@/lib/release-ai-moderation.server";
 
 /** Уведомление в Telegram только если у релиза есть реальный `telegram_id` (не веб-only). */
 async function notifyReleaseSubmittedForModeration(record: ReleaseRecord): Promise<void> {
+  await invalidateMyReleasesCache(record as Record<string, unknown>);
   await notifyAdminReleaseSubmitted({
     title: getReleaseDisplayTitle(record),
     artist: String(record.artist_name ?? ""),
     telegramId: record.telegram_id
   });
-  const tid =
-    record.telegram_id != null && String(record.telegram_id).trim() !== ""
-      ? String(record.telegram_id)
-      : null;
-  if (!tid) {
-    return;
-  }
   const rawTitle = getReleaseDisplayTitle(record);
   const title = escapeHtml(rawTitle.length > 0 ? rawTitle : "релиз");
   const text =
     `🚀 <b>Ваш релиз «${title}» отправлен на модерацию!</b>\n\n` +
     `Мы проверим его в течение 24 часов и пришлем уведомление здесь.`;
-  await sendTelegramNotification(tid, text);
+  await notifyArtist(record, text);
 }
 
 const bodySchema = z.object({

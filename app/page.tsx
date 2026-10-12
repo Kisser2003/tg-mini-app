@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   useIsTelegramMiniApp,
   checkIsTelegramMiniApp
 } from "@/lib/hooks/useIsTelegramMiniApp";
 import { appendCurrentTelegramHash } from "@/lib/telegram";
-import { useWebAuth } from "@/lib/hooks/useWebAuth";
 import { LoadingScreen } from "@/components/LoadingScreen";
 
 /**
@@ -18,28 +17,44 @@ import { LoadingScreen } from "@/components/LoadingScreen";
 export default function HomePage() {
   const router = useRouter();
   const isTelegram = useIsTelegramMiniApp();
-  const webUser = useWebAuth({ redirectToLogin: false });
+  const [webAuthState, setWebAuthState] = useState<"loading" | "authed" | "guest">("loading");
 
   useEffect(() => {
+    // Telegram first-load path: redirect ASAP, skip web auth bootstrap.
     if (typeof window !== "undefined" && checkIsTelegramMiniApp()) {
-      router.replace(appendCurrentTelegramHash("/library"));
+      window.location.replace(appendCurrentTelegramHash("/library"));
       return;
     }
     if (isTelegram) {
+      window.location.replace(appendCurrentTelegramHash("/library"));
+      return;
+    }
+    let active = true;
+
+    // Web-only fallback: resolve auth lazily to keep Telegram entry faster.
+    void (async () => {
+      const { createSupabaseBrowser } = await import("@/lib/supabase");
+      const supabase = createSupabaseBrowser();
+      const {
+        data: { session }
+      } = await supabase.auth.getSession();
+      if (!active) return;
+      setWebAuthState(session?.user ? "authed" : "guest");
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [isTelegram]);
+
+  useEffect(() => {
+    if (webAuthState === "loading") return;
+    if (webAuthState === "authed") {
       router.replace(appendCurrentTelegramHash("/library"));
       return;
     }
-
-    // Web users
-    if (webUser === undefined) {
-      // Not authenticated: go to login
-      router.replace(appendCurrentTelegramHash("/login"));
-    } else if (webUser) {
-      // Authenticated: go to library
-      router.replace(appendCurrentTelegramHash("/library"));
-    }
-    // webUser === null means loading, show loader below
-  }, [isTelegram, webUser, router]);
+    router.replace(appendCurrentTelegramHash("/login"));
+  }, [webAuthState, router]);
 
   return <LoadingScreen />;
 }

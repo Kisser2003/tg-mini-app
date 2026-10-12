@@ -114,7 +114,7 @@ describe("handleFinalizeSubmit core logic", () => {
       "utf8"
     );
     expect(routeSource).toContain("notifyReleaseSubmittedForModeration");
-    expect(routeSource).toContain("sendTelegramNotification");
+    expect(routeSource).toContain("notifyArtist");
   });
 });
 

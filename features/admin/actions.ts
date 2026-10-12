@@ -29,7 +29,7 @@ async function assertAdminAsync(): Promise<void> {
 }
 
 async function postModeration(
-  body: { releaseId: string; action: "approve" | "reject"; comment?: string }
+  body: { releaseId: string; action: "approve" | "reject"; comment?: string; reasonKeys?: string[] }
 ): Promise<ReleaseRecord> {
   const authHeaders = await getAdminApiAuthHeaders();
   const res = await fetch("/api/admin/update-release-status", {
@@ -79,9 +79,18 @@ export async function approveRelease(releaseId: string): Promise<ReleaseRecord> 
 /**
  * Отклонить релиз: статус `failed`; причина в `error_message` / `admin_notes`.
  */
-export async function rejectRelease(releaseId: string, comment: string): Promise<ReleaseRecord> {
+export async function rejectRelease(
+  releaseId: string,
+  comment: string,
+  reasonKey?: string
+): Promise<ReleaseRecord> {
   await assertAdminAsync();
-  return postModeration({ releaseId, action: "reject", comment });
+  return postModeration({
+    releaseId,
+    action: "reject",
+    comment,
+    ...(reasonKey ? { reasonKeys: [reasonKey] } : {})
+  });
 }
 
 async function postPublishSmartLink(body: {

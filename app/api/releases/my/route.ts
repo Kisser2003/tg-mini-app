@@ -3,25 +3,63 @@ import type { NextRequest } from "next/server";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
 import { resolveReleaseActor } from "@/lib/api/resolve-submit-actor";
 import type { ReleaseRecord } from "@/repositories/releases.repo";
+import { getJsonCache, setJsonCache } from "@/lib/server/redis-cache";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+const RELEASE_LIST_SELECT = [
+  "id",
+  "title",
+  "track_name",
+  "artist_name",
+  "artwork_url",
+  "status",
+  "created_at",
+  "error_message",
+  "admin_notes",
+  "draft_upload_started",
+  "isrc",
+  "upc",
+  "release_type",
+  "smart_link"
+].join(",");
+const RELEASES_CACHE_TTL_SECONDS = 20;
+type ReleaseListRow = Pick<
+  ReleaseRecord,
+  | "id"
+  | "title"
+  | "track_name"
+  | "artist_name"
+  | "artwork_url"
+  | "status"
+  | "created_at"
+  | "error_message"
+  | "admin_notes"
+  | "draft_upload_started"
+  | "isrc"
+  | "upc"
+  | "release_type"
+  | "smart_link"
+>;
 
 async function handleGetMyReleases(request: NextRequest): Promise<Response> {
   const actor = await resolveReleaseActor(request);
-  console.log("[API-DEBUG] resolveReleaseActor result", {
-    actor: actor
-      ? {
-          kind: actor.kind,
-          source:
-            "source" in actor && typeof actor.source === "string" ? actor.source : "no-source-field"
-        }
-      : null,
-    cookies: request.headers.get("cookie")?.includes("tg_init_data")
-      ? "has tg_init_data"
-      : "NO tg_init_data cookie",
-    hasInitDataHeader: !!request.headers.get("x-telegram-init-data"),
-    hasTelegramUserIdHeader: !!request.headers.get("x-telegram-user-id")
-  });
+  const cacheScope =
+    actor?.kind === "telegram"
+      ? `tg:${actor.telegramUserId}`
+      : actor?.kind === "web"
+        ? `web:${actor.authUserId}`
+        : null;
+  const cacheKey = cacheScope ? `releases:my:${cacheScope}` : null;
+
+  if (cacheKey) {
+    const cachedRows = await getJsonCache<ReleaseListRow[]>(cacheKey);
+    if (Array.isArray(cachedRows)) {
+      return NextResponse.json({ ok: true, rows: cachedRows, cached: true });
+    }
+  }
+
   if (!actor) {
     // Last resort: try x-telegram-user-id header directly
     const rawUid = request.headers.get("x-telegram-user-id");
@@ -34,10 +72,12 @@ async function handleGetMyReleases(request: NextRequest): Promise<Response> {
         const tid = String(fallbackUid);
         const { data } = await admin
           .from("releases")
-          .select("*")
+          .select(RELEASE_LIST_SELECT)
           .or(`user_id.eq.${tid},telegram_id.eq.${tid}`)
           .order("created_at", { ascending: false });
-        return NextResponse.json({ ok: true, rows: data ?? [] });
+        const rows = (data ?? []) as unknown as ReleaseListRow[];
+        await setJsonCache(`releases:my:tg:${tid}`, rows, RELEASES_CACHE_TTL_SECONDS);
+        return NextResponse.json({ ok: true, rows });
       }
     }
 
@@ -52,7 +92,7 @@ async function handleGetMyReleases(request: NextRequest): Promise<Response> {
     );
   }
 
-  let query = admin.from("releases").select("*").order("created_at", { ascending: false });
+  let query = admin.from("releases").select(RELEASE_LIST_SELECT).order("created_at", { ascending: false });
 
   if (actor.kind === "telegram") {
     const tid = String(actor.telegramUserId);
@@ -82,12 +122,11 @@ async function handleGetMyReleases(request: NextRequest): Promise<Response> {
     return NextResponse.json({ ok: false, error: "Не удалось загрузить релизы." }, { status: 500 });
   }
 
-  console.log("[API-DEBUG] releases/my rows", {
-    actorKind: actor.kind,
-    rows: Array.isArray(data) ? data.length : 0
-  });
-
-  return NextResponse.json({ ok: true, rows: (data ?? []) as ReleaseRecord[] });
+  const rows = (data ?? []) as unknown as ReleaseListRow[];
+  if (cacheKey) {
+    await setJsonCache(cacheKey, rows, RELEASES_CACHE_TTL_SECONDS);
+  }
+  return NextResponse.json({ ok: true, rows });
 }
 
 export const GET = handleGetMyReleases;

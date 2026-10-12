@@ -28,8 +28,7 @@ export function SuccessReleaseModal({ summary, onGoHome, onUploadAnother }: Prop
         Отправлено на проверку
       </h1>
       <p className="mt-3 max-w-[32ch] text-[15px] leading-relaxed text-omf-graphite">
-        Модератор проверит «{title}» и напишет в этот бот, когда будет решение. Статус релиза всегда
-        виден в списке релизов.
+        Модератор проверит «{title}» — обычно до 24 часов — и напишет в этот бот, когда будет решение. Статус релиза всегда виден в списке релизов.
       </p>
 
       <div className="mt-10 flex w-full flex-col gap-3">
