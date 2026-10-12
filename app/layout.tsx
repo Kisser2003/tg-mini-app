@@ -23,6 +23,7 @@ function supabasePreconnectOrigin(): string | null {
 const geologica = Geologica({
   subsets: ["latin", "cyrillic"],
   variable: "--font-geologica",
+  adjustFontFallback: false,
   display: "swap"
 });
 

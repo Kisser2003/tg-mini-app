@@ -22,6 +22,19 @@ const nextConfig = {
   ...(assetPrefix ? { assetPrefix } : {}),
   /** Отключает глобальный `crossOrigin` в renderOpts (часть цепочки preinit остаётся у React). */
   crossOrigin: false,
+  /**
+   * @vercel/blob тянет undici с приватными полями (`#x in obj`), которые webpack в Next 14.1 не разбирает.
+   * Эти пакеты подключаются на сервере как есть, без сборки.
+   */
+  experimental: {
+    serverComponentsExternalPackages: ["@vercel/blob", "undici"]
+  },
+  webpack(config, { isServer }) {
+    if (isServer) {
+      config.externals = [...(config.externals ?? []), "undici", "@vercel/blob", "@vercel/blob/client"];
+    }
+    return config;
+  },
   async headers() {
     return [
       {
