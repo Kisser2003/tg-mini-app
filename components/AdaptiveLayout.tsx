@@ -43,7 +43,7 @@ export function AdaptiveLayout({ children }: { children: React.ReactNode }) {
     return (
       <div className="relative z-[1] flex w-full min-h-app">
         <Sidebar />
-        <div className="ml-0 flex-1 lg:ml-64">
+        <div className="ml-0 min-w-0 flex-1 lg:ml-64">
           <div
             id="app-main-scroll"
             className={`app-main-scroll relative max-w-[1400px] ${webMobileScrollPad}`}
@@ -84,7 +84,7 @@ export function AdaptiveLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="relative z-[1] flex min-h-app w-full">
       <Sidebar />
-      <div className="ml-0 flex-1 lg:ml-64">
+      <div className="ml-0 min-w-0 flex-1 lg:ml-64">
         <div
           id="app-main-scroll"
           className={`app-main-scroll relative max-w-[1400px] ${webMobileScrollPad}`}

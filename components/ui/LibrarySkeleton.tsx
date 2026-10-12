@@ -11,7 +11,7 @@ type SkeletonProps = HTMLAttributes<HTMLDivElement>;
 export function Skeleton({ className, ...props }: SkeletonProps) {
   return (
     <div
-      className={["rounded-lg bg-white/[0.06] skeleton-shimmer-bg", className].filter(Boolean).join(" ")}
+      className={["rounded-lg bg-omf-surface skeleton-shimmer-bg", className].filter(Boolean).join(" ")}
       {...props}
     />
   );
@@ -23,10 +23,10 @@ export function Skeleton({ className, ...props }: SkeletonProps) {
 export function LibraryReleaseRowSkeleton() {
   return (
     <div
-      className="flex min-h-[88px] w-full items-center gap-3 rounded-[20px] border border-white/[0.08] bg-white/[0.02] p-4 backdrop-blur-sm"
+      className="flex min-h-[72px] w-full items-center gap-3 border-b border-omf-line py-3"
       aria-hidden
     >
-      <Skeleton className="h-14 w-14 shrink-0 rounded-xl" />
+      <Skeleton className="h-14 w-14 shrink-0 rounded-sleeve" />
       <div className="min-w-0 flex-1 space-y-2">
         <Skeleton className="h-4 w-[70%] max-w-[220px]" />
         <Skeleton className="h-3 w-[40%] max-w-[120px]" />
@@ -42,7 +42,7 @@ export function AdminModerationQueueSkeleton({ rows = 3 }: { rows?: number }) {
       {Array.from({ length: rows }, (_, i) => (
         <div
           key={i}
-          className="glass-card overflow-hidden rounded-[22px] border border-white/[0.08] bg-white/[0.03] p-4 shadow-[0_18px_40px_rgba(0,0,0,0.7)] backdrop-blur-2xl"
+          className="overflow-hidden border-b border-omf-line py-4"
           aria-hidden
         >
           <div className="flex min-h-[120px] gap-3">
@@ -92,7 +92,7 @@ export function LibraryStatsSkeletonRow() {
       {[0, 1, 2].map((i) => (
         <div
           key={i}
-          className="rounded-[16px] border border-white/[0.06] bg-white/[0.03] px-3 py-3"
+          className="rounded-control border border-omf-line px-3 py-3"
         >
           <Skeleton className="mb-2 h-2.5 w-14 rounded" />
           <Skeleton className="h-7 w-10 rounded-md" />
@@ -102,17 +102,34 @@ export function LibraryStatsSkeletonRow() {
   );
 }
 
-export function LibraryReleaseSkeletonGrid({ count = 6 }: { count?: number }) {
+/** Скелетон плитки библиотеки: квадрат конверта + две строки. */
+export function LibraryReleaseTileSkeleton() {
+  return (
+    <div aria-hidden>
+      <Skeleton className="aspect-square w-full rounded-sleeve" />
+      <Skeleton className="mt-2.5 h-3.5 w-[75%] rounded" />
+      <Skeleton className="mt-1.5 h-3 w-[45%] rounded" />
+    </div>
+  );
+}
+
+export function LibraryReleaseSkeletonGrid({
+  count = 6,
+  variant = "tiles"
+}: {
+  count?: number;
+  variant?: "tiles" | "rows";
+}) {
   return (
     <motion.div
-      className="grid grid-cols-1 gap-3"
+      className={variant === "tiles" ? "grid grid-cols-2 gap-x-4 gap-y-7" : "grid grid-cols-1"}
       variants={librarySkeletonContainer}
       initial="hidden"
       animate="show"
     >
       {Array.from({ length: count }, (_, i) => (
         <motion.div key={i} variants={librarySkeletonRow}>
-          <LibraryReleaseRowSkeleton />
+          {variant === "tiles" ? <LibraryReleaseTileSkeleton /> : <LibraryReleaseRowSkeleton />}
         </motion.div>
       ))}
     </motion.div>

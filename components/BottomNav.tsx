@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import type { LucideIcon } from "lucide-react";
-import { LayoutDashboard, Shield, CircleHelp, Link2 } from "lucide-react";
+import { Disc3, Shield, CircleHelp, Link2 } from "lucide-react";
 import { isAdminUi, isAdminUiByWebSession } from "@/lib/admin";
 import { hapticMap } from "@/lib/haptic-map";
 import { useHideOnScrollDown } from "@/lib/hooks/useHideOnScrollDown";
@@ -41,10 +41,10 @@ const BottomNavInner = memo(function BottomNavInner() {
 
   const tabs = useMemo<NavTab[]>(
     () => [
-      { path: "/library", icon: LayoutDashboard, label: "Релизы" },
+      { path: "/library", icon: Disc3, label: "Релизы" },
       { path: "/multi-links", icon: Link2, label: "Ссылки" },
-      { path: "/requirements", icon: CircleHelp, label: "FAQ" },
-      ...(showAdminTab ? [{ path: "/admin", icon: Shield, label: "Админ" }] : [])
+      { path: "/requirements", icon: CircleHelp, label: "Помощь" },
+      ...(showAdminTab ? [{ path: "/admin", icon: Shield, label: "Модерация" }] : [])
     ],
     [showAdminTab]
   );
@@ -60,21 +60,13 @@ const BottomNavInner = memo(function BottomNavInner() {
         {barVisible ? (
           <motion.div
             key="bottom-nav-bar"
-            initial={{ y: 100, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 110, opacity: 0 }}
-            transition={{ type: "spring", stiffness: 420, damping: 34 }}
-            className="pointer-events-auto mx-4 mb-[calc(1rem+env(safe-area-inset-bottom,0px))]"
+            initial={{ y: 100 }}
+            animate={{ y: 0 }}
+            exit={{ y: 110 }}
+            transition={{ type: "spring", stiffness: 420, damping: 38 }}
+            className="pointer-events-auto border-t border-omf-line bg-omf-bg pb-[env(safe-area-inset-bottom,0px)]"
           >
-            <div
-              className="glass flex items-center justify-around px-3 py-2.5"
-              style={{
-                borderRadius: "1.25rem",
-                background: "rgba(255,255,255,0.03)",
-                backdropFilter: "blur(32px) saturate(1.4)",
-                WebkitBackdropFilter: "blur(32px) saturate(1.4)"
-              }}
-            >
+            <div className="mx-auto flex max-w-lg items-stretch justify-around px-2">
               {tabs.map((tab) => {
                 const isActive = isTabActive(pathname, tab.path);
                 const Icon = tab.icon;
@@ -83,36 +75,24 @@ const BottomNavInner = memo(function BottomNavInner() {
                   <Link
                     key={tab.path}
                     href={tab.path}
+                    aria-current={isActive ? "page" : undefined}
                     onClick={() => {
                       if (!isActive) hapticMap.impactLight();
                     }}
-                    className="relative flex min-w-0 flex-1 flex-col items-center gap-1 px-2 py-1.5 sm:px-4"
+                    className={`omf-focus relative flex min-w-0 flex-1 flex-col items-center gap-1 pb-2 pt-2.5 transition-colors duration-150 ${
+                      isActive ? "text-omf-ink" : "text-omf-graphite hover:text-omf-ink"
+                    }`}
                   >
                     {isActive ? (
-                      <motion.div
+                      <motion.span
                         layoutId="activeTab"
-                        className="absolute inset-0 rounded-xl"
-                        style={{
-                          background: "rgba(129, 140, 248, 0.08)",
-                          boxShadow: "0 0 20px rgba(129, 140, 248, 0.1)"
-                        }}
-                        transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                        className="absolute left-1/2 top-0 h-[2px] w-8 -translate-x-1/2 rounded-full bg-omf-ink"
+                        transition={{ type: "spring", stiffness: 500, damping: 40 }}
+                        aria-hidden
                       />
                     ) : null}
-                    <Icon
-                      size={18}
-                      className={`relative z-10 transition-colors duration-200 ${
-                        isActive ? "text-[var(--ss-neon-blue)]" : "text-white/25"
-                      }`}
-                      strokeWidth={2}
-                    />
-                    <span
-                      className={`relative z-10 text-[10px] font-semibold tracking-wide transition-colors duration-200 ${
-                        isActive ? "text-[var(--ss-neon-blue)]" : "text-white/25"
-                      }`}
-                    >
-                      {tab.label}
-                    </span>
+                    <Icon size={20} strokeWidth={isActive ? 2.2 : 1.8} aria-hidden />
+                    <span className={`text-[11px] ${isActive ? "font-medium" : ""}`}>{tab.label}</span>
                   </Link>
                 );
               })}

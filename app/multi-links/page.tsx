@@ -137,7 +137,7 @@ function MultiLinksPageInner() {
         )}
 
         {showSkeleton ? (
-          <LibraryReleaseSkeletonGrid count={4} />
+          <LibraryReleaseSkeletonGrid count={4} variant="rows" />
         ) : filtered.length === 0 ? (
           <div className="glass-glow glass-glow-charged p-8 text-center">
             <p className="text-[15px] font-medium text-white/80">
@@ -193,7 +193,7 @@ export default function MultiLinksPage() {
           <div className="min-h-app px-5 pb-44 pt-14">
             <div className="mx-auto max-w-3xl space-y-6">
               <div className="h-24 animate-pulse rounded-[1.25rem] bg-white/[0.06]" />
-              <LibraryReleaseSkeletonGrid count={4} />
+              <LibraryReleaseSkeletonGrid count={4} variant="rows" />
             </div>
           </div>
         }

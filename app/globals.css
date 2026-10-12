@@ -14,52 +14,75 @@
     /** TMA: перекрытие снизу от виртуальной клавиатуры (px), выставляет VisualViewportKeyboardBridge */
     --keyboard-overlap: 0px;
 
-    --background: 240 20% 1.5%;
-    --foreground: 0 0% 95%;
+    /*
+     * OMF 2026 — «наклейки». Релиз как физический объект: обложка + круглая наклейка статуса.
+     * Основа тёмная графитовая (не чёрная), одно ультрамариновое главное действие.
+     */
+    --omf-bg: #1a1d24;
+    --omf-surface: #22262f;
+    --omf-surface-2: #2a2f39;
+    --omf-line: #2c313b;
+    --omf-line-strong: #3a404c;
+    --omf-ink: #eceef0;
+    --omf-graphite: #8c93a1;
+    --omf-faint: #5e6573;
+    --omf-ultra: #2f3fe0;
+    --omf-ultra-hover: #4050f0;
+    --omf-ultra-text: #8c9bff;
+    --omf-yellow: #f5d90a;
+    --omf-yellow-ink: #3a3000;
+    --omf-green: #1f9d63;
+    --omf-red: #e5484d;
+    --omf-sleeve-radius: 5px;
+    --omf-control-radius: 14px;
 
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 95%;
+    --background: 222 16% 12%;
+    --foreground: 210 11% 93%;
 
-    --popover: 240 15% 5%;
-    --popover-foreground: 0 0% 95%;
+    --card: 222 15% 16%;
+    --card-foreground: 210 11% 93%;
 
-    --primary: 245 58% 55%;
+    --popover: 222 15% 16%;
+    --popover-foreground: 210 11% 93%;
+
+    --primary: 234 74% 53%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 240 12% 8%;
-    --secondary-foreground: 0 0% 85%;
+    --secondary: 222 15% 20%;
+    --secondary-foreground: 210 11% 93%;
 
-    --muted: 240 10% 8%;
-    --muted-foreground: 230 10% 44%;
+    --muted: 222 15% 20%;
+    --muted-foreground: 221 9% 59%;
 
-    --accent: 173 58% 22%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 222 15% 20%;
+    --accent-foreground: 210 11% 93%;
 
-    --destructive: 0 72% 51%;
+    --destructive: 358 75% 59%;
     --destructive-foreground: 0 0% 100%;
 
     --border: 0 0% 100%;
-    --input: 240 10% 8%;
-    --ring: 245 58% 55%;
+    --input: 222 15% 20%;
+    --ring: 234 74% 53%;
 
-    --radius: 1rem;
+    --radius: 14px;
 
-    --ss-black: #030303;
-    /** Верхняя кромка градиента (статус-бар / theme-color) — совпадает с login hero */
-    --theme-color-status: #0a0a0f;
-    --ss-indigo: #1e1b4b;
-    --ss-purple: #4c1d95;
-    --ss-teal: #115e59;
-    --ss-neon-purple: #a78bfa;
-    --ss-neon-blue: #818cf8;
-    --ss-neon-pink: #c084fc;
-    --ss-gold: #f59e0b;
-    --ss-green: #34d399;
-    --ss-amber: #fbbf24;
-    --ss-red: #f87171;
+    /* Наследие старой темы: переменные оставлены, но указывают на новую палитру,
+       чтобы ещё не переделанные экраны сразу потеряли неон и градиенты. */
+    --ss-black: var(--omf-bg);
+    --theme-color-status: var(--omf-bg);
+    --ss-indigo: var(--omf-surface);
+    --ss-purple: var(--omf-surface);
+    --ss-teal: var(--omf-surface);
+    --ss-neon-purple: var(--omf-ultra-text);
+    --ss-neon-blue: var(--omf-ultra);
+    --ss-neon-pink: var(--omf-ultra);
+    --ss-gold: var(--omf-yellow);
+    --ss-green: var(--omf-green);
+    --ss-amber: var(--omf-yellow);
+    --ss-red: var(--omf-red);
 
-    --success: 160 60% 45%;
-    --warning: 43 96% 56%;
+    --success: 153 67% 37%;
+    --warning: 53 92% 50%;
   }
 
   * {
@@ -75,18 +98,7 @@ html {
   scroll-behavior: smooth;
   -webkit-tap-highlight-color: transparent;
   color-scheme: dark;
-  background-color: var(--ss-black);
-  background-image:
-    radial-gradient(ellipse 60% 50% at 20% 10%, rgba(30, 27, 75, 0.55) 0%, transparent 60%),
-    radial-gradient(ellipse 50% 60% at 75% 85%, rgba(76, 29, 149, 0.35) 0%, transparent 55%),
-    radial-gradient(ellipse 45% 40% at 60% 30%, rgba(17, 94, 89, 0.2) 0%, transparent 50%),
-    radial-gradient(ellipse 30% 35% at 40% 70%, rgba(76, 29, 149, 0.15) 0%, transparent 50%);
-  /*
-   * iOS Safari: background-attachment: fixed даёт артефакты/полосы у safe-area;
-   * scroll — как на простых лендингах, без «ломаных» слоёв.
-   */
-  background-attachment: scroll;
-  background-repeat: no-repeat;
+  background-color: var(--omf-bg);
   min-height: 100%;
   min-height: 100dvh;
 }
@@ -113,7 +125,8 @@ html,
 body {
   margin: 0;
   padding: 0;
-  font-family: var(--font-inter), Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+  font-family: var(--font-geologica), -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+  font-feature-settings: "tnum" 0;
   color: hsl(var(--foreground));
   overflow-x: hidden;
   overflow-y: auto !important;
@@ -181,7 +194,7 @@ input,
 textarea,
 select {
   outline: none;
-  color: #fff;
+  color: var(--omf-ink);
   font-size: 16px;
   line-height: 1.4;
   overscroll-behavior: contain;
@@ -189,7 +202,7 @@ select {
 
 input::placeholder,
 textarea::placeholder {
-  color: rgba(255, 255, 255, 0.48);
+  color: var(--omf-faint);
   opacity: 1;
 }
 
@@ -224,11 +237,9 @@ button {
 }
 
 .glass-card {
-  border-radius: 24px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.02);
-  backdrop-filter: blur(64px);
-  -webkit-backdrop-filter: blur(64px);
+  border-radius: var(--omf-control-radius);
+  border: 1px solid var(--omf-line);
+  background: var(--omf-surface);
 }
 
 .scrollbar-hide {
@@ -278,7 +289,7 @@ button {
 }
 
 .glass-card-shimmer-bar {
-  animation: glass-card-shimmer 5s ease-in-out infinite;
+  display: none;
 }
 
 /* Ready / Pending: диагональный шиммер ~45°, цикл 3s */
@@ -292,17 +303,7 @@ button {
 }
 
 .status-badge-shimmer::after {
-  content: "";
-  position: absolute;
-  inset: -40% -60%;
-  background: linear-gradient(
-    105deg,
-    transparent 38%,
-    rgba(255, 255, 255, 0.38) 50%,
-    transparent 62%
-  );
-  animation: status-badge-shimmer 3s linear infinite;
-  pointer-events: none;
+  content: none;
 }
 
 /* Скелетоны: блик по серому фону */
@@ -318,9 +319,9 @@ button {
 .skeleton-shimmer-bg {
   background-image: linear-gradient(
     90deg,
-    rgba(255, 255, 255, 0.04) 0%,
-    rgba(255, 255, 255, 0.12) 45%,
-    rgba(255, 255, 255, 0.04) 100%
+    var(--omf-surface) 0%,
+    var(--omf-surface-2) 45%,
+    var(--omf-surface) 100%
   );
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.8s ease-in-out infinite;
@@ -336,167 +337,69 @@ button {
   }
 }
 
-/* ── Lovable ref: noise (see NoiseOverlay component) ── */
-.noise-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  pointer-events: none;
-  opacity: 0.03;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  background-repeat: repeat;
-  background-size: 128px 128px;
-}
-
-/* ── Ambient mesh: слой над html-фоном (градиенты на html — см. выше), только блики ── */
-.mesh-bg {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  background: transparent;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.mesh-bg .light-hero {
-  position: absolute;
-  width: 500px;
-  height: 500px;
-  top: -80px;
-  left: -100px;
-  background: radial-gradient(circle, rgba(167, 139, 250, 0.08) 0%, transparent 70%);
-  border-radius: 50%;
-  animation: lightPulse 8s ease-in-out infinite;
-}
-
-.mesh-bg .light-fab {
-  position: absolute;
-  width: 400px;
-  height: 400px;
-  bottom: -60px;
-  right: -80px;
-  background: radial-gradient(circle, rgba(192, 132, 252, 0.06) 0%, transparent 70%);
-  border-radius: 50%;
-  animation: lightPulse 10s ease-in-out infinite reverse;
-}
-
-@keyframes lightPulse {
-  0%,
-  100% {
-    opacity: 0.6;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1.15);
-  }
-}
-
 @layer components {
   .glass {
-    background: rgba(255, 255, 255, 0.04);
-    backdrop-filter: blur(24px) saturate(1.4);
-    -webkit-backdrop-filter: blur(24px) saturate(1.4);
-    border: 0.5px solid rgba(255, 255, 255, 0.08);
-    border-radius: 1.25rem;
+    background: var(--omf-surface);
+    border: 1px solid var(--omf-line);
+    border-radius: var(--omf-control-radius);
     position: relative;
   }
 
   .glass-glow {
-    background: rgba(255, 255, 255, 0.05);
-    backdrop-filter: blur(28px) saturate(1.5);
-    -webkit-backdrop-filter: blur(28px) saturate(1.5);
-    border-radius: 1.25rem;
+    background: var(--omf-surface);
+    border: 1px solid var(--omf-line);
+    border-radius: var(--omf-control-radius);
     position: relative;
     overflow: hidden;
   }
 
-  .glass-glow::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    padding: 0.5px;
-    background: linear-gradient(
-      135deg,
-      rgba(129, 140, 248, 0.45),
-      rgba(192, 132, 252, 0.3),
-      rgba(129, 140, 248, 0.15)
-    );
-    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-    pointer-events: none;
-  }
-
   .glass-glow-charged {
-    box-shadow:
-      0 0 30px rgba(129, 140, 248, 0.08),
-      0 0 60px rgba(192, 132, 252, 0.04),
-      0 8px 32px rgba(0, 0, 0, 0.4);
+    box-shadow: none;
   }
 
   .gradient-text {
-    background: linear-gradient(135deg, #818cf8, #c084fc, #818cf8);
-    background-size: 200% 200%;
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    animation: gradientShift 4s ease infinite;
+    color: var(--omf-ink);
   }
 
   .gradient-text-gold {
-    background: linear-gradient(135deg, #f59e0b, #fbbf24);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    color: var(--omf-yellow);
   }
 
   .gradient-text-blue {
-    background: linear-gradient(135deg, #818cf8, #60a5fa);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    color: var(--omf-ultra-text);
   }
 
   .gradient-text-teal {
-    background: linear-gradient(135deg, #2dd4bf, #34d399);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    color: var(--omf-green);
   }
 
   .led-green {
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: #34d399;
-    box-shadow: 0 0 6px #34d399, 0 0 16px rgba(52, 211, 153, 0.4);
+    background: var(--omf-green);
   }
   .led-amber {
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: #fbbf24;
-    box-shadow: 0 0 6px #fbbf24, 0 0 16px rgba(251, 191, 36, 0.4);
+    background: var(--omf-yellow);
   }
   .led-red {
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: #f87171;
-    box-shadow: 0 0 6px #f87171, 0 0 16px rgba(248, 113, 113, 0.4);
+    background: var(--omf-red);
   }
   .led-gray {
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.2);
-    box-shadow: 0 0 4px rgba(255, 255, 255, 0.1);
+    background: var(--omf-faint);
   }
 
   .pulse-glow {
-    animation: fabPulse 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    animation: none;
   }
 
   .scanner-line {
@@ -554,11 +457,6 @@ button {
 
 /* Адаптивные карточки для desktop */
 @media (min-width: 1024px) {
-  .glass-card {
-    border-radius: 32px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    background: rgba(255, 255, 255, 0.03);
-  }
 
   /* Увеличенные отступы для desktop */
   .app-main-scroll {
@@ -593,5 +491,105 @@ button {
   .app-main-scroll {
     max-width: 1600px;
     margin: 0 auto;
+  }
+}
+
+/* ==========================================
+   OMF primitives
+   ========================================== */
+@layer components {
+  /** Обложка релиза: почти острые углы — это физический конверт, а не карточка. */
+  .omf-sleeve {
+    position: relative;
+    aspect-ratio: 1;
+    border-radius: var(--omf-sleeve-radius);
+    background: var(--omf-surface-2);
+    overflow: visible;
+  }
+
+  /** Круглая наклейка статуса — единственный «громкий» элемент интерфейса. */
+  .omf-sticker {
+    position: absolute;
+    top: -10px;
+    right: 6px;
+    width: 62px;
+    height: 62px;
+    border-radius: 9999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 5px;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    overflow-wrap: normal;
+    word-break: keep-all;
+    transform: rotate(var(--omf-sticker-tilt, -8deg));
+    z-index: 2;
+    pointer-events: none;
+  }
+
+  .omf-btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 48px;
+    padding: 0 20px;
+    border-radius: var(--omf-control-radius);
+    background: var(--omf-ultra);
+    color: #fff;
+    font-weight: 700;
+    font-size: 15px;
+    transition: background-color 150ms ease, transform 120ms ease;
+  }
+  .omf-btn-primary:hover {
+    background: var(--omf-ultra-hover);
+  }
+  .omf-btn-primary:active {
+    transform: scale(0.98);
+  }
+  .omf-btn-primary:disabled {
+    opacity: 0.45;
+  }
+
+  .omf-btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 48px;
+    padding: 0 20px;
+    border-radius: var(--omf-control-radius);
+    border: 1px solid var(--omf-line-strong);
+    color: var(--omf-ink);
+    font-weight: 500;
+    font-size: 15px;
+    transition: background-color 150ms ease, transform 120ms ease;
+  }
+  .omf-btn-secondary:hover {
+    background: var(--omf-surface);
+  }
+  .omf-btn-secondary:active {
+    transform: scale(0.98);
+  }
+
+  .omf-focus:focus-visible,
+  .omf-btn-primary:focus-visible,
+  .omf-btn-secondary:focus-visible {
+    outline: 2px solid var(--omf-ultra-text);
+    outline-offset: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

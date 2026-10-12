@@ -1,15 +1,14 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import dynamic from "next/dynamic";
 import { Plus, RefreshCw, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PullRefreshBrand } from "@/components/PullRefreshBrand";
-import { ReleaseCard, type ReleaseStatus } from "@/components/ReleaseCard";
-import { LibraryReleaseSkeletonGrid, LibraryStatsSkeletonRow } from "@/components/ui/LibrarySkeleton";
+import { ReleaseCard } from "@/components/ReleaseCard";
+import { LibraryReleaseSkeletonGrid } from "@/components/ui/LibrarySkeleton";
 import { resumeDraftFromRelease } from "@/features/release/createRelease/actions";
 import { useCreateReleaseDraftStore } from "@/features/release/createRelease/store";
-import { getReleaseStatusMeta, normalizeReleaseStatus } from "@/lib/release-status";
+import { normalizeReleaseStatus } from "@/lib/release-status";
 import { getReleaseDisplayTitle } from "@/repositories/releases.repo";
 import { useReleases, type ReleaseListRow } from "@/lib/hooks/useReleases";
 import { hapticMap } from "@/lib/haptic-map";
@@ -20,48 +19,31 @@ import { pickProfileGreetingName, useAuthProfile } from "@/lib/hooks/useAuthProf
 import { cn } from "@/lib/utils";
 import { getTelegramInitDataForApiHeader, getTelegramUserIdForSupabaseRequests } from "@/lib/telegram";
 
-const HeroWave = dynamic(
-  () => import("@/components/HeroWave").then((m) => m.HeroWave),
-  { ssr: false }
-);
-const EmptyStateNeonWaveform = dynamic(
-  () => import("@/components/EmptyStateNeonWaveform").then((m) => m.EmptyStateNeonWaveform),
-  { ssr: false }
-);
 
 type LibraryStatusFilter = "all" | "processing" | "ready" | "failed";
 type LibraryView = "all" | "drafts" | "moderation";
 
 const STATUS_FILTER_CHIPS: { id: LibraryStatusFilter; label: string }[] = [
   { id: "all", label: "Все" },
-  { id: "processing", label: "В проверке" },
-  { id: "ready", label: "Одобрено" },
+  { id: "processing", label: "На проверке" },
+  { id: "ready", label: "Одобрены" },
   { id: "failed", label: "Отклонены" }
 ];
-
-function mapToReleaseCardStatus(canonical: ReturnType<typeof normalizeReleaseStatus>): ReleaseStatus {
-  switch (canonical) {
-    case "processing":
-      return "processing";
-    case "ready":
-      return "ready";
-    case "failed":
-      return "error";
-    case "draft":
-    case "pending":
-    case "unknown":
-    default:
-      return "draft";
-  }
-}
 
 function formatReleaseTypeLabel(value: string | null | undefined): string | null {
   if (!value) return null;
   const normalized = value.toLowerCase();
-  if (normalized === "single") return "Type: Single";
-  if (normalized === "ep") return "Type: EP";
-  if (normalized === "album") return "Type: Album";
-  return `Type: ${value}`;
+  if (normalized === "single") return "Сингл";
+  if (normalized === "ep") return "EP";
+  if (normalized === "album") return "Альбом";
+  return value;
+}
+
+function formatShortDate(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString("ru-RU", { day: "numeric", month: "short" }).replace(".", "");
 }
 
 function parseLibraryView(value: string | null): LibraryView {
@@ -300,23 +282,35 @@ function LibraryPageInner() {
 
   const isEmpty = !showAuthWait && !showListSkeleton && !error && releases.length === 0;
 
+  const heroArtistName = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const r of releases) {
+      const name = r.artist_name?.trim();
+      if (name) counts.set(name, (counts.get(name) ?? 0) + 1);
+    }
+    let best: string | null = null;
+    let bestCount = 0;
+    counts.forEach((count, name) => {
+      if (count > bestCount) {
+        best = name;
+        bestCount = count;
+      }
+    });
+    return best ?? artistFirstName;
+  }, [releases, artistFirstName]);
+
   const renderReleaseBlock = (release: ReleaseListRow, listIndex: number) => {
     const displayTitle = getReleaseDisplayTitle(release);
     const normalized = normalizeReleaseStatus(release.status);
-    const cardStatus = mapToReleaseCardStatus(normalized);
-    const statusMeta = getReleaseStatusMeta(release.status);
     const isDraft = normalized === "draft" || normalized === "pending";
     const isFailed = normalized === "failed";
     const isResumingDraft = isDraft && resumingId === release.id;
-    const artistLine =
-      release.track_name?.trim() && release.track_name.trim() !== displayTitle
-        ? release.track_name.trim()
-        : new Date(release.created_at).toLocaleDateString("ru-RU");
-    const releaseMeta = [
-      release.upc?.trim() ? `UPC: ${release.upc.trim()}` : null,
-      release.isrc?.trim() ? `ISRC: ${release.isrc.trim()}` : null,
-      formatReleaseTypeLabel(release.release_type ?? null)
-    ].filter((item): item is string => Boolean(item));
+    const subtitle = [
+      formatReleaseTypeLabel(release.release_type ?? null),
+      formatShortDate(release.created_at)
+    ]
+      .filter(Boolean)
+      .join(" · ");
 
     const onCardClick = () => {
       if (isResumingDraft) return;
@@ -332,7 +326,7 @@ function LibraryPageInner() {
           body:
             notes && notes.length > 0
               ? notes
-              : "Свяжитесь с поддержкой для уточнения деталей"
+              : "Модератор не оставил комментарий. Напиши в поддержку, чтобы узнать причину."
         });
         return;
       }
@@ -340,181 +334,129 @@ function LibraryPageInner() {
       router.push(`/release/${release.id}`);
     };
 
-    if (isFailed) {
-      return (
-        <div key={release.id} className={isResumingDraft ? "pointer-events-none opacity-70" : ""}>
-          <ReleaseCard
-            title={displayTitle}
-            artist={`${artistLine} · ${statusMeta.label}`}
-            status="error"
-            meta={releaseMeta}
-            coverUrl={release.artwork_url ?? undefined}
-            index={listIndex}
-            onClick={onCardClick}
-          />
-        </div>
-      );
-    }
-
     return (
-      <div key={release.id} className={isResumingDraft ? "pointer-events-none opacity-70" : ""}>
-        <ReleaseCard
-          title={displayTitle}
-          artist={
-            isDraft && release.draft_upload_started
-              ? `${artistLine} · черновик`
-              : isDraft
-                ? artistLine
-                : `${artistLine} · ${statusMeta.label}`
-          }
-          status={cardStatus}
-          meta={releaseMeta}
-          coverUrl={release.artwork_url ?? undefined}
-          index={listIndex}
-          onClick={onCardClick}
-        />
-      </div>
+      <ReleaseCard
+        key={release.id}
+        id={release.id}
+        title={displayTitle}
+        artist={release.artist_name}
+        subtitle={subtitle}
+        status={normalized}
+        coverUrl={release.artwork_url}
+        priority={listIndex < 4}
+        busy={isResumingDraft}
+        onClick={onCardClick}
+      />
     );
   };
 
+  const newReleaseTile = (
+    <button
+      type="button"
+      onClick={handleCreate}
+      className="omf-focus block w-full min-w-0 text-left transition-transform duration-150 active:scale-[0.98]"
+    >
+      <span className="flex aspect-square w-full flex-col items-center justify-center gap-2 rounded-sleeve border-[1.5px] border-dashed border-omf-line-strong text-omf-graphite transition-colors hover:border-omf-graphite hover:text-omf-ink">
+        <Plus className="h-7 w-7" strokeWidth={1.75} aria-hidden />
+      </span>
+      <span className="mt-2.5 block text-[14px] font-medium leading-tight text-omf-ink">Новый релиз</span>
+      <span className="mt-0.5 block text-[12px] text-omf-graphite">Сингл, EP или альбом</span>
+    </button>
+  );
+
+  const heroLabel =
+    selectedView === "drafts" ? "Твои черновики" : selectedView === "moderation" ? "На модерации" : "Твои релизы";
+
   return (
-    <div className="min-h-app text-foreground">
+    <div className="min-h-app text-omf-ink">
       <PullRefreshBrand />
 
-      <div
-        className={cn(
-          "mx-auto w-full px-5 pb-44 pt-14",
-          isWeb ? "max-w-[1320px]" : "max-w-lg"
-        )}
-      >
-        <div>
-          <div className={cn("min-w-0", isWeb ? "xl:max-w-none" : "mx-auto w-full max-w-lg")}>
-        {/* Hero — действия в правом верхнем углу карточки */}
-        <div className="glass-glow glass-glow-charged relative mb-12 min-h-[140px] overflow-hidden p-8 pr-24 sm:pr-28">
-          <div className="absolute right-4 top-4 z-20 flex gap-2 sm:right-6 sm:top-6">
-            <button
-              type="button"
-              onClick={() => {
-                hapticMap.impactLight();
-                void mutate(undefined, { revalidate: true });
-              }}
-              disabled={isValidating || showAuthWait}
-              aria-label="Обновить список"
-              className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.06] text-white/80 backdrop-blur-md transition-colors hover:bg-white/[0.1] hover:text-white disabled:opacity-40"
-            >
-              <RefreshCw className={`h-[18px] w-[18px] ${isValidating ? "animate-spin" : ""}`} />
-            </button>
-            <button
-              type="button"
-              onClick={handleCreate}
-              aria-label="Новый релиз"
-              className="flex h-10 w-10 items-center justify-center rounded-xl text-white pulse-glow"
-              style={{
-                background:
-                  "linear-gradient(135deg, var(--ss-neon-blue), var(--ss-neon-pink))",
-                boxShadow: "0 0 20px rgba(129,140,248,0.25)"
-              }}
-            >
-              <Plus className="h-[22px] w-[22px]" strokeWidth={2.5} />
-            </button>
-          </div>
-          <HeroWave />
-          <div className="relative z-10 max-w-xl">
-            <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/25">
-              С возвращением
-            </p>
-            <h1 className="font-display text-4xl font-extrabold leading-none tracking-tighter gradient-text">
-              Привет, {artistFirstName}
+      <div className={cn("mx-auto w-full px-1 pb-40 pt-6", isWeb ? "max-w-[1100px]" : "max-w-lg")}>
+        <header className="mb-8 flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-[13px] text-omf-graphite">{heroLabel}</p>
+            <h1 className="mt-1 break-words text-[40px] font-extrabold leading-[0.92] tracking-[-0.045em] text-omf-ink sm:text-[52px]">
+              {heroArtistName}
             </h1>
           </div>
-        </div>
+          <button
+            type="button"
+            onClick={() => {
+              hapticMap.impactLight();
+              void mutate(undefined, { revalidate: true });
+            }}
+            disabled={isValidating || showAuthWait}
+            aria-label="Обновить список"
+            className="omf-focus mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-omf-graphite transition-colors hover:bg-omf-surface hover:text-omf-ink disabled:opacity-40"
+          >
+            <RefreshCw className={cn("h-[18px] w-[18px]", isValidating && "animate-spin")} aria-hidden />
+          </button>
+        </header>
 
         {!hasReleases && (showAuthWait || showListSkeleton) ? (
-          <div className="glass-glow glass-glow-charged space-y-4 px-4 py-5">
-            <p className="text-[13px] text-white/45">
+          <div aria-busy="true">
+            <p className="mb-4 text-[13px] text-omf-graphite">
               {!authReady
                 ? "Загрузка…"
                 : userId === null || authMode === null
                   ? "Подключаем Telegram…"
-                  : "Загружаем твои релизы…"}
+                  : "Загружаем релизы…"}
             </p>
-            <LibraryReleaseSkeletonGrid count={6} />
+            <LibraryReleaseSkeletonGrid count={4} />
           </div>
         ) : !showListSkeleton && error != null ? (
-          <div className="glass-glow glass-glow-charged flex flex-col items-center p-10 text-center">
-            <p className="font-display text-lg font-bold text-white/85">Не удалось загрузить</p>
-            <p className="mt-2 text-sm text-white/35">
-              {error instanceof Error ? error.message : String(error)}
+          <div className="border-t border-omf-line pt-6">
+            <p className="text-[18px] font-bold tracking-tight">Не удалось загрузить релизы</p>
+            <p className="mt-1.5 text-[14px] text-omf-graphite">
+              Проверь интернет и попробуй ещё раз. Если не поможет, перезапусти приложение.
             </p>
             <button
               type="button"
-              className="mt-6 rounded-xl px-6 py-3 text-sm font-bold text-white"
-              style={{
-                background:
-                  "linear-gradient(135deg, var(--ss-neon-blue), var(--ss-neon-pink))"
-              }}
+              className="omf-btn-primary mt-5"
               onClick={() => void mutate(undefined, { revalidate: true })}
             >
-              Повторить
+              Загрузить снова
             </button>
           </div>
         ) : showEmptyState && isEmpty ? (
-          <div className="glass-glow glass-glow-charged flex flex-col items-center p-12 text-center">
-            <EmptyStateNeonWaveform />
-            <p className="mb-2 font-display text-xl font-bold tracking-tight text-white/80">
-              Пока нет релизов
-            </p>
-            <p className="mb-8 max-w-[220px] text-sm font-light text-white/25">
-              Загрузите первый трек — это займёт пару минут.
-            </p>
-            <button
-              type="button"
-              onClick={handleCreate}
-              className="rounded-xl px-8 py-3.5 text-sm font-bold text-white pulse-glow"
-              style={{
-                background:
-                  "linear-gradient(135deg, var(--ss-neon-blue), var(--ss-neon-pink))"
-              }}
-            >
-              Создать первый
-            </button>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-6">
+            {newReleaseTile}
+            <div className="col-span-2 -mt-1">
+              <p className="text-[18px] font-bold tracking-tight">Выпусти первый релиз</p>
+              <p className="mt-1.5 max-w-[34ch] text-[14px] leading-relaxed text-omf-graphite">
+                Заполни паспорт, добавь обложку и WAV. Модератор проверит релиз и отправит его на площадки.
+              </p>
+              <button type="button" onClick={handleCreate} className="omf-btn-primary mt-5 w-full sm:w-auto">
+                Создать релиз
+              </button>
+            </div>
           </div>
         ) : (
           <>
-            <div className="mb-6 flex items-center justify-between">
-              <h2 className="font-display text-sm font-bold tracking-tight text-white/70">
-                {selectedView === "drafts"
-                  ? "Ваши релизы · Черновики"
-                  : selectedView === "moderation"
-                    ? "Ваши релизы · Модерация"
-                    : "Ваши релизы"}
-              </h2>
-              <button
-                onClick={() => router.push("/create/metadata")}
-                className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition-all duration-200 hover:bg-white/10 hover:text-white"
-              >
-                <Plus className="h-4 w-4" />
-                Новый релиз
-              </button>
-            </div>
-
             {hasReleasesInView && error == null && selectedView === "all" && (
-              <div className="mb-4 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div
+                className="mb-6 flex gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                role="tablist"
+                aria-label="Фильтр по статусу"
+              >
                 {STATUS_FILTER_CHIPS.map((chip) => {
                   const active = statusFilter === chip.id;
                   return (
                     <button
                       key={chip.id}
                       type="button"
+                      role="tab"
+                      aria-selected={active}
                       onClick={() => {
                         hapticMap.impactLight();
                         setStatusFilter(chip.id);
                       }}
-                      className={`shrink-0 rounded-full border px-3.5 py-1.5 text-[12px] font-medium transition-colors ${
+                      className={cn(
+                        "omf-focus shrink-0 rounded-full px-3.5 py-1.5 text-[13px] transition-colors",
                         active
-                          ? "border-[var(--ss-neon-blue)]/50 bg-[var(--ss-neon-blue)]/15 text-white"
-                          : "border-white/15 bg-white/5 text-white/70 hover:bg-white/10"
-                      }`}
+                          ? "bg-omf-ink font-medium text-omf-bg"
+                          : "text-omf-graphite hover:text-omf-ink"
+                      )}
                     >
                       {chip.label}
                     </button>
@@ -524,62 +466,68 @@ function LibraryPageInner() {
             )}
 
             {hasReleasesInView && filteredReleases.length === 0 && (
-              <p className="mb-6 text-center text-[13px] text-white/45">
-                Нет релизов с выбранным статусом.
-              </p>
+              <p className="mb-6 text-[14px] text-omf-graphite">С таким статусом релизов нет.</p>
             )}
 
             {!hasReleasesInView && hasReleases && selectedView !== "all" && (
-              <p className="mb-6 text-center text-[13px] text-white/45">
-                В этом разделе пока нет релизов.
-              </p>
+              <p className="mb-6 text-[14px] text-omf-graphite">Здесь пока пусто.</p>
             )}
 
-            <div className={cn("flex flex-col gap-3", isWeb && "xl:grid xl:grid-cols-2 xl:gap-4")}>
+            <div
+              className={cn(
+                "grid grid-cols-2 gap-x-4 gap-y-7",
+                isWeb && "sm:grid-cols-3 lg:grid-cols-4 lg:gap-x-6"
+              )}
+            >
               {filteredReleases.map((release, i) => renderReleaseBlock(release, i))}
+              {selectedView !== "moderation" ? newReleaseTile : null}
             </div>
           </>
         )}
-          </div>
-
-        </div>
       </div>
 
       {adminNotesModal && (
+        <div
+          key="admin-notes-modal"
+          className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 p-4 sm:items-center"
+          onClick={() => setAdminNotesModal(null)}
+        >
           <div
-            key="admin-notes-modal"
-            className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 p-4 backdrop-blur-[2px] sm:items-center"
-            onClick={() => setAdminNotesModal(null)}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="admin-notes-title"
+            className="w-full max-w-[420px] rounded-[20px] border border-omf-line bg-omf-surface p-5"
+            onClick={(e) => e.stopPropagation()}
           >
-            <div
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="admin-notes-title"
-              className="w-full max-w-[400px] rounded-[22px] border border-white/[0.1] bg-[#141416]/95 p-5 shadow-[0_24px_60px_rgba(0,0,0,0.85)] backdrop-blur-2xl"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <h2 id="admin-notes-title" className="text-[15px] font-semibold text-white">
-                  Комментарий модератора
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate text-[13px] text-omf-graphite">{adminNotesModal.title}</p>
+                <h2 id="admin-notes-title" className="mt-0.5 text-[18px] font-bold tracking-tight text-omf-ink">
+                  Почему релиз отклонён
                 </h2>
-                <button
-                  type="button"
-                  className="rounded-full p-1 text-white/45 hover:bg-white/10 hover:text-white/80"
-                  aria-label="Закрыть"
-                  onClick={() => setAdminNotesModal(null)}
-                >
-                  <X className="h-5 w-5" />
-                </button>
               </div>
-              <p className="mt-3 whitespace-pre-wrap break-words text-[13px] leading-relaxed text-white/88">
-                {adminNotesModal.body}
-              </p>
-              <p className="mt-3 truncate text-[11px] text-white/40" title={adminNotesModal.title}>
-                {adminNotesModal.title}
-              </p>
+              <button
+                type="button"
+                className="omf-focus -mr-1 rounded-full p-1.5 text-omf-graphite hover:bg-omf-surface-2 hover:text-omf-ink"
+                aria-label="Закрыть"
+                onClick={() => setAdminNotesModal(null)}
+              >
+                <X className="h-5 w-5" />
+              </button>
             </div>
+            <p className="mt-4 whitespace-pre-wrap break-words text-[15px] leading-relaxed text-omf-ink">
+              {adminNotesModal.body}
+            </p>
+            <button
+              type="button"
+              className="omf-btn-secondary mt-5 w-full"
+              onClick={() => setAdminNotesModal(null)}
+            >
+              Понятно
+            </button>
           </div>
-        )}
+        </div>
+      )}
     </div>
   );
 }
@@ -589,11 +537,10 @@ export default function LibraryPage() {
     <AuthGuard>
       <Suspense
         fallback={
-          <div className="min-h-app px-5 pb-44 pt-14">
-            <div className="mx-auto max-w-lg space-y-6">
-              <div className="h-36 animate-pulse rounded-[1.25rem] bg-white/[0.06]" />
-              <LibraryStatsSkeletonRow />
-              <LibraryReleaseSkeletonGrid count={5} />
+          <div className="min-h-app px-5 pb-40 pt-10">
+            <div className="mx-auto max-w-lg">
+              <div className="mb-8 h-[84px] w-3/4 animate-pulse rounded-control bg-omf-surface" />
+              <LibraryReleaseSkeletonGrid count={4} />
             </div>
           </div>
         }

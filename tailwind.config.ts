@@ -19,23 +19,36 @@ export default {
     extend: {
       fontFamily: {
         sans: [
-          "var(--font-inter)",
-          "Inter",
+          "var(--font-geologica)",
           "-apple-system",
           "BlinkMacSystemFont",
-          "SF Pro Display",
           "system-ui",
           "sans-serif"
         ],
         display: [
-          "var(--font-display)",
-          "Space Grotesk",
-          "Inter",
+          "var(--font-geologica)",
+          "-apple-system",
           "system-ui",
           "sans-serif"
         ]
       },
       colors: {
+        omf: {
+          bg: "var(--omf-bg)",
+          surface: "var(--omf-surface)",
+          "surface-2": "var(--omf-surface-2)",
+          line: "var(--omf-line)",
+          "line-strong": "var(--omf-line-strong)",
+          ink: "var(--omf-ink)",
+          graphite: "var(--omf-graphite)",
+          faint: "var(--omf-faint)",
+          ultra: "var(--omf-ultra)",
+          "ultra-text": "var(--omf-ultra-text)",
+          yellow: "var(--omf-yellow)",
+          "yellow-ink": "var(--omf-yellow-ink)",
+          green: "var(--omf-green)",
+          red: "var(--omf-red)"
+        },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
@@ -71,12 +84,14 @@ export default {
         },
         success: "hsl(var(--success))",
         warning: "hsl(var(--warning))",
-        surface: "#141416",
-        text: "#FFFFFF",
-        "text-muted": "#8E8E93",
-        "primary-hover": "#0051FF"
+        surface: "var(--omf-surface)",
+        text: "var(--omf-ink)",
+        "text-muted": "var(--omf-graphite)",
+        "primary-hover": "var(--omf-ultra-hover)"
       },
       borderRadius: {
+        sleeve: "var(--omf-sleeve-radius)",
+        control: "var(--omf-control-radius)",
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)"

@@ -1,7 +1,7 @@
 import "./globals.css";
 import type { Metadata, Viewport } from "next";
 import { Toaster } from "sonner";
-import { Inter, Space_Grotesk } from "next/font/google";
+import { Geologica } from "next/font/google";
 import { AppProviders } from "@/components/AppProviders";
 import { AppErrorBoundary } from "@/components/ErrorBoundary";
 import { PageTransition } from "@/components/PageTransition";
@@ -10,7 +10,6 @@ import { VisualViewportKeyboardBridge } from "@/components/VisualViewportKeyboar
 import { TelegramBootstrap } from "@/components/TelegramBootstrap";
 import { TelegramWebAppScript } from "@/components/TelegramWebAppScript";
 import { AdaptiveLayout } from "@/components/AdaptiveLayout";
-import { NoiseOverlay } from "@/components/NoiseOverlay";
 function supabasePreconnectOrigin(): string | null {
   const raw = process.env.NEXT_PUBLIC_SUPABASE_URL;
   if (!raw) return null;
@@ -21,22 +20,16 @@ function supabasePreconnectOrigin(): string | null {
   }
 }
 
-const inter = Inter({
+const geologica = Geologica({
   subsets: ["latin", "cyrillic"],
-  variable: "--font-inter",
-  display: "swap"
-});
-
-const spaceGrotesk = Space_Grotesk({
-  subsets: ["latin"],
-  variable: "--font-display",
+  variable: "--font-geologica",
   display: "swap"
 });
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"),
   title: "omf mini app",
-  description: "Премиальный Telegram Mini App для музыкальной дистрибуции",
+  description: "Выпуск музыки на стриминги прямо из Telegram",
   appleWebApp: {
     capable: true,
     /** Opaque bar — без «затемняющих» полос как у black-translucent под вырезом / снизу */
@@ -45,7 +38,7 @@ export const metadata: Metadata = {
 };
 
 /**
- * theme-color = базовый фон (--ss-black), чтобы Safari/PWA не накладывал отличающуюся маску на системные полосы.
+ * theme-color = базовый фон (--omf-bg), чтобы Safari/PWA не накладывал отличающуюся маску на системные полосы.
  */
 export const viewport: Viewport = {
   width: "device-width",
@@ -56,8 +49,8 @@ export const viewport: Viewport = {
   interactiveWidget: "resizes-content",
   viewportFit: "cover",
   themeColor: [
-    { media: "(prefers-color-scheme: dark)", color: "#030303" },
-    { color: "#030303" }
+    { media: "(prefers-color-scheme: dark)", color: "#1A1D24" },
+    { color: "#1A1D24" }
   ]
 };
 
@@ -79,7 +72,7 @@ export default function RootLayout({
         {supabaseOrigin ? <link rel="dns-prefetch" href={supabaseOrigin} /> : null}
       </head>
       <body
-        className={`${inter.variable} ${spaceGrotesk.variable} font-sans text-foreground antialiased`}
+        className={`${geologica.variable} font-sans text-foreground antialiased`}
         style={{
           ["--bottom-nav-height" as string]: "4.5rem"
         }}
@@ -89,10 +82,6 @@ export default function RootLayout({
         <InputFocusScroll />
         <VisualViewportKeyboardBridge />
         <Toaster richColors expand position="top-center" />
-        <div className="mesh-bg" aria-hidden>
-          <div className="light-hero" />
-          <div className="light-fab" />
-        </div>
         <div className="app-safe-shell">
           <AppProviders>
             <AppErrorBoundary>
@@ -102,7 +91,6 @@ export default function RootLayout({
             </AppErrorBoundary>
           </AppProviders>
         </div>
-        <NoiseOverlay />
       </body>
     </html>
   );
