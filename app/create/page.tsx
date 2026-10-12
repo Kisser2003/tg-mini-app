@@ -21,7 +21,7 @@ export default function CreateEntryPage() {
   return (
     <div className="bg-background flex min-h-app items-center justify-center">
       <div
-        className="h-9 w-9 animate-spin rounded-full border-2 border-white/10 border-t-[#7C3AED]"
+        className="h-9 w-9 animate-spin rounded-full border-2 border-omf-line border-t-omf-ultra"
         aria-label="Загрузка…"
       />
     </div>

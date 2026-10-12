@@ -2,9 +2,6 @@
 
 import { useState, useCallback } from "react";
 import useSWR from "swr";
-import { motion } from "framer-motion";
-import { Bell, LogOut, MoonStar, ShieldCheck } from "lucide-react";
-import { GlassCard } from "@/components/GlassCard";
 import { getTelegramApiAuthHeaders } from "@/lib/telegram";
 import { toast } from "sonner";
 import { useLogout, useWebAuth } from "@/lib/hooks/useWebAuth";
@@ -45,42 +42,41 @@ async function savePreferences(
 
 function ToggleRow({
   label,
-  icon: Icon,
+  hint,
   checked,
   onChange,
   disabled
 }: {
   label: string;
-  icon: React.ElementType;
+  hint?: string;
   checked: boolean;
   onChange: (v: boolean) => void;
   disabled?: boolean;
 }) {
   return (
-    <label className="flex w-full cursor-pointer items-center justify-between gap-4 p-4">
-      <span className="inline-flex items-center gap-3">
-        <Icon className="h-4 w-4 text-white/80" />
-        <span className="text-sm">{label}</span>
-      </span>
+    <div className="flex w-full items-center justify-between gap-4 border-b border-omf-line py-4">
+      <div className="min-w-0">
+        <p className="text-[16px] text-omf-ink">{label}</p>
+        {hint ? <p className="mt-0.5 text-[14px] text-omf-graphite">{hint}</p> : null}
+      </div>
       <button
         type="button"
         role="switch"
         aria-checked={checked}
+        aria-label={label}
         disabled={disabled}
         onClick={() => onChange(!checked)}
-        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
-          checked
-            ? "border-primary/60 bg-primary"
-            : "border-white/20 bg-white/10"
-        } disabled:opacity-50`}
+        className={`omf-focus relative inline-flex h-8 w-[52px] shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
+          checked ? "bg-omf-ultra" : "bg-omf-line-strong"
+        }`}
       >
         <span
-          className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
-            checked ? "translate-x-5" : "translate-x-1"
+          className={`inline-block h-6 w-6 rounded-full bg-white transition-transform ${
+            checked ? "translate-x-[25px]" : "translate-x-[3px]"
           }`}
         />
       </button>
-    </label>
+    </div>
   );
 }
 
@@ -105,11 +101,9 @@ export default function SettingsPage() {
       try {
         const updated = await savePreferences({ push_notifications: value });
         await mutate(updated, { revalidate: false });
-        toast.success(
-          value ? "Push-уведомления включены" : "Push-уведомления отключены"
-        );
+        toast.success(value ? "Уведомления включены" : "Уведомления выключены");
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Ошибка сохранения");
+        toast.error(e instanceof Error ? e.message : "Не удалось сохранить. Попробуй ещё раз.");
       } finally {
         setIsSavingPush(false);
       }
@@ -120,69 +114,30 @@ export default function SettingsPage() {
   // ─── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col gap-4 pb-28 px-5 py-6">
-      <GlassCard className="p-5">
-        <p className="text-xs uppercase tracking-[0.2em] text-white/55">Настройки</p>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">Параметры приложения</h1>
-      </GlassCard>
+    <div className="mx-auto w-full max-w-lg px-1 pb-40 pt-6 text-omf-ink">
+      <h1 className="text-[40px] font-extrabold leading-[0.92] tracking-[-0.045em]">Настройки</h1>
 
-      {/* Appearance — static (dark-only app) */}
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0, type: "spring", stiffness: 320, damping: 22 }}
-        className="glass-card p-4"
-      >
-        <div className="flex items-center justify-between gap-4">
-          <span className="inline-flex items-center gap-3">
-            <MoonStar className="h-4 w-4 text-white/80" />
-            <span className="text-sm">Темный интерфейс</span>
-          </span>
-          <span className="text-xs text-white/60">Включен (только тёмный)</span>
-        </div>
-      </motion.div>
-
-      {/* Push notifications */}
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.05, type: "spring", stiffness: 320, damping: 22 }}
-        className="glass-card overflow-hidden"
-      >
+      <div className="mt-6">
         {isLoading ? (
-          <div className="flex items-center justify-between p-4">
-            <div className="flex items-center gap-3">
-              <Bell className="h-4 w-4 text-white/80" />
-              <div className="h-3 w-40 animate-pulse rounded bg-white/10" />
-            </div>
-            <div className="h-6 w-11 animate-pulse rounded-full bg-white/10" />
+          <div className="flex items-center justify-between border-b border-omf-line py-4" aria-busy="true">
+            <div className="h-4 w-40 animate-pulse rounded bg-omf-surface" />
+            <div className="h-8 w-[52px] animate-pulse rounded-full bg-omf-surface" />
           </div>
         ) : (
           <ToggleRow
-            label="Push-уведомления"
-            icon={Bell}
+            label="Уведомления"
+            hint="Сообщения в Telegram, когда модератор принял решение по релизу."
             checked={prefs?.push_notifications ?? true}
             onChange={handleTogglePush}
             disabled={isSavingPush}
           />
         )}
-      </motion.div>
+        <div className="border-b border-omf-line py-4">
+          <p className="text-[16px] text-omf-ink">Оформление</p>
+          <p className="mt-0.5 text-[14px] text-omf-graphite">Приложение всегда тёмное.</p>
+        </div>
+      </div>
 
-      {/* Security — static info */}
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1, type: "spring", stiffness: 320, damping: 22 }}
-        className="glass-card flex items-center justify-between p-4"
-      >
-        <span className="inline-flex items-center gap-3">
-          <ShieldCheck className="h-4 w-4 text-white/80" />
-          <span className="text-sm">Безопасность дистрибуции</span>
-        </span>
-        <span className="text-xs text-white/60">Защищено</span>
-      </motion.div>
-
-      {/* Logout button for web users */}
       <WebLogoutButton />
     </div>
   );
@@ -205,26 +160,19 @@ function WebLogoutButton() {
       await logout();
     } catch (err) {
       console.error("Logout error:", err);
-      toast.error("Ошибка выхода");
+      toast.error("Не получилось выйти. Попробуй ещё раз.");
       setIsLoggingOut(false);
     }
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.15, type: "spring", stiffness: 320, damping: 22 }}
+    <button
+      type="button"
+      onClick={handleLogout}
+      disabled={isLoggingOut}
+      className="omf-btn-secondary mt-8 w-full text-omf-red disabled:opacity-50"
     >
-      <button
-        type="button"
-        onClick={handleLogout}
-        disabled={isLoggingOut}
-        className="glass-card w-full flex items-center justify-center gap-2 p-4 text-sm text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
-      >
-        <LogOut className="h-4 w-4" />
-        {isLoggingOut ? "Выход..." : "Выйти из аккаунта"}
-      </button>
-    </motion.div>
+      {isLoggingOut ? "Выходим…" : "Выйти из аккаунта"}
+    </button>
   );
 }

@@ -15,23 +15,23 @@ export default function GlobalError({
 
   return (
     <html lang="ru">
-      <body className="min-h-[100dvh] bg-[#030303] px-4 py-10 text-white">
-        <div className="mx-auto w-full max-w-[440px] rounded-[20px] border border-red-500/25 bg-red-950/30 p-5">
-          <p className="text-base font-semibold">Критическая ошибка приложения</p>
-          <p className="mt-2 text-sm text-white/80">
-            Приложение столкнулось с неожиданной ошибкой. Нажмите кнопку ниже, чтобы
-            попробовать восстановиться.
+      <body
+        style={{ minHeight: "100dvh", background: "#1a1d24", color: "#eceef0", margin: 0, padding: "40px 20px", fontFamily: "system-ui, sans-serif" }}
+      >
+        <div style={{ maxWidth: 440, margin: "0 auto" }}>
+          <h1 style={{ fontSize: 28, fontWeight: 800, lineHeight: 0.95, margin: 0 }}>Приложение остановилось</h1>
+          <p style={{ marginTop: 12, fontSize: 15, lineHeight: 1.5, color: "#8c93a1" }}>
+            Произошла неожиданная ошибка. Перезапусти экран. Если повторится, напиши в поддержку.
           </p>
           <button
             type="button"
             onClick={() => reset()}
-            className="mt-4 inline-flex h-10 items-center justify-center rounded-[12px] border border-red-300/40 bg-red-500/15 px-4 text-sm font-medium"
+            style={{ marginTop: 24, width: "100%", height: 56, border: 0, borderRadius: 14, background: "#2f3fe0", color: "#fff", fontSize: 16, fontWeight: 700 }}
           >
-            Перезапустить экран
+            Перезапустить
           </button>
         </div>
       </body>
     </html>
   );
 }
-

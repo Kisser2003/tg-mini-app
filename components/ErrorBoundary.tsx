@@ -8,23 +8,16 @@ import { logClientError } from "@/lib/logger";
 
 function ErrorFallback({ error: _error, resetErrorBoundary }: FallbackProps) {
   return (
-    <div className="flex min-h-[60vh] flex-col items-center justify-center px-4 py-10">
-      <div className="w-full max-w-[360px] rounded-[24px] border border-white/[0.12] bg-surface/85 px-6 py-8 text-center shadow-[0_24px_60px_rgba(0,0,0,0.75)] backdrop-blur-2xl">
-        <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-white/45">Ошибка</p>
-        <h1 className="mt-3 text-xl font-semibold tracking-tight text-white">
-          Упс! Что-то пошло не так
-        </h1>
-        <p className="mt-2 text-[13px] leading-relaxed text-white/55">
-          Попробуй обновить экран. Если повторится — напиши нам, мы разберёмся.
-        </p>
-        <button
-          type="button"
-          onClick={resetErrorBoundary}
-          className="mt-6 inline-flex h-[52px] w-full items-center justify-center rounded-[18px] bg-gradient-to-tr from-[#4F46E5] to-[#7C3AED] text-[15px] font-semibold text-white shadow-[0_14px_40px_rgba(88,80,236,0.5)]"
-        >
-          Попробовать снова
-        </button>
-      </div>
+    <div className="mx-auto flex min-h-[60vh] w-full max-w-md flex-col justify-center px-5 py-10">
+      <h1 className="text-[28px] font-extrabold leading-[0.95] tracking-[-0.03em] text-omf-ink">
+        Что-то сломалось
+      </h1>
+      <p className="mt-3 text-[15px] leading-relaxed text-omf-graphite">
+        Мы уже получили отчёт об ошибке. Обнови экран. Если не помогло, напиши в поддержку.
+      </p>
+      <button type="button" onClick={resetErrorBoundary} className="omf-btn-primary mt-6 h-14 w-full text-[16px]">
+        Обновить экран
+      </button>
     </div>
   );
 }

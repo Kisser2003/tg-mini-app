@@ -2,8 +2,7 @@
 
 import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { motion } from "framer-motion";
-import { CheckCircle2, XCircle, Loader2, Sparkles } from "lucide-react";
+import { AuthShell } from "@/components/AuthShell";
 import { createSupabaseBrowser } from "@/lib/supabase";
 
 type ConfirmStatus = "loading" | "success" | "error";
@@ -23,7 +22,7 @@ function ConfirmEmailContent() {
 
       if (error) {
         console.error("Confirmation error:", error);
-        setErrorMessage(error.message || "Не удалось подтвердить email");
+        setErrorMessage(error.message || "Не удалось подтвердить почту");
         setStatus("error");
         return;
       }
@@ -36,7 +35,7 @@ function ConfirmEmailContent() {
           router.push(redirect);
         }, 2000);
       } else {
-        setErrorMessage("Сессия не найдена");
+        setErrorMessage("Ссылка устарела или уже использована");
         setStatus("error");
       }
     };
@@ -45,79 +44,30 @@ function ConfirmEmailContent() {
   }, [router, searchParams]);
 
   return (
-    <div className="flex min-h-app items-center justify-center px-5 py-10">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="w-full max-w-md"
-      >
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <motion.div
-            initial={{ scale: 0.9 }}
-            animate={{ scale: 1 }}
-            transition={{ duration: 0.5 }}
-            className="inline-flex items-center gap-2 mb-4"
-          >
-            <Sparkles className="text-indigo-400" size={32} />
-            <h1 className="text-3xl font-bold gradient-text-blue">OMF Distribution</h1>
-          </motion.div>
-        </div>
-
-        {/* Status Card */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.4, delay: 0.2 }}
-          className="glass p-10 rounded-2xl text-center"
-        >
-          {status === "loading" && (
-            <>
-              <Loader2 className="mx-auto mb-4 text-indigo-400 animate-spin" size={48} />
-              <h2 className="text-xl font-semibold text-white mb-2">
-                Подтверждаем email
-              </h2>
-              <p className="text-white/60 text-sm">Пожалуйста, подождите...</p>
-            </>
-          )}
-
-          {status === "success" && (
-            <>
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ type: "spring", duration: 0.6 }}
-              >
-                <CheckCircle2 className="mx-auto mb-4 text-green-400" size={48} />
-              </motion.div>
-              <h2 className="text-xl font-semibold text-white mb-2">
-                Email подтвержден!
-              </h2>
-              <p className="text-white/60 text-sm">
-                Перенаправляем вас в приложение...
-              </p>
-            </>
-          )}
-
-          {status === "error" && (
-            <>
-              <XCircle className="mx-auto mb-4 text-red-400" size={48} />
-              <h2 className="text-xl font-semibold text-white mb-2">
-                Ошибка подтверждения
-              </h2>
-              <p className="text-white/60 text-sm mb-6">{errorMessage}</p>
-              <button
-                onClick={() => router.push("/login")}
-                className="px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-semibold rounded-xl transition-all duration-200"
-              >
-                Вернуться к входу
-              </button>
-            </>
-          )}
-        </motion.div>
-      </motion.div>
-    </div>
+    <AuthShell
+      title={
+        status === "loading" ? "Подтверждаем почту" : status === "success" ? "Почта подтверждена" : "Не получилось подтвердить"
+      }
+      subtitle={
+        status === "loading"
+          ? "Это займёт пару секунд."
+          : status === "success"
+            ? "Открываем приложение…"
+            : `${errorMessage}. Попробуй войти или запроси письмо ещё раз.`
+      }
+    >
+      {status === "error" ? (
+        <button type="button" onClick={() => router.push("/login")} className="omf-btn-primary h-14 w-full text-[16px]">
+          Ко входу
+        </button>
+      ) : (
+        <div
+          className="h-8 w-8 animate-spin rounded-full border-2 border-omf-line border-t-omf-ultra"
+          role="status"
+          aria-label={status === "loading" ? "Подтверждаем" : "Открываем приложение"}
+        />
+      )}
+    </AuthShell>
   );
 }
 
@@ -126,7 +76,7 @@ export default function ConfirmEmailPage() {
     <Suspense
       fallback={
         <div className="flex min-h-app items-center justify-center">
-          <Loader2 className="animate-spin text-indigo-400" size={48} />
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-omf-line border-t-omf-ultra" />
         </div>
       }
     >

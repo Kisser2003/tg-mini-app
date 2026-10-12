@@ -11,20 +11,9 @@ export default function CreateLayout({ children }: { children: React.ReactNode }
 
   if (!hasHydrated) {
     return (
-      <div className="flex min-h-[100svh] items-center justify-center bg-transparent">
-        <div className="flex flex-col items-center gap-4">
-          <div className="glass-glow glass-glow-charged p-8">
-            <div className="flex flex-col items-center gap-3">
-              <div
-                className="h-9 w-9 animate-spin rounded-full border-2 border-white/10 border-t-[#7C3AED]"
-                aria-hidden="true"
-              />
-              <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-white/40">
-                Загрузка…
-              </p>
-            </div>
-          </div>
-        </div>
+      <div className="flex min-h-[100svh] flex-col items-center justify-center gap-4" role="status">
+        <div className="h-9 w-9 animate-spin rounded-full border-2 border-omf-line border-t-omf-ultra" aria-hidden="true" />
+        <p className="text-[15px] text-omf-graphite">Открываем черновик…</p>
       </div>
     );
   }

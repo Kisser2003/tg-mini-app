@@ -72,11 +72,11 @@ export function PullRefreshBrand({ scrollRoot }: PullRefreshBrandProps) {
     >
       <motion.div
         style={{ rotate, scale }}
-        className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/15 bg-black/35 shadow-[0_8px_28px_rgba(0,0,0,0.45)] backdrop-blur-md"
+        className="flex h-11 w-11 items-center justify-center rounded-full border border-omf-line bg-omf-surface"
       >
         <Music
           className="h-5 w-5"
-          style={{ color: "var(--tg-theme-button-color, #3390ec)" }}
+          style={{ color: "var(--omf-ultra-text)" }}
           strokeWidth={1.6}
           aria-hidden
         />

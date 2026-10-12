@@ -7,16 +7,13 @@ import {
   Shield,
   LogOut,
   CircleHelp,
-  FileMusic,
   List,
   FileText,
   Clock3,
   Link2,
-  Megaphone,
   ChevronDown
 } from "lucide-react";
 import { useLogout } from "@/lib/hooks/useWebAuth";
-import { motion } from "framer-motion";
 import { isAdminUi, isAdminUiByWebSession } from "@/lib/admin";
 import { initTelegramWebApp } from "@/lib/telegram";
 import { cn } from "@/lib/utils";
@@ -71,8 +68,8 @@ export function Sidebar() {
 
   const navItems = useMemo(
     () => [
-      { path: "/requirements", icon: CircleHelp, label: "FAQ" },
-      ...(showAdminTab ? [{ path: "/admin", icon: Shield, label: "Админка" }] : [])
+      { path: "/requirements", icon: CircleHelp, label: "Помощь" },
+      ...(showAdminTab ? [{ path: "/admin", icon: Shield, label: "Модерация" }] : [])
     ],
     [showAdminTab]
   );
@@ -88,19 +85,23 @@ export function Sidebar() {
     return null;
   }
 
+  const itemClass = (active: boolean) =>
+    cn(
+      "omf-focus relative flex items-center gap-3 rounded-control px-3 py-2.5 text-[15px] transition-colors",
+      active ? "bg-omf-surface font-medium text-omf-ink" : "text-omf-graphite hover:bg-omf-surface hover:text-omf-ink"
+    );
+
+  const groupButton = "omf-focus flex w-full items-center gap-2 rounded-control px-2 py-2 text-left text-[13px] text-omf-graphite transition-colors hover:text-omf-ink";
+
   return (
-    <aside className="fixed bottom-0 left-0 top-[var(--safe-top)] z-50 hidden w-64 flex-col border-r border-white/5 bg-black/40 backdrop-blur-xl lg:flex">
-      {/* Header */}
-      <div className="p-6 border-b border-white/5">
-        <h1 className="text-2xl font-display font-bold gradient-text">
-          OMF
-        </h1>
-        <p className="text-sm text-white/40 mt-1">Music Distribution</p>
+    <aside className="fixed bottom-0 left-0 top-[var(--safe-top)] z-50 hidden w-64 flex-col border-r border-omf-line bg-omf-bg lg:flex">
+      <div className="border-b border-omf-line p-6">
+        <p className="text-[24px] font-extrabold tracking-[-0.04em] text-omf-ink">OMF</p>
+        <p className="mt-0.5 text-[13px] text-omf-graphite">Выпуск музыки</p>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 space-y-4 p-4">
-        <div className="space-y-2">
+      <nav className="flex-1 space-y-5 overflow-y-auto p-4" aria-label="Основная навигация">
+        <div className="space-y-1">
           <button
             type="button"
             onClick={() => {
@@ -115,56 +116,35 @@ export function Sidebar() {
               });
             }}
             aria-expanded={releasesOpen}
-            className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-white/85 transition-colors hover:bg-white/5"
+            className={groupButton}
           >
             <ChevronDown
-              className={cn(
-                "h-4 w-4 shrink-0 text-white/45 transition-transform duration-200",
-                !releasesOpen && "-rotate-90"
-              )}
+              className={cn("h-4 w-4 shrink-0 transition-transform duration-200", !releasesOpen && "-rotate-90")}
               aria-hidden
             />
-            <FileMusic className="h-5 w-5 shrink-0" />
-            <span className="min-w-0 flex-1 font-medium">Ваши релизы</span>
+            <span className="min-w-0 flex-1">Релизы</span>
           </button>
-          {releasesOpen ? (
-            <div className="ml-3 border-l border-white/10 pl-3">
-              {releaseViews.map((item) => {
+          {releasesOpen
+            ? releaseViews.map((item) => {
                 const Icon = item.icon;
                 const isActive = pathname === "/library" && releaseView === item.view;
-
                 return (
                   <Link
                     key={item.path}
                     href={item.path}
                     onClick={() => setReleaseView(item.view)}
+                    aria-current={isActive ? "page" : undefined}
+                    className={itemClass(isActive)}
                   >
-                    <motion.div
-                      className={`
-                      relative mt-1.5 flex items-center gap-2.5 rounded-lg px-3 py-2.5 transition-all duration-200
-                      ${isActive ? "bg-white/10 text-white" : "text-white/55 hover:bg-white/5 hover:text-white"}
-                    `}
-                      whileHover={{ scale: 1.01 }}
-                      whileTap={{ scale: 0.98 }}
-                    >
-                      {isActive && (
-                        <motion.div
-                          layoutId="sidebar-active-sub"
-                          className="absolute inset-0 rounded-lg border border-white/10 bg-gradient-to-r from-purple-500/20 to-pink-500/20"
-                          transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                        />
-                      )}
-                      <Icon className="relative h-4 w-4" />
-                      <span className="relative text-[14px] font-medium">{item.label}</span>
-                    </motion.div>
+                    <Icon className="h-[18px] w-[18px]" aria-hidden />
+                    {item.label}
                   </Link>
                 );
-              })}
-            </div>
-          ) : null}
+              })
+            : null}
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-1">
           <button
             type="button"
             onClick={() => {
@@ -179,90 +159,53 @@ export function Sidebar() {
               });
             }}
             aria-expanded={marketingOpen}
-            className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-white/85 transition-colors hover:bg-white/5"
+            className={groupButton}
           >
             <ChevronDown
-              className={cn(
-                "h-4 w-4 shrink-0 text-white/45 transition-transform duration-200",
-                !marketingOpen && "-rotate-90"
-              )}
+              className={cn("h-4 w-4 shrink-0 transition-transform duration-200", !marketingOpen && "-rotate-90")}
               aria-hidden
             />
-            <Megaphone className="h-5 w-5 shrink-0" />
-            <span className="min-w-0 flex-1 font-medium">Маркетинг</span>
+            <span className="min-w-0 flex-1">Продвижение</span>
           </button>
           {marketingOpen ? (
-            <div className="ml-3 border-l border-white/10 pl-3">
-              <Link href="/multi-links">
-                <motion.div
-                  className={`
-                  relative mt-1.5 flex items-center gap-2.5 rounded-lg px-3 py-2.5 transition-all duration-200
-                  ${
-                    pathname === "/multi-links"
-                      ? "bg-white/10 text-white"
-                      : "text-white/55 hover:bg-white/5 hover:text-white"
-                  }
-                `}
-                  whileHover={{ scale: 1.01 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  {pathname === "/multi-links" && (
-                    <motion.div
-                      layoutId="sidebar-active-marketing"
-                      className="absolute inset-0 rounded-lg border border-white/10 bg-gradient-to-r from-purple-500/20 to-pink-500/20"
-                      transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                    />
-                  )}
-                  <Link2 className="relative h-4 w-4" />
-                  <span className="relative text-[14px] font-medium">Мультиссылки</span>
-                </motion.div>
-              </Link>
-            </div>
+            <Link
+              href="/multi-links"
+              aria-current={pathname === "/multi-links" ? "page" : undefined}
+              className={itemClass(pathname === "/multi-links")}
+            >
+              <Link2 className="h-[18px] w-[18px]" aria-hidden />
+              Ссылки на релизы
+            </Link>
           ) : null}
         </div>
 
-        {navItems.map((item) => {
-          const isActive = pathname === item.path;
-          const Icon = item.icon;
-
-          return (
-            <Link key={`${item.path}-${item.label}`} href={item.path}>
-              <motion.div
-                className={`
-                  relative flex items-center gap-3 px-4 py-3 rounded-xl
-                  transition-all duration-200
-                  ${
-                    isActive
-                      ? "bg-white/10 text-white"
-                      : "text-white/60 hover:text-white hover:bg-white/5"
-                  }
-                `}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
+        <div className="space-y-1">
+          {navItems.map((item) => {
+            const isActive = pathname === item.path;
+            const Icon = item.icon;
+            return (
+              <Link
+                key={`${item.path}-${item.label}`}
+                href={item.path}
+                aria-current={isActive ? "page" : undefined}
+                className={itemClass(isActive)}
               >
-                {isActive && (
-                  <motion.div
-                    layoutId="sidebar-active"
-                    className="absolute inset-0 rounded-xl bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-white/10"
-                    transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                  />
-                )}
-                <Icon className="relative w-5 h-5" />
-                <span className="relative font-medium">{item.label}</span>
-              </motion.div>
-            </Link>
-          );
-        })}
+                <Icon className="h-[18px] w-[18px]" aria-hidden />
+                {item.label}
+              </Link>
+            );
+          })}
+        </div>
       </nav>
 
-      {/* Footer: Logout */}
-      <div className="p-4 border-t border-white/5">
+      <div className="border-t border-omf-line p-4">
         <button
+          type="button"
           onClick={logout}
-          className="flex items-center gap-3 px-4 py-3 w-full rounded-xl text-white/60 hover:text-white hover:bg-white/5 transition-all duration-200"
+          className="omf-focus flex w-full items-center gap-3 rounded-control px-3 py-2.5 text-[15px] text-omf-graphite transition-colors hover:bg-omf-surface hover:text-omf-ink"
         >
-          <LogOut className="w-5 h-5" />
-          <span className="font-medium">Выйти</span>
+          <LogOut className="h-[18px] w-[18px]" aria-hidden />
+          Выйти
         </button>
       </div>
     </aside>

@@ -7,21 +7,17 @@ import { LibraryWebAside } from "@/components/library/LibraryWebAside";
 export default function RequirementsPage() {
   return (
     <AuthGuard>
-      <div className="min-h-app px-5 pb-44 pt-14 text-foreground">
-        <div className="mx-auto w-full max-w-[760px]">
-          <div className="mb-6">
-            <h1 className="font-display text-2xl font-bold tracking-tight text-white/90">
-              FAQ
-            </h1>
-            <p className="mt-1 text-sm text-white/45">
-              Реальные правила OMF: файлы, даты, фиты, модерация — то, с чем вы столкнётесь в
-              кабинете.
-            </p>
-          </div>
-          <LibraryWebAside />
-          <div className="mt-5">
-            <FeedbackCard />
-          </div>
+      <div className="mx-auto min-h-app w-full max-w-lg px-1 pb-40 pt-6 text-omf-ink">
+        <header className="mb-6">
+          <p className="text-[13px] text-omf-graphite">Правила и ответы</p>
+          <h1 className="mt-1 text-[40px] font-extrabold leading-[0.92] tracking-[-0.045em]">Помощь</h1>
+          <p className="mt-3 text-[15px] leading-relaxed text-omf-graphite">
+            Требования к файлам, даты выхода, фиты и статусы модерации.
+          </p>
+        </header>
+        <LibraryWebAside />
+        <div className="mt-8">
+          <FeedbackCard />
         </div>
       </div>
     </AuthGuard>

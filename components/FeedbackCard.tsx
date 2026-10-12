@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { Send } from "lucide-react";
 import { hapticMap } from "@/lib/haptic-map";
 import { getTelegramApiAuthHeaders } from "@/lib/telegram";
 
@@ -38,16 +37,16 @@ export function FeedbackCard() {
 
       const json = (await response.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
       if (!response.ok || json?.ok !== true) {
-        throw new Error(json?.error || "Не удалось отправить сообщение.");
+        throw new Error(json?.error || "Не получилось отправить сообщение. Попробуй ещё раз.");
       }
 
       hapticMap.notificationSuccess();
       setMessage("");
-      setStatusText("Спасибо! Сообщение отправлено.");
+      setStatusText("Спасибо, сообщение отправлено.");
       setStatusError(false);
     } catch (error) {
       hapticMap.notificationError();
-      setStatusText(error instanceof Error ? error.message : "Ошибка отправки.");
+      setStatusText(error instanceof Error ? error.message : "Не получилось отправить сообщение. Попробуй ещё раз.");
       setStatusError(true);
     } finally {
       setSending(false);
@@ -55,39 +54,39 @@ export function FeedbackCard() {
   };
 
   return (
-    <section className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5 backdrop-blur-md">
-      <h2 className="text-sm font-semibold text-white/90">Есть идея или проблема?</h2>
-      <p className="mt-1 text-[12px] leading-relaxed text-white/45">
-        Напишите, что улучшить в приложении. Сообщение сразу попадет в админ-панель данных.
+    <section className="border-t border-omf-line pt-6">
+      <h2 className="text-[20px] font-bold tracking-tight">Нашёл ошибку или есть идея?</h2>
+      <p className="mt-1.5 text-[14px] leading-relaxed text-omf-graphite">
+        Напиши, что неудобно или сломалось. Сообщение увидит команда сервиса.
       </p>
 
       <textarea
         value={message}
         onChange={(e) => setMessage(e.target.value)}
-        placeholder="Например: добавьте фильтр по датам в библиотеке..."
+        placeholder="Что случилось или что улучшить"
+        aria-label="Сообщение для команды"
         maxLength={4000}
-        className="mt-3 min-h-[110px] w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder:text-white/30 outline-none transition-colors focus:border-indigo-400/50"
+        className="omf-focus mt-4 min-h-[120px] w-full rounded-control border border-omf-line bg-omf-surface px-4 py-3 text-[16px] text-omf-ink outline-none transition-colors placeholder:text-omf-faint focus:border-omf-ultra"
       />
 
-      <div className="mt-2 flex items-center justify-between text-[11px] text-white/35">
-        <span>Минимум 3 символа</span>
-        <span>{message.length}/4000</span>
+      <div className="mt-2 flex items-center justify-between text-[13px] text-omf-faint">
+        <span>Не короче 3 символов</span>
+        <span className="tabular-nums">{message.length}/4000</span>
       </div>
 
-      <div className="mt-3 flex items-center gap-3">
-        <button
-          type="button"
-          disabled={!canSubmit}
-          onClick={submitFeedback}
-          className="inline-flex items-center gap-1 rounded-lg bg-indigo-500/90 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          <Send className="h-3.5 w-3.5" />
-          {sending ? "Отправка..." : "Отправить"}
-        </button>
-        {statusText ? (
-          <p className={`text-[12px] ${statusError ? "text-red-300" : "text-emerald-300"}`}>{statusText}</p>
-        ) : null}
-      </div>
+      <button
+        type="button"
+        disabled={!canSubmit}
+        onClick={submitFeedback}
+        className="omf-btn-primary mt-4 w-full"
+      >
+        {sending ? "Отправляем…" : "Отправить"}
+      </button>
+      {statusText ? (
+        <p className={`mt-3 text-[14px] ${statusError ? "text-omf-red" : "text-omf-green"}`} role="status">
+          {statusText}
+        </p>
+      ) : null}
     </section>
   );
 }

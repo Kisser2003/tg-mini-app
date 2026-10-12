@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, History, RefreshCcw } from "lucide-react";
+import { ArrowLeft, RefreshCcw } from "lucide-react";
 import useSWR from "swr";
 import { AdminReleaseCard } from "@/components/AdminReleaseCard";
 import { PullRefreshBrand } from "@/components/PullRefreshBrand";
@@ -111,67 +111,62 @@ export default function AdminModerationHistoryPage() {
 
   if (userId == null && !isAdmin && process.env.NODE_ENV === "production") {
     return (
-      <div className="glass-glow glass-glow-charged mx-5 mt-14 p-6">
-        <h1 className="font-display text-xl font-bold text-white/85">История модерации</h1>
-        <p className="mt-2 text-sm text-white/50">Открой приложение из Telegram для доступа к админке.</p>
+      <div className="mx-auto max-w-lg px-1 pt-10">
+        <h1 className="text-[28px] font-extrabold tracking-[-0.03em]">История решений</h1>
+        <p className="mt-2 text-[15px] text-omf-graphite">Открой приложение из Telegram, чтобы попасть в админку.</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-app px-5 pb-44 pt-14">
+    <div className="mx-auto min-h-app max-w-lg px-1 pb-40 pt-4 text-omf-ink">
       <PullRefreshBrand />
 
       <div className="mb-4 flex items-center justify-between gap-3">
         <Link
           href="/admin"
-          className="inline-flex items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-sm text-white/75 backdrop-blur-md hover:bg-white/[0.07]"
+          className="omf-focus -ml-2 inline-flex items-center gap-1.5 rounded-full px-2 py-1.5 text-[14px] text-omf-graphite transition-colors hover:text-omf-ink"
         >
-          <ArrowLeft className="h-4 w-4 shrink-0" />
-          К очереди
+          <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden />
+          Очередь
         </Link>
         <button
           type="button"
           onClick={() => void mutate(undefined, { revalidate: true })}
           disabled={isValidating}
-          aria-label="Обновить"
-          className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04] text-white/70 backdrop-blur-md disabled:opacity-50"
+          aria-label="Обновить историю"
+          className="omf-focus flex h-10 w-10 items-center justify-center rounded-full text-omf-graphite transition-colors hover:bg-omf-surface hover:text-omf-ink disabled:opacity-50"
         >
-          <RefreshCcw className={`h-[18px] w-[18px] ${isValidating ? "animate-spin" : ""}`} />
+          <RefreshCcw className={`h-[18px] w-[18px] ${isValidating ? "animate-spin" : ""}`} aria-hidden />
         </button>
       </div>
 
-      <div className="mb-6 flex items-center gap-3">
-        <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-violet-400/25 bg-violet-500/10 text-violet-200">
-          <History className="h-5 w-5" />
-        </div>
-        <div>
-          <h1 className="font-display text-2xl font-bold tracking-tight text-white/80">История решений</h1>
-          <p className="text-sm text-white/45">Одобренные и отклонённые релизы</p>
-        </div>
-      </div>
+      <header className="mb-6">
+        <p className="text-[13px] text-omf-graphite">Одобренные и возвращённые релизы</p>
+        <h1 className="mt-1 text-[40px] font-extrabold leading-[0.92] tracking-[-0.045em]">История</h1>
+      </header>
 
       {listTruncated && rows.length > 0 && (
-        <div className="glass-glow glass-glow-charged mb-4 p-3 text-xs text-amber-100/85">
-          Показаны последние {HISTORY_LIMIT} релизов по дате создания. Если нужно больше — напишите в поддержку,
-          добавим пагинацию.
-        </div>
+        <p className="mb-4 text-[14px] text-omf-yellow">
+          Показаны последние {HISTORY_LIMIT} релизов. Более старых здесь пока нет.
+        </p>
       )}
 
-      {errorMessage && (
-        <div className="glass-glow glass-glow-charged mb-4 p-4 text-sm text-rose-200">{errorMessage}</div>
-      )}
+      {errorMessage && <p className="mb-4 text-[14px] text-omf-red">{errorMessage}</p>}
 
       {showSkeleton && <AdminModerationQueueSkeleton rows={4} />}
 
       {!showSkeleton && !errorMessage && rows.length === 0 && (
-        <div className="glass-glow glass-glow-charged p-5 text-sm text-white/50">
-          Пока нет релизов со статусом «Готов» или «Отклонено».
+        <div className="border-t border-omf-line pt-6">
+          <p className="text-[18px] font-bold tracking-tight">История пока пуста</p>
+          <p className="mt-1.5 text-[14px] text-omf-graphite">
+            Здесь появятся релизы, по которым вы приняли решение.
+          </p>
         </div>
       )}
 
       {rows.length > 0 && (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col">
           {visibleRows.map((row, index) => (
             <AdminReleaseCard
               key={row.release.id}
@@ -192,15 +187,13 @@ export default function AdminModerationHistoryPage() {
       )}
 
       {hasMoreRows && (
-        <div className="mt-4 flex justify-center">
-          <button
-            type="button"
-            onClick={() => setVisibleRowsCount((prev) => Math.min(prev + VISIBLE_ROWS_CHUNK, rows.length))}
-            className="inline-flex items-center justify-center rounded-xl border border-white/[0.1] bg-white/[0.03] px-4 py-2 text-sm text-white/70 transition-colors hover:bg-white/[0.08]"
-          >
-            Показать еще ({visibleRows.length}/{rows.length})
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => setVisibleRowsCount((prev) => Math.min(prev + VISIBLE_ROWS_CHUNK, rows.length))}
+          className="omf-btn-secondary mt-5 w-full"
+        >
+          Показать ещё ({visibleRows.length} из {rows.length})
+        </button>
       )}
     </div>
   );

@@ -45,6 +45,10 @@ export function FAB() {
   if (pathname === "/requirements" || pathname === "/multi-links") {
     return null;
   }
+  /* Настройки: создать релиз можно с главного экрана */
+  if (pathname === "/settings") {
+    return null;
+  }
   /* Hide on auth pages */
   if (pathname === "/login") {
     return null;
@@ -67,18 +71,12 @@ export function FAB() {
             haptics.impactLight();
             router.push("/create/metadata");
           }}
-          className="pulse-glow fixed z-[55] flex h-[60px] w-[60px] items-center justify-center rounded-full text-white"
+          className="fixed z-[55] flex h-[56px] w-[56px] items-center justify-center rounded-full bg-omf-ultra text-white"
           style={{
-            bottom: isTelegram
-              ? "calc(var(--bottom-nav-height, 4.5rem) + 0.75rem + env(safe-area-inset-bottom, 0px))"
-              : "2rem",
-            right: isTelegram ? "1.25rem" : "2rem",
-            background:
-              "linear-gradient(135deg, var(--ss-neon-blue), var(--ss-neon-pink))",
-            border: "0.5px solid rgba(255,255,255,0.15)"
+            bottom: "calc(var(--bottom-nav-height, 4.5rem) + 0.75rem + env(safe-area-inset-bottom, 0px))",
+            right: isTelegram ? "1.25rem" : "2rem"
           }}
           whileTap={{ scale: 0.85 }}
-          whileHover={{ scale: 1.08 }}
         >
           <Plus size={26} strokeWidth={2.5} />
         </motion.button>

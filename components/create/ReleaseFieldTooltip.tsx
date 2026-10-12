@@ -27,7 +27,7 @@ export function ReleaseFieldTooltip({ topic, children, className }: ReleaseField
             <button
               type="button"
               className={cn(
-                "inline-flex h-5 w-5 items-center justify-center rounded-full text-white/45 transition-colors hover:text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/40",
+                "inline-flex h-5 w-5 items-center justify-center rounded-full text-omf-faint transition-colors hover:text-omf-ink omf-focus",
                 className,
               )}
               aria-label="Показать подсказку"
@@ -38,7 +38,7 @@ export function ReleaseFieldTooltip({ topic, children, className }: ReleaseField
         </TooltipTrigger>
         <TooltipContent
           side="top"
-          className="max-w-[260px] border-white/[0.12] bg-[#111217]/95 px-3 py-2 text-xs leading-relaxed text-white/80 shadow-2xl"
+          className="max-w-[260px] rounded-control border-omf-line-strong bg-omf-surface-2 px-3 py-2.5 text-[13px] leading-relaxed text-omf-ink"
         >
           {tooltipText}
         </TooltipContent>

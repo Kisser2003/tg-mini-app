@@ -75,7 +75,7 @@ function borderForField(
     return "";
   }
   if (hasGuidelineWarning) {
-    return "border-amber-500/45 ring-1 ring-amber-400/20";
+    return "border-omf-yellow";
   }
   return "";
 }
@@ -557,7 +557,7 @@ function CreateMetadataPageInner() {
             <MetadataSelectField
               label="Контент с матом"
               Icon={AlertTriangle}
-              iconClassName={values.explicit ? "text-amber-400" : "text-white/40"}
+              iconClassName={values.explicit ? "text-omf-yellow" : "text-omf-faint"}
               errorMessage={errors.explicit?.message}
               value={values.explicit ? "explicit" : "clean"}
               onChange={(e) =>
