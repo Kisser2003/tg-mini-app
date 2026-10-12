@@ -1,27 +1,24 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { motion } from "framer-motion";
-import { ArrowLeft, CheckCircle2, XCircle } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import { AudioPlayerLazy } from "@/components/AudioPlayerLazy";
 import { AdminReleaseDownloads } from "@/components/admin/AdminReleaseDownloads";
 import { AdminReleaseMetadataCard } from "@/components/admin/AdminReleaseMetadataCard";
-import { GlassCard } from "@/components/GlassCard";
+import { ReleaseSleeve } from "@/components/ReleaseSleeve";
 import { AdminApproveSmartLinkModal } from "@/components/AdminApproveSmartLinkModal";
 import { publishReleaseWithSmartLink, rejectRelease } from "@/features/admin/actions";
 import { fetchAdminReleaseDetail } from "@/features/admin/release-detail";
 import { isAdminUi, isAdminUiByWebSession } from "@/lib/admin";
-import { getReleaseStatusMeta, normalizeReleaseStatus } from "@/lib/release-status";
+import { normalizeReleaseStatus } from "@/lib/release-status";
 import type { ReleaseRecord, ReleaseTrackRow } from "@/repositories/releases.repo";
 import { getReleaseDisplayTitle } from "@/repositories/releases/types";
 import { getTelegramUserId, initTelegramWebApp, triggerHaptic } from "@/lib/telegram";
 import { featuringNamesFromCollaboratorsJson } from "@/lib/collaborators";
 
-const ARTWORK_PREVIEW_SIZES = "(max-width: 768px) 100vw, min(480px, 45vw)";
 
 function buildAudioItems(release: ReleaseRecord, tracks: ReleaseTrackRow[]) {
   if (tracks.length > 0) {
@@ -137,47 +134,49 @@ export default function AdminReleaseDetailPage() {
 
   if (userId == null && !isAdmin && process.env.NODE_ENV === "production") {
     return (
-      <GlassCard className="p-5">
-        <p className="text-sm text-white/65">Открой приложение из Telegram.</p>
-      </GlassCard>
+      <div className="mx-auto max-w-lg px-1 pt-10">
+        <p className="text-[15px] text-omf-graphite">Открой приложение из Telegram.</p>
+      </div>
     );
   }
 
   if (!isAdmin) {
     return (
-      <GlassCard className="p-5">
-        <p className="text-sm text-white/65">Доступ только для администратора.</p>
-      </GlassCard>
+      <div className="mx-auto max-w-lg px-1 pt-10">
+        <p className="text-[15px] text-omf-graphite">Эта страница только для администратора.</p>
+      </div>
     );
   }
 
   if (loading) {
     return (
-      <GlassCard className="p-5">
-        <p className="text-sm text-white/70">Загрузка…</p>
-      </GlassCard>
+      <div className="mx-auto max-w-lg px-1 pt-10" aria-busy="true">
+        <div className="mx-auto aspect-square w-[64%] max-w-[260px] animate-pulse rounded-sleeve bg-omf-surface" />
+        <div className="mx-auto mt-6 h-7 w-1/2 animate-pulse rounded bg-omf-surface" />
+      </div>
     );
   }
 
   if (loadError || !release) {
     return (
-      <GlassCard className="p-5">
-        <p className="text-sm text-rose-200">{loadError ?? "Релиз не найден."}</p>
-        <Link href="/admin" className="mt-3 inline-block text-sm text-[#A5B4FC] underline">
-          К очереди
+      <div className="mx-auto max-w-lg px-1 pt-10">
+        <h1 className="text-[24px] font-extrabold tracking-[-0.03em]">Не получилось открыть релиз</h1>
+        <p className="mt-2 text-[15px] text-omf-graphite">{loadError ?? "Такого релиза нет."}</p>
+        <Link href="/admin" className="omf-btn-secondary mt-5 w-full">
+          Вернуться к очереди
         </Link>
-      </GlassCard>
+      </div>
     );
   }
 
-  const statusMeta = getReleaseStatusMeta(release.status);
+  const canonical = normalizeReleaseStatus(release.status);
   const audioItems = buildAudioItems(release, tracks);
-  const canModerate = normalizeReleaseStatus(release.status) === "processing";
+  const canModerate = canonical === "processing";
   const displayTitle = getReleaseDisplayTitle(release);
   const featuringNames = featuringNamesFromCollaboratorsJson(release.collaborators);
 
   return (
-    <div className="flex flex-col gap-4 pb-10">
+    <div className="mx-auto w-full max-w-lg px-1 pb-40 pt-4 text-omf-ink">
       <AdminApproveSmartLinkModal
         releaseId={approveModalReleaseId}
         busy={approveModalReleaseId != null && busy}
@@ -185,54 +184,62 @@ export default function AdminReleaseDetailPage() {
         onSubmit={(id, newStatus, smartLink) => void handlePublishSmartLink(id, newStatus, smartLink)}
       />
 
-      <GlassCard className="p-5">
-        <Link
-          href="/admin"
-          className="mb-4 inline-flex items-center gap-2 text-[13px] text-white/70 hover:text-white"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          К очереди
-        </Link>
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-          <div className="relative mx-auto aspect-square w-full max-w-sm shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-white/5 sm:mx-0">
-            {release.artwork_url ? (
-              <Image
-                src={release.artwork_url}
-                alt=""
-                fill
-                sizes={ARTWORK_PREVIEW_SIZES}
-                className="object-contain"
-                priority
-              />
-            ) : (
-              <div className="flex h-full min-h-[200px] items-center justify-center text-sm text-white/40">
-                Нет обложки
-              </div>
-            )}
-          </div>
-          <div className="min-w-0 flex-1">
-            <h1 className="break-words text-xl font-semibold tracking-tight">
-              {displayTitle || release.track_name || "Релиз"}
-            </h1>
-            <p className="break-words text-sm text-white/60">{release.artist_name}</p>
-            {featuringNames.length > 0 ? (
-              <p
-                className="mt-1 break-words text-xs text-violet-200/85"
-                title={featuringNames.join(", ")}
-              >
-                feat: {featuringNames.join(", ")}
-              </p>
-            ) : null}
-            <span
-              className={`mt-2 inline-flex rounded-full border px-2 py-0.5 text-[10px] ${statusMeta.badgeClassName} ${statusMeta.badgeGlowClassName ?? ""} ${statusMeta.badgeShimmerClassName ?? ""}`}
-            >
-              {statusMeta.label}
-            </span>
-          </div>
-        </div>
-      </GlassCard>
+      <Link
+        href="/admin"
+        className="omf-focus -ml-2 mb-4 inline-flex items-center gap-1.5 rounded-full px-2 py-1.5 text-[14px] text-omf-graphite transition-colors hover:text-omf-ink"
+      >
+        <ArrowLeft className="h-4 w-4" aria-hidden />
+        Очередь
+      </Link>
 
-      <GlassCard className="p-5">
+      <div className="mx-auto w-[72%] max-w-[300px]">
+        <ReleaseSleeve
+          seed={release.id}
+          title={displayTitle || release.track_name || "Релиз"}
+          artist={release.artist_name}
+          coverUrl={release.artwork_url}
+          status={canonical}
+          size="hero"
+          priority
+        />
+      </div>
+
+      <h1 className="mt-7 break-words text-center text-[32px] font-extrabold leading-[0.95] tracking-[-0.04em]">
+        {displayTitle || release.track_name || "Релиз"}
+      </h1>
+      <p className="mt-2 text-center text-[15px] text-omf-graphite">{release.artist_name}</p>
+      {featuringNames.length > 0 ? (
+        <p className="mt-1 text-center text-[14px] text-omf-graphite" title={featuringNames.join(", ")}>
+          feat. {featuringNames.join(", ")}
+        </p>
+      ) : null}
+
+      <section className="mt-8" aria-labelledby="admin-listen">
+        <h2 id="admin-listen" className="mb-2 text-[13px] text-omf-graphite">
+          Послушать
+        </h2>
+        {audioItems.length === 0 ? (
+          <p className="text-[14px] text-omf-graphite">Аудио в базе нет, послушать нечего.</p>
+        ) : (
+          <div className="space-y-2.5">
+            {audioItems.map((item) => (
+              <AudioPlayerLazy key={item.key} src={item.src} label={item.label} variant="admin" />
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="mt-8" aria-labelledby="admin-meta">
+        <h2 id="admin-meta" className="mb-1 text-[13px] text-omf-graphite">
+          Данные релиза
+        </h2>
+        <AdminReleaseMetadataCard release={release} tracks={tracks} />
+      </section>
+
+      <section className="mt-8" aria-labelledby="admin-files">
+        <h2 id="admin-files" className="mb-2 text-[13px] text-omf-graphite">
+          Файлы
+        </h2>
         <AdminReleaseDownloads
           releaseId={release.id}
           hasArtwork={Boolean(release.artwork_url?.trim())}
@@ -240,78 +247,52 @@ export default function AdminReleaseDetailPage() {
           legacyAudioUrl={release.audio_url}
           releaseLyrics={release.lyrics ?? null}
         />
-      </GlassCard>
+      </section>
 
-      <GlassCard className="p-5">
-        <p className="mb-4 text-[11px] font-medium uppercase tracking-[0.14em] text-white/45">
-          Метаданные релиза
-        </p>
-        <AdminReleaseMetadataCard release={release} tracks={tracks} />
-      </GlassCard>
-
-      <GlassCard className="p-5">
-        <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.14em] text-white/45">
-          Аудио
-        </p>
-        {audioItems.length === 0 ? (
-          <p className="text-sm text-white/50">Нет URL аудио в базе.</p>
-        ) : (
-          <div className="space-y-3">
-            {audioItems.map((item) => (
-              <AudioPlayerLazy key={item.key} src={item.src} label={item.label} />
-            ))}
-          </div>
-        )}
-      </GlassCard>
-
-      {canModerate && (
-        <GlassCard className="p-5">
-          <div className="grid grid-cols-2 gap-2">
-            <motion.button
-              type="button"
-              disabled={busy}
-              onClick={() => {
-                triggerHaptic("light");
-                setApproveModalReleaseId(release.id);
-              }}
-              whileHover={{ scale: 0.99 }}
-              whileTap={{ scale: 0.98 }}
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-300/40 bg-emerald-500/20 px-3 py-2.5 text-sm text-emerald-100 disabled:opacity-60"
-            >
-              <CheckCircle2 className="h-4 w-4" />
-              Одобрить
-            </motion.button>
-            <motion.button
+      {canModerate ? (
+        <section className="mt-8 border-t border-omf-line pt-6" aria-labelledby="admin-decision">
+          <h2 id="admin-decision" className="text-[20px] font-bold tracking-tight">
+            Решение
+          </h2>
+          <div className="mt-4 grid grid-cols-2 gap-2.5">
+            <button
               type="button"
               disabled={busy}
               onClick={() => {
                 triggerHaptic("light");
                 setRejectOpen((v) => !v);
               }}
-              whileHover={{ scale: 0.99 }}
-              whileTap={{ scale: 0.98 }}
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-rose-300/40 bg-rose-500/20 px-3 py-2.5 text-sm text-rose-100 disabled:opacity-60"
+              className="omf-btn-secondary w-full disabled:opacity-50"
             >
-              <XCircle className="h-4 w-4" />
-              Отклонить
-            </motion.button>
+              Вернуть
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                triggerHaptic("light");
+                setApproveModalReleaseId(release.id);
+              }}
+              className="omf-btn-ink w-full disabled:opacity-50"
+            >
+              Одобрить
+            </button>
           </div>
-          {rejectOpen && (
-            <div className="mt-4 space-y-2 rounded-xl border border-white/10 bg-black/25 p-3">
-              <p className="text-xs text-white/65">Причина (колонка error_message)</p>
+          {rejectOpen ? (
+            <div className="mt-4">
+              <label htmlFor="reject-reason" className="text-[13px] text-omf-graphite">
+                Что исправить артисту
+              </label>
               <textarea
+                id="reject-reason"
                 value={rejectReason}
                 onChange={(e) => setRejectReason(e.target.value)}
-                rows={3}
-                placeholder="Причина отклонения"
-                className="w-full resize-none break-words rounded-xl border border-white/[0.08] bg-black/30 px-4 py-3 text-[16px] leading-relaxed text-white outline-none transition-[box-shadow] duration-200 placeholder:text-white/45 focus:ring-2 focus:ring-violet-500/25 focus:ring-offset-0"
+                rows={4}
+                placeholder="Например: обложка меньше 3000×3000"
+                className="omf-focus mt-2 w-full resize-none break-words rounded-control border border-omf-line bg-omf-surface px-4 py-3 text-[16px] leading-relaxed text-omf-ink outline-none placeholder:text-omf-faint focus:border-omf-ultra"
               />
-              <div className="flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setRejectOpen(false)}
-                  className="rounded-lg border border-white/20 bg-white/5 px-3 py-1.5 text-xs text-white/80"
-                >
+              <div className="mt-3 grid grid-cols-2 gap-2.5">
+                <button type="button" onClick={() => setRejectOpen(false)} className="omf-btn-secondary w-full">
                   Отмена
                 </button>
                 <button
@@ -321,20 +302,18 @@ export default function AdminReleaseDetailPage() {
                     triggerHaptic("light");
                     void handleReject();
                   }}
-                  className="rounded-lg border border-rose-300/35 bg-rose-500/20 px-3 py-1.5 text-xs text-rose-100 disabled:opacity-60"
+                  className="omf-btn-primary w-full"
                 >
-                  Подтвердить
+                  {busy ? "Отправляем…" : "Вернуть релиз"}
                 </button>
               </div>
             </div>
-          )}
-        </GlassCard>
-      )}
-
-      {!canModerate && (
-        <GlassCard className="p-4 text-sm text-white/60">
-          Релиз не в статусе «На проверке» — модерация с этой страницы недоступна.
-        </GlassCard>
+          ) : null}
+        </section>
+      ) : (
+        <p className="mt-8 border-t border-omf-line pt-6 text-[14px] leading-relaxed text-omf-graphite">
+          Релиз сейчас не «на проверке», поэтому решение здесь принять нельзя.
+        </p>
       )}
     </div>
   );

@@ -37,7 +37,7 @@ export function AdminApproveSmartLinkModal({ releaseId, busy, onClose, onSubmit 
           <button
             type="button"
             aria-label="Закрыть"
-            className="absolute inset-0 bg-black/40 backdrop-blur-[30px]"
+            className="absolute inset-0 bg-black/60"
             onClick={() => !busy && onClose()}
           />
           <motion.div
@@ -48,33 +48,35 @@ export function AdminApproveSmartLinkModal({ releaseId, busy, onClose, onSubmit 
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={SPRING_UI}
-            className="relative z-10 mx-auto w-full max-w-md rounded-t-[28px] border border-white/[0.12] border-b-0 bg-zinc-950/90 p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] shadow-[0_-12px_60px_rgba(0,0,0,0.65)] backdrop-blur-2xl"
+            className="relative z-10 mx-auto w-full max-w-md rounded-t-[24px] border border-b-0 border-omf-line bg-omf-surface p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))]"
           >
-            <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-white/15" aria-hidden />
+            <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-omf-line-strong" aria-hidden />
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h2 id="admin-approve-smart-title" className="text-lg font-semibold text-white">
-                  Выпуск + Smart Link
+                <h2 id="admin-approve-smart-title" className="text-[20px] font-bold tracking-tight">
+                  Одобрить релиз
                 </h2>
-                <p className="mt-1 text-[13px] leading-relaxed text-white/55">
-                  Статус в каталоге станет «выпущен» (<code className="text-white/70">ready</code> в БД).
-                  Укажите публичную ссылку для артиста.
+                <p className="mt-1 text-[14px] leading-relaxed text-omf-graphite">
+                  Вставь ссылку на релиз на всех площадках. Артист получит её в Telegram, а релиз
+                  получит статус «одобрен».
                 </p>
               </div>
               <button
                 type="button"
                 disabled={busy}
                 onClick={() => onClose()}
-                className="rounded-xl border border-white/15 bg-white/5 p-2 text-white/70 hover:bg-white/10 disabled:opacity-50"
+                aria-label="Закрыть"
+                className="omf-focus -mr-1 rounded-full p-1.5 text-omf-graphite hover:bg-omf-surface-2 hover:text-omf-ink disabled:opacity-50"
               >
-                <X className="h-4 w-4" />
+                <X className="h-5 w-5" />
               </button>
             </div>
 
-            <label className="mt-4 block text-[11px] font-medium uppercase tracking-[0.12em] text-white/45">
-              Smart Link (https)
+            <label htmlFor="admin-smart-link" className="mt-5 block text-[13px] text-omf-graphite">
+              Ссылка на релиз
             </label>
             <input
+              id="admin-smart-link"
               type="url"
               inputMode="url"
               autoComplete="off"
@@ -85,19 +87,14 @@ export function AdminApproveSmartLinkModal({ releaseId, busy, onClose, onSubmit 
                 setLocalError(null);
               }}
               placeholder="https://ffm.to/…"
-              className="mt-1.5 w-full rounded-xl border border-white/[0.08] bg-black/30 px-4 py-3 text-[16px] text-white outline-none placeholder:text-white/40 focus:ring-2 focus:ring-emerald-500/25 disabled:opacity-50"
+              className={`mt-2 min-h-[52px] w-full rounded-control border bg-omf-bg px-4 py-3 text-[16px] text-omf-ink outline-none placeholder:text-omf-faint focus:border-omf-ultra disabled:opacity-50 ${
+                localError ? "border-omf-red" : "border-omf-line"
+              }`}
             />
-            {localError && (
-              <p className="mt-2 text-[12px] text-rose-300">{localError}</p>
-            )}
+            {localError && <p className="mt-2 text-[14px] text-omf-red">{localError}</p>}
 
-            <div className="mt-5 flex gap-2">
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => onClose()}
-                className="flex-1 rounded-xl border border-white/15 bg-white/5 py-3 text-sm font-medium text-white/80 hover:bg-white/10 disabled:opacity-50"
-              >
+            <div className="mt-5 grid grid-cols-2 gap-2.5">
+              <button type="button" disabled={busy} onClick={() => onClose()} className="omf-btn-secondary w-full disabled:opacity-50">
                 Отмена
               </button>
               <button
@@ -106,23 +103,23 @@ export function AdminApproveSmartLinkModal({ releaseId, busy, onClose, onSubmit 
                 onClick={() => {
                   const t = smartLink.trim();
                   if (!t) {
-                    setLocalError("Введите ссылку.");
+                    setLocalError("Вставь ссылку на релиз.");
                     return;
                   }
                   try {
                     const u = new URL(t);
                     if (u.protocol !== "https:" && u.protocol !== "http:") {
-                      setLocalError("Нужна ссылка http(s).");
+                      setLocalError("Ссылка должна начинаться с http:// или https://");
                       return;
                     }
                   } catch {
-                    setLocalError("Некорректный URL.");
+                    setLocalError("Это не похоже на ссылку. Проверь, что скопировал её целиком.");
                     return;
                   }
                   setLocalError(null);
                   onSubmit(releaseId, "RELEASED", t);
                 }}
-                className="flex-1 rounded-xl border border-emerald-400/40 bg-emerald-500/25 py-3 text-sm font-semibold text-emerald-100 shadow-[0_0_20px_rgba(16,185,129,0.25)] disabled:opacity-50"
+                className="omf-btn-primary w-full"
               >
                 {busy ? "Сохраняем…" : "Одобрить"}
               </button>

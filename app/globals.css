@@ -557,6 +557,31 @@ button {
     cursor: not-allowed;
   }
 
+  .omf-btn-ink {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 48px;
+    padding: 0 20px;
+    border-radius: var(--omf-control-radius);
+    background: var(--omf-ink);
+    color: var(--omf-bg);
+    font-weight: 700;
+    font-size: 15px;
+    transition: opacity 150ms ease, transform 120ms ease;
+  }
+  .omf-btn-ink:hover {
+    opacity: 0.9;
+  }
+  .omf-btn-ink:active {
+    transform: scale(0.98);
+  }
+  .omf-btn-ink:focus-visible {
+    outline: 2px solid var(--omf-ultra-text);
+    outline-offset: 2px;
+  }
+
   .omf-btn-secondary {
     display: inline-flex;
     align-items: center;

@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { motion, type Variants } from "framer-motion";
 import { History, RefreshCcw } from "lucide-react";
 import useSWR from "swr";
 import { toast } from "sonner";
@@ -33,23 +32,6 @@ type ModerationQueueRow = {
 type QueueFilterKey = "all" | "needs_smart_link" | "with_errors";
 
 const ADMIN_QUEUE_TIMEOUT_MS = 15000;
-
-const adminQueueContainer: Variants = {
-  hidden: { opacity: 0 },
-  show: {
-    opacity: 1,
-    transition: { staggerChildren: 0.05 }
-  }
-};
-
-const adminQueueItem: Variants = {
-  hidden: { opacity: 0, y: 14 },
-  show: {
-    opacity: 1,
-    y: 0,
-    transition: { type: "spring", stiffness: 280, damping: 24 }
-  }
-};
 
 export default function AdminPage() {
   const router = useRouter();
@@ -311,47 +293,46 @@ export default function AdminPage() {
 
   if (userId == null && !isAdmin && process.env.NODE_ENV === "production") {
     return (
-      <div className="glass-glow glass-glow-charged mx-5 mt-14 p-6">
-        <h1 className="font-display text-xl font-bold text-white/85">Панель модерации</h1>
-        <p className="mt-2 text-sm text-white/50">Открой приложение из Telegram для доступа к админке.</p>
+      <div className="mx-auto max-w-lg px-1 pt-10">
+        <h1 className="text-[28px] font-extrabold tracking-[-0.03em]">Модерация</h1>
+        <p className="mt-2 text-[15px] text-omf-graphite">
+          Открой приложение из Telegram, чтобы попасть в админку.
+        </p>
       </div>
     );
   }
 
   const showQueueSkeleton = isLoading && data === undefined;
   return (
-    <div className="min-h-app px-5 pb-44 pt-14">
+    <div className="mx-auto min-h-app max-w-lg px-1 pb-40 pt-6 text-omf-ink">
       <PullRefreshBrand />
 
-      <div className="mb-4 flex justify-end">
-        <motion.button
+      <header className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <p className="text-[13px] text-omf-graphite">В очереди: {moderationQueue.length}</p>
+          <h1 className="mt-1 text-[40px] font-extrabold leading-[0.92] tracking-[-0.045em]">Модерация</h1>
+        </div>
+        <button
           type="button"
-          whileTap={{ scale: 0.94 }}
           onClick={() => void refreshAll()}
           disabled={isValidating}
-          aria-label="Обновить"
-          className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04] text-white/70 backdrop-blur-md disabled:opacity-50"
+          aria-label="Обновить очередь"
+          className="omf-focus mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-omf-graphite transition-colors hover:bg-omf-surface hover:text-omf-ink disabled:opacity-50"
         >
-          <RefreshCcw className={`h-[18px] w-[18px] ${isValidating ? "animate-spin" : ""}`} />
-        </motion.button>
-      </div>
-
-      <motion.h1 className="mb-5 font-display text-xl font-semibold tracking-tight text-white/80" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-        Модерация
-      </motion.h1>
+          <RefreshCcw className={`h-[18px] w-[18px] ${isValidating ? "animate-spin" : ""}`} aria-hidden />
+        </button>
+      </header>
 
       {statsErrorMessage && (
-        <div className="glass-glow glass-glow-charged mb-4 p-4 text-sm text-amber-100/90">
-          Счётчики: {statsErrorMessage}
-        </div>
+        <p className="mb-4 text-[14px] text-omf-yellow">Не удалось загрузить счётчики: {statsErrorMessage}</p>
       )}
 
-      <div className="mb-8">
+      <div className="mb-6">
         <Link
           href="/admin/history"
-          className="inline-flex items-center gap-2 rounded-xl border border-white/[0.1] bg-white/[0.04] px-3 py-2 text-xs text-white/75 hover:bg-white/[0.08]"
+          className="omf-focus inline-flex items-center gap-2 rounded-full py-1.5 text-[14px] text-omf-ultra-text hover:text-omf-ink"
         >
-          <History className="h-4 w-4 shrink-0 opacity-90" />
+          <History className="h-4 w-4 shrink-0" aria-hidden />
           История решений
         </Link>
       </div>
@@ -374,31 +355,27 @@ export default function AdminPage() {
         <div className="fixed inset-0 z-[110] flex flex-col justify-end">
           <button
             type="button"
-            aria-label="Закрыть массовое отклонение"
-            className="absolute inset-0 bg-black/40 backdrop-blur-[20px]"
+            aria-label="Закрыть"
+            className="absolute inset-0 bg-black/60"
             onClick={() => !bulkBusy && setBulkRejectOpen(false)}
           />
-          <div className="relative z-10 mx-auto w-full max-w-md rounded-t-[28px] border border-white/[0.12] border-b-0 bg-zinc-950/90 p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] shadow-[0_-12px_60px_rgba(0,0,0,0.65)] backdrop-blur-2xl">
-            <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-white/15" aria-hidden />
-            <h3 className="text-lg font-semibold text-white">Массовое отклонение</h3>
-            <p className="mt-1 text-[13px] text-white/55">
-              Выбрано релизов: {selectedReleaseIds.length}. Выберите причину:
+          <div className="relative z-10 mx-auto w-full max-w-md rounded-t-[24px] border border-b-0 border-omf-line bg-omf-surface p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))]">
+            <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-omf-line-strong" aria-hidden />
+            <h3 className="text-[20px] font-bold tracking-tight">Вернуть выбранные релизы</h3>
+            <p className="mt-1 text-[14px] text-omf-graphite">
+              Выбрано: {selectedReleaseIds.length}. Причину увидят все артисты.
             </p>
-            <div className="mt-4 grid grid-cols-1 gap-2">
+            <div className="mt-4 flex flex-col">
               {ADMIN_REJECT_PRESETS.map((preset) => (
                 <button
                   key={preset.key}
                   type="button"
                   disabled={bulkBusy}
                   onClick={() => void handleBulkReject(preset.message)}
-                  className="rounded-2xl border border-white/[0.08] bg-gradient-to-br from-rose-500/15 to-rose-950/40 px-4 py-3 text-left text-[14px] font-medium text-rose-50 transition-colors hover:border-rose-400/30 hover:from-rose-500/25 disabled:opacity-50"
+                  className="omf-focus border-t border-omf-line py-3.5 text-left transition-colors hover:bg-omf-surface-2 disabled:opacity-50"
                 >
-                  <span className="text-[11px] uppercase tracking-[0.14em] text-rose-200/80">
-                    {preset.label}
-                  </span>
-                  <span className="mt-1 block text-[12px] font-normal leading-snug text-white/75">
-                    {preset.message}
-                  </span>
+                  <span className="block text-[16px] font-medium">{preset.label}</span>
+                  <span className="mt-0.5 block text-[14px] leading-snug text-omf-graphite">{preset.message}</span>
                 </button>
               ))}
             </div>
@@ -406,12 +383,14 @@ export default function AdminPage() {
         </div>
       )}
 
-      <h2 className="mb-3 text-xs font-semibold tracking-wide text-white/50">Очередь</h2>
-
-      <div className="mb-6 flex flex-wrap gap-2">
+      <div
+        className="mb-4 flex gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        role="tablist"
+        aria-label="Фильтр очереди"
+      >
         {([
           { key: "all", label: "Все" },
-          { key: "needs_smart_link", label: "Без smart-link" },
+          { key: "needs_smart_link", label: "Без ссылки" },
           { key: "with_errors", label: "С ошибками" }
         ] as const).map((filter) => {
           const isActive = activeFilter === filter.key;
@@ -419,19 +398,15 @@ export default function AdminPage() {
             <button
               key={filter.key}
               type="button"
+              role="tab"
+              aria-selected={isActive}
               onClick={() => setActiveFilter(filter.key)}
-              className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-medium transition-colors ${
-                isActive
-                  ? "border-violet-400/50 bg-violet-500/20 text-violet-100"
-                  : "border-white/[0.1] bg-white/[0.04] text-white/65 hover:bg-white/[0.08]"
+              className={`omf-focus shrink-0 rounded-full px-3.5 py-1.5 text-[13px] transition-colors ${
+                isActive ? "bg-omf-ink font-medium text-omf-bg" : "text-omf-graphite hover:text-omf-ink"
               }`}
             >
               {filter.label}
-              <span
-                className={`inline-flex min-w-[20px] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] ${
-                  isActive ? "bg-violet-200/20 text-violet-100" : "bg-white/10 text-white/70"
-                }`}
-              >
+              <span className={`ml-1.5 tabular-nums ${isActive ? "text-omf-bg/70" : "text-omf-faint"}`}>
                 {filterCounts[filter.key]}
               </span>
             </button>
@@ -439,109 +414,111 @@ export default function AdminPage() {
         })}
       </div>
 
-      <div className="mb-5">
+      <div className="mb-4">
         <input
           type="search"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Поиск: ID, артист, название, smart-link"
-          className="w-full rounded-2xl border border-white/[0.1] bg-white/[0.04] px-4 py-3 text-sm text-white/85 placeholder:text-white/35 focus:border-violet-400/45 focus:outline-none focus:ring-1 focus:ring-violet-400/30"
+          placeholder="Артист, название или ID"
+          aria-label="Поиск по очереди"
+          className="omf-focus min-h-[48px] w-full rounded-control border border-omf-line bg-omf-surface px-4 py-3 text-[16px] text-omf-ink placeholder:text-omf-faint focus:border-omf-ultra focus:outline-none"
         />
       </div>
 
       {moderationQueueFiltered.length > 0 && (
-        <div className="mb-5 flex flex-wrap items-center gap-2">
+        <div className="mb-2 flex flex-wrap items-center gap-x-1 gap-y-1 text-[13px]">
           <button
             type="button"
             onClick={() => void selectAllFiltered()}
-            className="rounded-xl border border-white/[0.1] bg-white/[0.04] px-3 py-2 text-xs font-medium text-white/70 hover:bg-white/[0.08]"
+            className="omf-focus rounded-full px-2.5 py-1.5 text-omf-ultra-text hover:text-omf-ink"
           >
             Выбрать все ({moderationQueueFiltered.length})
           </button>
-          <button
-            type="button"
-            onClick={() => void clearSelection()}
-            disabled={selectedReleaseIds.length === 0}
-            className="rounded-xl border border-white/[0.1] bg-white/[0.04] px-3 py-2 text-xs font-medium text-white/70 hover:bg-white/[0.08] disabled:opacity-50"
-          >
-            Сбросить
-          </button>
-          <button
-            type="button"
-            onClick={() => void handleBulkApprove()}
-            disabled={selectedReleaseIds.length === 0 || selectedWithSmartLinkCount === 0 || bulkBusy}
-            className="rounded-xl border border-emerald-300/35 bg-emerald-500/15 px-3 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/25 disabled:opacity-50"
-          >
-            Одобрить выбранные ({selectedWithSmartLinkCount})
-          </button>
-          <button
-            type="button"
-            onClick={() => setBulkRejectOpen(true)}
-            disabled={selectedReleaseIds.length === 0 || bulkBusy}
-            className="rounded-xl border border-rose-300/35 bg-rose-500/15 px-3 py-2 text-xs font-semibold text-rose-100 hover:bg-rose-500/25 disabled:opacity-50"
-          >
-            Отклонить выбранные ({selectedReleaseIds.length})
-          </button>
-          {selectedReleaseIds.length > 0 && selectedWithoutSmartLinkCount > 0 ? (
-            <span className="text-xs text-amber-200/85">Без smart-link: {selectedWithoutSmartLinkCount}</span>
+          {selectedReleaseIds.length > 0 ? (
+            <>
+              <button
+                type="button"
+                onClick={() => void clearSelection()}
+                className="omf-focus rounded-full px-2.5 py-1.5 text-omf-graphite hover:text-omf-ink"
+              >
+                Сбросить
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleBulkApprove()}
+                disabled={selectedWithSmartLinkCount === 0 || bulkBusy}
+                className="omf-focus rounded-full px-2.5 py-1.5 font-medium text-omf-green hover:text-omf-ink disabled:opacity-40"
+              >
+                Одобрить выбранные ({selectedWithSmartLinkCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => setBulkRejectOpen(true)}
+                disabled={bulkBusy}
+                className="omf-focus rounded-full px-2.5 py-1.5 font-medium text-omf-red hover:text-omf-ink disabled:opacity-40"
+              >
+                Вернуть выбранные ({selectedReleaseIds.length})
+              </button>
+              {selectedWithoutSmartLinkCount > 0 ? (
+                <span className="px-2.5 text-omf-yellow">без ссылки: {selectedWithoutSmartLinkCount}</span>
+              ) : null}
+            </>
           ) : null}
         </div>
       )}
 
       {showQueueSkeleton && <AdminModerationQueueSkeleton rows={3} />}
       {errorMessage && (
-        <div className="glass-glow glass-glow-charged mb-4 p-4 text-sm text-rose-200">{errorMessage}</div>
+        <p className="mb-4 text-[14px] text-omf-red">{errorMessage}</p>
       )}
       {actionError && (
-        <div className="glass-glow glass-glow-charged mb-4 p-4 text-sm text-rose-200">{actionError}</div>
+        <p className="mb-4 text-[14px] text-omf-red">{actionError}</p>
       )}
 
       {!showQueueSkeleton && !errorMessage && moderationQueueFiltered.length === 0 && (
-        <div className="glass-glow glass-glow-charged p-5 text-sm text-white/50">
-          {moderationQueue.length === 0
-            ? "На данный момент новых релизов на проверку нет."
-            : "По фильтру или поисковому запросу релизов не найдено."}
+        <div className="border-t border-omf-line pt-6">
+          <p className="text-[18px] font-bold tracking-tight">
+            {moderationQueue.length === 0 ? "Очередь пуста" : "Ничего не найдено"}
+          </p>
+          <p className="mt-1.5 text-[14px] text-omf-graphite">
+            {moderationQueue.length === 0
+              ? "Новые релизы появятся здесь, когда артисты отправят их на проверку."
+              : "Попробуй другой фильтр или поменяй запрос."}
+          </p>
         </div>
       )}
 
       {moderationQueueFiltered.length > 0 && (
-        <motion.div
-          className="flex flex-col gap-3"
-          variants={adminQueueContainer}
-          initial="hidden"
-          animate="show"
-        >
-          {moderationQueueFiltered.map((row, index) => (
-            <motion.div
-              key={row.release.id}
-              variants={adminQueueItem}
-              initial="hidden"
-              animate="show"
-              className="relative"
-            >
-              <label className="absolute right-3 top-3 z-20 inline-flex items-center rounded-lg border border-white/15 bg-black/45 px-2 py-1 text-[11px] text-white/80 backdrop-blur-sm">
-                <input
-                  type="checkbox"
-                  checked={selectedReleaseIds.includes(row.release.id)}
-                  onChange={() => toggleSelectRelease(row.release.id)}
-                  className="h-3.5 w-3.5 accent-violet-500"
+        <div className="flex flex-col">
+          {moderationQueueFiltered.map((row, index) => {
+            const checked = selectedReleaseIds.includes(row.release.id);
+            return (
+              <div key={row.release.id} className="relative">
+                <label className="absolute right-0 top-5 z-20 inline-flex h-11 w-11 cursor-pointer items-center justify-center">
+                  <span className="sr-only">Выбрать «{row.release.artist_name}»</span>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleSelectRelease(row.release.id)}
+                    className="h-5 w-5 rounded-[6px] accent-[var(--omf-ultra)]"
+                  />
+                </label>
+                <AdminReleaseCard
+                  release={row.release}
+                  tracks={row.tracks}
+                  index={index}
+                  listVariants={undefined}
+                  busy={busyId === row.release.id}
+                  onOpenApprove={() => setApproveModalReleaseId(row.release.id)}
+                  onOpenReject={() => setRejectModalReleaseId(row.release.id)}
+                  showAudioPreview={false}
+                  detailHref={`/admin/release/${row.release.id}`}
+                  artworkPriority={index < 3}
                 />
-              </label>
-              <AdminReleaseCard
-                release={row.release}
-                tracks={row.tracks}
-                index={index}
-                listVariants={undefined}
-                busy={busyId === row.release.id}
-                onOpenApprove={() => setApproveModalReleaseId(row.release.id)}
-                onOpenReject={() => setRejectModalReleaseId(row.release.id)}
-                showAudioPreview={false}
-                detailHref={`/admin/release/${row.release.id}`}
-                artworkPriority={index < 3}
-              />
-            </motion.div>
-          ))}
-        </motion.div>
+              </div>
+            );
+          })}
+        </div>
       )}
     </div>
   );

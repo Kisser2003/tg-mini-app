@@ -55,7 +55,7 @@ export function AdminRejectModal({ releaseId, busy, onClose, onSelectReason }: P
           <button
             type="button"
             aria-label="Закрыть"
-            className="absolute inset-0 bg-black/40 backdrop-blur-[30px]"
+            className="absolute inset-0 bg-black/60"
             onClick={() => !busy && onClose()}
           />
           <motion.div
@@ -66,56 +66,49 @@ export function AdminRejectModal({ releaseId, busy, onClose, onSelectReason }: P
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={SPRING_UI}
-            className="relative z-10 mx-auto w-full max-w-md rounded-t-[28px] border border-white/[0.12] border-b-0 bg-zinc-950/90 p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] shadow-[0_-12px_60px_rgba(0,0,0,0.65)] backdrop-blur-2xl"
+            className="relative z-10 mx-auto w-full max-w-md rounded-t-[24px] border border-b-0 border-omf-line bg-omf-surface p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))]"
           >
-            <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-white/15" aria-hidden />
+            <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-omf-line-strong" aria-hidden />
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h2 id="admin-reject-title" className="text-lg font-semibold text-white">
-                  Причина отклонения
+                <h2 id="admin-reject-title" className="text-[20px] font-bold tracking-tight">
+                  Почему возвращаешь релиз
                 </h2>
-                <p className="mt-1 text-[13px] leading-relaxed text-white/55">
-                  Выберите пресет — артист увидит текст в уведомлении.
+                <p className="mt-1 text-[14px] leading-relaxed text-omf-graphite">
+                  Нажми на причину. Релиз сразу вернётся артисту, и он увидит этот текст.
                 </p>
               </div>
               <button
                 type="button"
                 disabled={busy}
                 onClick={() => onClose()}
-                className="rounded-xl border border-white/15 bg-white/5 p-2 text-white/70 hover:bg-white/10 disabled:opacity-50"
+                aria-label="Закрыть"
+                className="omf-focus -mr-1 rounded-full p-1.5 text-omf-graphite hover:bg-omf-surface-2 hover:text-omf-ink disabled:opacity-50"
               >
-                <X className="h-4 w-4" />
+                <X className="h-5 w-5" />
               </button>
             </div>
 
-            <div className="mt-5 grid grid-cols-1 gap-2">
+            <div className="mt-4 flex flex-col">
               {ADMIN_REJECT_PRESETS.map((p) => (
-                <motion.button
+                <button
                   key={p.key}
                   type="button"
                   disabled={busy || releaseId == null}
-                  whileTap={{ scale: 0.98 }}
-                  transition={SPRING_UI}
                   onClick={() => {
                     if (releaseId == null) return;
                     hapticMap.impactLight();
                     onSelectReason(releaseId, p.message);
                   }}
-                  className="rounded-2xl border border-white/[0.08] bg-gradient-to-br from-rose-500/15 to-rose-950/40 px-4 py-3 text-left text-[14px] font-medium text-rose-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-colors hover:border-rose-400/30 hover:from-rose-500/25 disabled:opacity-50"
+                  className="omf-focus border-t border-omf-line py-3.5 text-left transition-colors hover:bg-omf-surface-2 disabled:opacity-50"
                 >
-                  <span className="text-[11px] uppercase tracking-[0.14em] text-rose-200/80">
-                    {p.label}
-                  </span>
-                  <span className="mt-1 block text-[12px] font-normal leading-snug text-white/75">
-                    {p.message}
-                  </span>
-                </motion.button>
+                  <span className="block text-[16px] font-medium text-omf-ink">{p.label}</span>
+                  <span className="mt-0.5 block text-[14px] leading-snug text-omf-graphite">{p.message}</span>
+                </button>
               ))}
             </div>
 
-            {busy && (
-              <p className="mt-4 text-center text-[12px] text-white/45">Отправляем…</p>
-            )}
+            {busy && <p className="mt-4 text-center text-[14px] text-omf-graphite">Отправляем артисту…</p>}
           </motion.div>
         </motion.div>
       )}

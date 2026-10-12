@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
-import { AlertCircle, Gauge, Pause, Play } from "lucide-react";
+import { AlertCircle, Pause, Play } from "lucide-react";
 import { toast } from "sonner";
 
 type Props = {
@@ -70,7 +70,7 @@ export function AudioPlayer({ src, label, className = "", variant = "default" }:
   const onError = useCallback(() => {
     setLoadError(true);
     setPlaying(false);
-    toast.error("Не удалось загрузить аудио. Проверьте файл в Storage или права доступа.");
+    toast.error("Не удалось загрузить аудио. Проверь, что файл есть в хранилище.");
   }, []);
 
   useEffect(() => {
@@ -126,32 +126,26 @@ export function AudioPlayer({ src, label, className = "", variant = "default" }:
   }, [src]);
 
   return (
-    <div
-      className={`rounded-xl border border-white/10 bg-white/[0.04] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl ${
-        isAdmin ? "rounded-lg p-1.5" : "p-2"
-      } ${className}`}
-    >
+    <div className={`rounded-control border border-omf-line bg-omf-surface p-2.5 ${className}`}>
       {!isAdmin && (
         <div className="mb-2 flex items-center justify-between gap-2">
-          <p className="truncate text-[11px] text-white/55">{label}</p>
+          <p className="truncate text-[13px] text-omf-graphite">{label}</p>
         </div>
       )}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-3">
         <button
           type="button"
           onClick={toggle}
           disabled={loadError}
           aria-label={loadError ? "Ошибка загрузки аудио" : playing ? "Пауза" : "Воспроизвести"}
-          className={`flex shrink-0 items-center justify-center rounded-lg border border-white/15 bg-black/40 text-white/90 disabled:opacity-50 ${
-            isAdmin ? "h-8 w-8" : "h-10 w-10"
-          }`}
+          className="omf-focus flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-omf-ink text-omf-bg disabled:opacity-50"
         >
           {loadError ? (
-            <AlertCircle className={`text-rose-400 ${isAdmin ? "h-4 w-4" : "h-5 w-5"}`} />
+            <AlertCircle className="h-5 w-5 text-omf-red" />
           ) : playing ? (
-            <Pause className={isAdmin ? "h-4 w-4" : "h-5 w-5"} />
+            <Pause className="h-5 w-5" />
           ) : (
-            <Play className={`pl-0.5 ${isAdmin ? "h-4 w-4" : "h-5 w-5"}`} />
+            <Play className="h-5 w-5 pl-0.5" />
           )}
         </button>
         <div className="min-w-0 flex-1">
@@ -167,33 +161,34 @@ export function AudioPlayer({ src, label, className = "", variant = "default" }:
             onError={onError}
           />
           {isAdmin && (
-            <p className="mb-1 truncate text-[10px] leading-tight text-white/50" title={label}>
+            <p className="mb-1.5 truncate text-[14px] leading-tight text-omf-ink" title={label}>
               {label}
             </p>
           )}
           <div
-            className={`relative w-full overflow-hidden rounded-full bg-white/10 ${
-              isAdmin ? "h-1" : "h-1.5"
-            }`}
-            aria-hidden
-            title="Светлая зона — буфер; фиолетовый — позиция"
+            className="relative h-1 w-full overflow-hidden rounded-full bg-omf-line"
+            role="progressbar"
+            aria-label="Позиция в треке"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(currentRatio * 100)}
           >
             <div
-              className="absolute inset-y-0 left-0 rounded-full bg-white/20 transition-[width] duration-150 ease-out"
+              className="absolute inset-y-0 left-0 rounded-full bg-omf-line-strong transition-[width] duration-150 ease-out"
               style={{ width: `${bufferedRatio * 100}%` }}
             />
             <div
-              className="absolute inset-y-0 left-0 rounded-full bg-violet-400/85 transition-[width] duration-100 ease-linear"
+              className="absolute inset-y-0 left-0 rounded-full bg-omf-ultra transition-[width] duration-100 ease-linear"
               style={{ width: `${currentRatio * 100}%` }}
             />
           </div>
           {!isAdmin && (
-            <p className="mt-1.5 text-[11px] text-white/40">
-              {loadError ? "Ошибка загрузки" : "Нажмите Play для прослушивания"}
+            <p className="mt-1.5 text-[13px] text-omf-graphite">
+              {loadError ? "Не удалось загрузить" : "Нажми Play, чтобы послушать"}
             </p>
           )}
           {isAdmin && loadError && (
-            <p className="mt-1 text-[10px] text-rose-300/90">Ошибка загрузки</p>
+            <p className="mt-1 text-[13px] text-omf-red">Не удалось загрузить аудио</p>
           )}
         </div>
         {isAdmin && (
@@ -201,11 +196,10 @@ export function AudioPlayer({ src, label, className = "", variant = "default" }:
             type="button"
             onClick={toggleSpeed}
             disabled={loadError}
-            title={speed15 ? "Скорость 1.5×" : "Скорость 1×"}
-            className="inline-flex shrink-0 items-center gap-0.5 rounded-md border border-white/15 bg-white/[0.06] px-1.5 py-1 text-[9px] font-medium text-white/75 hover:bg-white/10 disabled:opacity-50"
+            aria-label={speed15 ? "Скорость 1,5×, нажми для обычной" : "Обычная скорость, нажми для 1,5×"}
+            className="omf-focus shrink-0 rounded-full px-2.5 py-1.5 text-[13px] text-omf-graphite hover:text-omf-ink disabled:opacity-50"
           >
-            <Gauge className="h-2.5 w-2.5" />
-            {speed15 ? "1.5×" : "1×"}
+            {speed15 ? "1,5×" : "1×"}
           </button>
         )}
       </div>

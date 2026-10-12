@@ -32,7 +32,7 @@ export function AdminReleaseDownloads({
         await adminDownloadToDisk(path, filenameFallback);
         triggerHaptic("success");
       } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : "Ошибка загрузки";
+        const msg = e instanceof Error ? e.message : "Не удалось скачать файл";
         toast.error(msg);
         triggerHaptic("error");
       } finally {
@@ -48,10 +48,8 @@ export function AdminReleaseDownloads({
 
   return (
     <div className="space-y-3">
-      <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-white/45">
-        Исходники (без перекодирования)
-      </p>
-      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+      <p className="text-[14px] text-omf-graphite">Оригиналы файлов, без сжатия.</p>
+      <div className="flex flex-col gap-2">
         {hasArtwork && (
           <button
             type="button"
@@ -63,14 +61,14 @@ export function AdminReleaseDownloads({
                 `cover-${releaseId}`
               )
             }
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/5 px-3 py-2.5 text-sm text-white/90 hover:bg-white/10 disabled:opacity-50"
+            className="omf-btn-secondary w-full justify-start gap-3 px-4 text-[14px] disabled:opacity-50"
           >
             {busyKey === "artwork" ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <Download className="h-4 w-4" />
             )}
-            Обложка (оригинал)
+            Обложка
           </button>
         )}
 
@@ -92,7 +90,7 @@ export function AdminReleaseDownloads({
                   `track-${String(t.index + 1).padStart(2, "0")}-${releaseId}`
                 )
               }
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/5 px-3 py-2.5 text-sm text-white/90 hover:bg-white/10 disabled:opacity-50"
+              className="omf-btn-secondary w-full justify-start gap-3 px-4 text-[14px] disabled:opacity-50"
             >
               {busyKey === key ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -122,7 +120,7 @@ export function AdminReleaseDownloads({
                   `track-${String(t.index + 1).padStart(2, "0")}-lyrics.txt`
                 )
               }
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-teal-300/25 bg-teal-500/15 px-3 py-2.5 text-sm text-teal-100/95 hover:bg-teal-500/25 disabled:opacity-50"
+              className="omf-btn-secondary w-full justify-start gap-3 px-4 text-[14px] disabled:opacity-50"
             >
               {busyKey === key ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -145,14 +143,14 @@ export function AdminReleaseDownloads({
                 `release-lyrics-${releaseId.slice(0, 8)}.txt`
               )
             }
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-teal-300/25 bg-teal-500/15 px-3 py-2.5 text-sm text-teal-100/95 hover:bg-teal-500/25 disabled:opacity-50"
+            className="omf-btn-secondary w-full justify-start gap-3 px-4 text-[14px] disabled:opacity-50"
           >
             {busyKey === "lyrics-release" ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <FileText className="h-4 w-4" />
             )}
-            Текст релиза (сводный)
+            Текст релиза
           </button>
         ) : null}
 
@@ -167,14 +165,14 @@ export function AdminReleaseDownloads({
                 `master-${releaseId}`
               )
             }
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/5 px-3 py-2.5 text-sm text-white/90 hover:bg-white/10 disabled:opacity-50"
+            className="omf-btn-secondary w-full justify-start gap-3 px-4 text-[14px] disabled:opacity-50"
           >
             {busyKey === "legacy-audio" ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <Download className="h-4 w-4" />
             )}
-            Аудио (legacy)
+            Аудио
           </button>
         )}
 
@@ -184,7 +182,7 @@ export function AdminReleaseDownloads({
           onClick={() =>
             void run("zip", `/api/admin/releases/${releaseId}/bundle`, `release-${releaseId}.zip`)
           }
-          className="inline-flex items-center justify-center gap-2 rounded-xl border border-violet-300/35 bg-violet-500/20 px-3 py-2.5 text-sm text-violet-100 hover:bg-violet-500/30 disabled:opacity-50"
+          className="omf-btn-ink w-full justify-start gap-3 px-4 text-[14px] disabled:opacity-50"
         >
           {busyKey === "zip" ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -194,12 +192,8 @@ export function AdminReleaseDownloads({
           Скачать всё (ZIP)
         </button>
       </div>
-      <p className="text-xs text-white/45">
-        ZIP: аудио в <span className="font-mono text-white/60">audio/</span>, обложка в{" "}
-        <span className="font-mono text-white/60">artwork/</span>, тексты треков (если есть) в{" "}
-        <span className="font-mono text-white/60">lyrics/*.txt</span> плюс при необходимости{" "}
-        <span className="font-mono text-white/60">release-aggregated.txt</span>, метаданные в{" "}
-        <span className="font-mono text-white/60">metadata.json</span>.
+      <p className="text-[13px] leading-relaxed text-omf-faint">
+        В архиве: аудио, обложка, тексты треков и файл metadata.json с данными релиза.
       </p>
     </div>
   );

@@ -28,11 +28,11 @@ function CopyValueButton({ value }: { value: string }) {
     <button
       type="button"
       onClick={() => void onCopy()}
-      className="inline-flex shrink-0 items-center justify-center rounded-lg border border-white/15 bg-white/5 p-1.5 text-white/70 hover:bg-white/10 hover:text-white"
+      className="omf-focus inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-omf-graphite hover:text-omf-ink"
       title="Копировать"
       aria-label="Копировать значение"
     >
-      {done ? <Check className="h-3.5 w-3.5 text-emerald-300" /> : <Copy className="h-3.5 w-3.5" />}
+      {done ? <Check className="h-4 w-4 text-omf-green" /> : <Copy className="h-4 w-4" />}
     </button>
   );
 }
@@ -51,30 +51,26 @@ export function AdminReleaseMetadataCard({
 
   if (sections.length === 0) {
     return (
-      <p className="text-sm text-white/50">Нет метаданных для отображения.</p>
+      <p className="text-[14px] text-omf-graphite">Данных для показа нет.</p>
     );
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-7">
       {sections.map((section) => (
         <section key={section.title}>
-          <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/45">
-            {section.title}
-          </h3>
-          <dl className="space-y-3">
+          <h3 className="text-[15px] font-bold tracking-tight text-omf-ink">{section.title}</h3>
+          <dl className="mt-1">
             {section.entries.map((entry, idx) => (
               <div
                 key={`${section.title}-${idx}-${entry.label}`}
-                className="rounded-xl border border-white/[0.08] bg-black/20 px-3 py-2.5"
+                className="border-b border-omf-line py-3"
               >
-                <dt className="text-[11px] font-medium uppercase tracking-wide text-white/40">
-                  {entry.label}
-                </dt>
-                <dd className="mt-1.5 flex gap-2">
+                <dt className="text-[13px] text-omf-graphite">{entry.label}</dt>
+                <dd className="mt-1 flex items-start gap-2">
                   <pre
                     className={cn(
-                      "min-w-0 flex-1 overflow-auto whitespace-pre-wrap break-words font-sans text-[13px] leading-relaxed text-white/90",
+                      "min-w-0 flex-1 overflow-auto whitespace-pre-wrap break-words font-sans text-[15px] leading-relaxed text-omf-ink",
                       entry.label === "Текст песни" ? "max-h-[min(28rem,70vh)]" : "max-h-64"
                     )}
                   >
