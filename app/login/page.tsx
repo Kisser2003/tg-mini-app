@@ -6,6 +6,8 @@ import { AuthMessage, AuthShell } from "@/components/AuthShell";
 import { createSupabaseBrowser } from "@/lib/supabase";
 import { appendCurrentTelegramHash, isTelegramClientShell } from "@/lib/telegram";
 import { useIsTelegramMiniApp } from "@/lib/hooks/useIsTelegramMiniApp";
+import { mapAuthErrorMessage } from "@/lib/auth-errors";
+import { hapticMap } from "@/lib/haptic-map";
 
 type AuthMode = "login" | "signup";
 
@@ -53,11 +55,13 @@ function LoginPageContent() {
       if (mode === "signup") {
         const name = artistName.trim();
         if (name.length < 2) {
+          hapticMap.notificationError();
           setError("Имя артиста должно быть не короче 2 символов.");
           setLoading(false);
           return;
         }
         if (name.length > 120) {
+          hapticMap.notificationError();
           setError("Имя слишком длинное. Сократи его до 120 символов.");
           setLoading(false);
           return;
@@ -102,6 +106,7 @@ function LoginPageContent() {
         if (signInError) throw signInError;
 
         if (data.session) {
+          hapticMap.notificationSuccess();
           setSuccess("Готово. Открываем приложение…");
           setTimeout(() => {
             const target = redirectTo.startsWith("/") ? redirectTo : "/library";
@@ -116,7 +121,8 @@ function LoginPageContent() {
       }
     } catch (err: any) {
       console.error("Auth error:", err);
-      setError(err.message || "Не получилось войти. Проверь почту и пароль и попробуй ещё раз.");
+      hapticMap.notificationError();
+      setError(mapAuthErrorMessage(err, "Не получилось войти. Проверь почту и пароль и попробуй ещё раз."));
     } finally {
       setLoading(false);
     }

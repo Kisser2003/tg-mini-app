@@ -4,6 +4,8 @@ import { useState, Suspense } from "react";
 import { ArrowLeft } from "lucide-react";
 import { AuthMessage, AuthShell } from "@/components/AuthShell";
 import { useRouter } from "next/navigation";
+import { mapAuthErrorMessage } from "@/lib/auth-errors";
+import { hapticMap } from "@/lib/haptic-map";
 import { createSupabaseBrowser } from "@/lib/supabase";
 
 function ResetPasswordContent() {
@@ -27,10 +29,12 @@ function ResetPasswordContent() {
 
       if (resetError) throw resetError;
 
+      hapticMap.notificationSuccess();
       setSuccess(true);
     } catch (err: any) {
       console.error("Reset password error:", err);
-      setError(err.message || "Не получилось отправить письмо. Проверь почту и попробуй ещё раз.");
+      hapticMap.notificationError();
+      setError(mapAuthErrorMessage(err, "Не получилось отправить письмо. Проверь почту и попробуй ещё раз."));
     } finally {
       setLoading(false);
     }

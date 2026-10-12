@@ -6,7 +6,11 @@ import { PERFORMANCE_LANGUAGE_VALUES } from "@/lib/performance-language";
 export const FIXED_RELEASE_LABEL = "OMF" as const;
 
 export const metadataSchema = z.object({
-  releaseTitle: z.string().trim().min(1, "Укажите название релиза"),
+  releaseTitle: z
+    .string()
+    .trim()
+    .min(1, "Укажите название релиза")
+    .max(200, "Название слишком длинное (макс. 200 символов)"),
   releaseType: z.enum(RELEASE_TYPE_VALUES),
   genre: z.string().min(1, "Выберите основной жанр"),
   subgenre: z.string().default(""),
@@ -14,7 +18,11 @@ export const metadataSchema = z.object({
     message: "Выберите язык исполнения"
   }),
   label: z.literal(FIXED_RELEASE_LABEL),
-  primaryArtist: z.string().trim().min(1, "Укажите имя артиста"),
+  primaryArtist: z
+    .string()
+    .trim()
+    .min(1, "Укажите имя артиста")
+    .max(120, "Имя артиста слишком длинное (макс. 120 символов)"),
   releaseDate: z
     .string()
     .min(1, "Укажите дату релизного издания")
@@ -54,7 +62,11 @@ export const assetsSchema = z.object({
 });
 
 export const trackSchema = z.object({
-  title: z.string().min(1, "Укажите название трека"),
+  title: z
+    .string()
+    .trim()
+    .min(1, "Укажите название трека")
+    .max(200, "Название трека слишком длинное (макс. 200 символов)"),
   explicit: z.boolean().default(false),
   lyrics: z
     .string()

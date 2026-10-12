@@ -3,6 +3,8 @@
 import { useState, Suspense } from "react";
 import { AuthMessage, AuthShell } from "@/components/AuthShell";
 import { useRouter } from "next/navigation";
+import { mapAuthErrorMessage } from "@/lib/auth-errors";
+import { hapticMap } from "@/lib/haptic-map";
 import { createSupabaseBrowser } from "@/lib/supabase";
 
 function UpdatePasswordContent() {
@@ -18,11 +20,13 @@ function UpdatePasswordContent() {
     setError("");
 
     if (password !== confirmPassword) {
+      hapticMap.notificationError();
       setError("Пароли не совпадают. Введи один и тот же пароль дважды.");
       return;
     }
 
     if (password.length < 6) {
+      hapticMap.notificationError();
       setError("Пароль должен быть не короче 6 символов.");
       return;
     }
@@ -38,15 +42,17 @@ function UpdatePasswordContent() {
 
       if (updateError) throw updateError;
 
+      hapticMap.notificationSuccess();
       setSuccess(true);
-      
+
       // Редирект через 2 секунды
       setTimeout(() => {
         router.push("/library");
       }, 2000);
     } catch (err: any) {
       console.error("Update password error:", err);
-      setError(err.message || "Не получилось сохранить пароль. Запроси новую ссылку и попробуй снова.");
+      hapticMap.notificationError();
+      setError(mapAuthErrorMessage(err, "Не получилось сохранить пароль. Запроси новую ссылку и попробуй снова."));
     } finally {
       setLoading(false);
     }

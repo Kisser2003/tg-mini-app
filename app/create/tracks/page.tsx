@@ -343,7 +343,10 @@ export default function CreateTracksPage() {
           onAction={() => router.push(`/create/${guard.redirectTo}`)}
         />
       ) : (
-        <form onSubmit={handleSubmit(handleNext)} className="space-y-6">
+        <form
+          onSubmit={handleSubmit(handleNext, () => triggerHaptic("error"))}
+          className="space-y-6"
+        >
           {showResumeAudioBanner && (
             <div className="rounded-control border border-omf-line-strong bg-omf-surface px-4 py-3.5 text-[14px] leading-relaxed text-omf-graphite">
               <span className="font-bold text-omf-ink">Выбери WAV-файлы заново.</span> Мы сохранили
