@@ -60,9 +60,7 @@ npm install
 - `release_logs` — журнал этапов:
   - `release_id`, `stage`, `status`, `error_message`
 
-**Кошелёк (ledger):** миграция [supabase/migrations/20260323140000_wallet_ledger.sql](supabase/migrations/20260323140000_wallet_ledger.sql) — таблицы `transactions`, `payout_accounts`, RLS (чтение своих строк по `x-telegram-user-id`). RPC `get_user_balance(p_user_id text, p_only_available boolean default false)` ([доп. миграция holding period](supabase/migrations/20260326120000_wallet_holding_period.sql)) — общий баланс или сумма проводок старше 60 дней (`p_only_available = true`); только `service_role`. Запись транзакций — с сервера с приватным ключом, не из клиентского anon SDK.
-
-**Обратная связь (опционально):** миграция [supabase/migrations/20260324120000_feedback.sql](supabase/migrations/20260324120000_feedback.sql) — таблица `feedback`; отдельного HTTP-эндпоинта в этом репозитории пока нет.
+**Обратная связь (опционально):** миграция [supabase/migrations/20260324120000_feedback.sql](supabase/migrations/20260324120000_feedback.sql) — таблица `feedback`; запись идёт через `/api/feedback`.
 
 **Postgres / `finalize_release`:** каноническая функция — `RETURNS SETOF public.releases`, переход `draft` \| `pending` → `processing`, лог в `release_logs`. Исторически: [20250320120000_finalize_release_transaction.sql](supabase/migrations/20250320120000_finalize_release_transaction.sql), затем `pending` в [20260325120000_release_pending_admin_notes.sql](supabase/migrations/20260325120000_release_pending_admin_notes.sql). **Прод и любые ручные правки:** примените [20260418210000_finalize_release_setof_canonical.sql](supabase/migrations/20260418210000_finalize_release_setof_canonical.sql) — `DROP` + `CREATE` (заменяет кастомный `RETURNS jsonb`). Если RPC недоступна, клиент использует фолбэк в [repositories/releases.repo.ts](repositories/releases.repo.ts).
 
@@ -107,7 +105,6 @@ Hook the dev or production URL as a Telegram WebApp URL in your bot, so that Tel
 - **Триггер БД / Database Webhooks:** см. миграции с `pg_net`; URL и секрет должны совпадать с деплоем.
 - **Production:** в проекте Vercel задайте **`WEBHOOK_REQUIRE_SECRET=true`** и тот же **`SUPABASE_WEBHOOK_SECRET`**, что в `notify_release_status_webhook` (заголовок `x-supabase-webhook-secret`). Затем проверьте вызов: `npm run verify:webhook` (нужны `NEXT_PUBLIC_APP_URL` или `WEBHOOK_BASE_URL` и `SUPABASE_WEBHOOK_SECRET` в окружении, например `node --env-file=.env.local`). Ожидается HTTP 200 и `{ "ok": true, ... }`.
 - **Проверка строки релиза в Supabase после E2E:** `RELEASE_ID=<uuid> npm run verify:release-db` (с теми же переменными Supabase, что в `.env.local`).
-- **Кошелёк:** [`GET /api/wallet/stats`](app/api/wallet/stats/route.ts) — `withTelegramAuth`, данные через `SUPABASE_SERVICE_ROLE_KEY` (баланс RPC, список транзакций).
 
 ## Security incident checklist (secrets)
 

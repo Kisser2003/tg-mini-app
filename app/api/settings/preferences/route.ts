@@ -9,8 +9,6 @@ import { getUserProfileByTelegramId } from "@/lib/auth/hybrid-auth";
 export type UserPreferences = {
   user_uuid: string;
   push_notifications: boolean;
-  payout_method: string | null;
-  payout_details: Record<string, unknown> | null;
   updated_at: string;
 };
 
@@ -34,7 +32,7 @@ async function handleGetPreferences(
   const { data, error } = await admin
     .from("user_preferences")
     .select(
-      "user_uuid, push_notifications, payout_method, payout_details, updated_at"
+      "user_uuid, push_notifications, updated_at"
     )
     .eq("user_uuid", userProfile.id)
     .maybeSingle();
@@ -51,8 +49,6 @@ async function handleGetPreferences(
       preferences: {
         user_uuid: userProfile.id,
         push_notifications: true,
-        payout_method: null,
-        payout_details: null,
         updated_at: new Date().toISOString()
       } satisfies UserPreferences
     });
@@ -66,9 +62,7 @@ export const GET = withTelegramAuth(handleGetPreferences);
 // ─── POST (upsert) ────────────────────────────────────────────────────────────
 
 const upsertSchema = z.object({
-  push_notifications: z.boolean().optional(),
-  payout_method: z.enum(["bank_card", "crypto", "paypal"]).nullable().optional(),
-  payout_details: z.record(z.string(), z.unknown()).nullable().optional()
+  push_notifications: z.boolean().optional()
 });
 
 async function handlePostPreferences(
@@ -109,7 +103,7 @@ async function handlePostPreferences(
   const { data, error } = await admin
     .from("user_preferences")
     .upsert(payload, { onConflict: "user_uuid" })
-    .select("user_uuid, push_notifications, payout_method, payout_details, updated_at")
+    .select("user_uuid, push_notifications, updated_at")
     .maybeSingle();
 
   if (error) {
