@@ -1,3 +1,5 @@
+import { getTelegramApiAuthHeaders } from "@/lib/telegram";
+
 /** Лёгкая клиентская аналитика воронки мастера. Никогда не бросает и не блокирует UI. */
 type FunnelEvent =
   | "wizard_step_view"
@@ -5,21 +7,6 @@ type FunnelEvent =
   | "submit_success"
   | "submit_error"
   | "reopen_rejected";
-
-const ANON_KEY = "omf_anon_id";
-
-function getAnonId(): string {
-  try {
-    let id = window.localStorage.getItem(ANON_KEY);
-    if (!id) {
-      id = crypto.randomUUID();
-      window.localStorage.setItem(ANON_KEY, id);
-    }
-    return id;
-  } catch {
-    return "anon-session-" + Math.random().toString(36).slice(2, 12);
-  }
-}
 
 export function trackFunnel(
   event: FunnelEvent,
@@ -29,8 +16,9 @@ export function trackFunnel(
   try {
     void fetch("/api/analytics/event", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ anonId: getAnonId(), event, ...data }),
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json", ...getTelegramApiAuthHeaders() },
+      body: JSON.stringify({ event, ...data }),
       keepalive: true
     }).catch(() => {});
   } catch {

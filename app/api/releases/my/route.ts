@@ -61,8 +61,8 @@ async function handleGetMyReleases(request: NextRequest): Promise<Response> {
   }
 
   if (!actor) {
-    // Last resort: try x-telegram-user-id header directly
-    const rawUid = request.headers.get("x-telegram-user-id");
+    // Dev-only: в production голому заголовку доверять нельзя (IDOR через service role).
+    const rawUid = process.env.NODE_ENV !== "production" ? request.headers.get("x-telegram-user-id") : null;
     const fallbackUid = rawUid ? Math.trunc(Number(rawUid)) : null;
 
     if (fallbackUid && Number.isFinite(fallbackUid) && fallbackUid > 0) {

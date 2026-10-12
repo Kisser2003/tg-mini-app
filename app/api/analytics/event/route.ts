@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 import { z } from "zod";
+import { createHash } from "crypto";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
+import { resolveReleaseActor } from "@/lib/api/resolve-submit-actor";
 
 export const runtime = "nodejs";
 
@@ -13,7 +16,6 @@ const EVENTS = [
 ] as const;
 
 const bodySchema = z.object({
-  anonId: z.string().min(8).max(64),
   event: z.enum(EVENTS),
   step: z.string().max(32).optional(),
   releaseId: z.string().uuid().nullable().optional(),
@@ -21,13 +23,18 @@ const bodySchema = z.object({
 });
 
 /** Анонимные события воронки. Всегда 204: аналитика не должна ломать UX. */
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
+    // Только аутентифицированные пользователи; anon_id считаем на сервере (нельзя накрутить воронку подделкой id).
+    const actor = await resolveReleaseActor(req);
+    if (!actor) return new NextResponse(null, { status: 204 });
+    const actorKey = actor.kind === "telegram" ? `tg:${actor.telegramUserId}` : `web:${actor.authUserId}`;
+    const anonId = createHash("sha256").update(actorKey).digest("hex").slice(0, 32);
     const parsed = bodySchema.safeParse(await req.json());
     if (!parsed.success) return new NextResponse(null, { status: 204 });
     const admin = createSupabaseAdmin();
     if (!admin) return new NextResponse(null, { status: 204 });
-    const { anonId, event, step, releaseId, props } = parsed.data;
+    const { event, step, releaseId, props } = parsed.data;
     const propsJson = JSON.stringify(props ?? {});
     await admin.from("funnel_events").insert({
       anon_id: anonId,
