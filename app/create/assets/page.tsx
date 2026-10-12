@@ -3,7 +3,6 @@
 import { useMemo, useState, useCallback, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { MagneticButton } from "@/components/MagneticButton";
 import { CreateShell } from "@/features/release/createRelease/components/CreateShell";
 import { StepGate } from "@/features/release/createRelease/components/StepGate";
 import { useStepGuard } from "@/features/release/createRelease/guards";
@@ -74,7 +73,7 @@ export default function CreateAssetsPage() {
     }
     if (!artworkFile) {
       debugInit("create/assets", "blocked: artwork file missing");
-      setSubmitError("Загрузите обложку (JPG/PNG).");
+      setSubmitError("Сначала выбери обложку: JPG или PNG от 3000×3000 пикселей.");
       return;
     }
     setIsUploading(true);
@@ -128,7 +127,7 @@ export default function CreateAssetsPage() {
   }, [artworkFile, artworkUrl, releaseId, router, setSubmitError]);
 
   return (
-    <CreateShell title="Релиз · Обложка">
+    <CreateShell title="Обложка">
       {!guard.allowed ? (
         <StepGate
           title={guard.title}
@@ -138,10 +137,10 @@ export default function CreateAssetsPage() {
         />
       ) : (
         <div className="space-y-6">
-          <div className="glass-glow glass-glow-charged flex flex-col gap-6 px-5 py-6">
+          <div>
             <div>
               <FileUploader
-                label="Artwork (JPG/PNG)"
+                label="Так релиз увидят слушатели на площадках"
                 accept=".jpg,.jpeg,.png"
                 maxSizeMb={RELEASE_FILE_LIMITS.artworkMaxMb}
                 type="cover"
@@ -152,14 +151,14 @@ export default function CreateAssetsPage() {
             </div>
           </div>
 
-          <MagneticButton
+          <button
             type="button"
             disabled={!canGoNext || isUploading}
             onClick={handleNext}
-            className="create-flow-submit-target pulse-glow inline-flex h-14 w-full items-center justify-center rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-[16px] font-bold text-white drop-shadow-[0_0_20px_rgba(168,85,247,0.45)] disabled:opacity-60 disabled:shadow-none"
+            className="create-flow-submit-target omf-btn-primary h-14 w-full text-[16px]"
           >
-            {isUploading ? "Загружаем..." : "Далее"}
-          </MagneticButton>
+            {isUploading ? "Загружаем обложку…" : "Дальше: треки"}
+          </button>
 
           <FormFieldError message={submitError ?? undefined} messageClassName="text-center" />
         </div>

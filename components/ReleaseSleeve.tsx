@@ -95,6 +95,7 @@ export function ReleaseSleeve({
           fill
           sizes={sizes}
           priority={priority}
+          unoptimized={coverUrl.startsWith("blob:") || coverUrl.startsWith("data:")}
           className="rounded-sleeve object-cover"
         />
       ) : (
@@ -106,7 +107,11 @@ export function ReleaseSleeve({
           style={{ color: blank.color }}
           aria-hidden
         >
-          {size !== "thumb" ? (
+          {size === "thumb" ? (
+            <span className="absolute inset-0 flex items-center justify-center text-[28px] font-extrabold leading-none">
+              {(title.trim().charAt(0) || "•").toUpperCase()}
+            </span>
+          ) : (
             <>
               <span
                 className={cn(
@@ -127,7 +132,7 @@ export function ReleaseSleeve({
                 </span>
               ) : null}
             </>
-          ) : null}
+          )}
         </div>
       )}
 

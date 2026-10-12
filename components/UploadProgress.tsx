@@ -38,20 +38,16 @@ export function UploadProgress({ label, progress, className = "" }: Props) {
 
   return (
     <div
-      className={`rounded-[18px] border border-white/10 bg-black/30 px-4 py-3 backdrop-blur-md ${className}`}
+      className={`rounded-control border border-omf-line bg-omf-surface px-4 py-3.5 ${className}`}
     >
-      <div className="mb-2 flex items-center justify-between gap-2 text-[11px] text-white/80">
+      <div className="mb-2.5 flex items-center justify-between gap-2 text-[14px] text-omf-ink">
         <span className="min-w-0 flex-1 truncate">{label}</span>
-        <span className="tabular-nums text-white/90">{displayPct}%</span>
+        <span className="tabular-nums text-omf-ultra-text">{displayPct}%</span>
       </div>
-      <div className="relative h-2.5 overflow-hidden rounded-full bg-white/10 backdrop-blur-sm">
+      <div className="relative h-1.5 overflow-hidden rounded-full bg-omf-line">
         <motion.div
-          className="absolute inset-y-0 left-0 w-full origin-left rounded-full bg-gradient-to-r from-sky-400 via-violet-400 to-fuchsia-400 will-change-transform"
-          style={{
-            scaleX,
-            boxShadow:
-              "0 0 24px rgba(56, 189, 248, 0.65), 0 0 16px rgba(167, 139, 250, 0.5), 0 0 8px rgba(232, 121, 249, 0.45)"
-          }}
+          className="absolute inset-y-0 left-0 w-full origin-left rounded-full bg-omf-ultra will-change-transform"
+          style={{ scaleX }}
         />
       </div>
     </div>

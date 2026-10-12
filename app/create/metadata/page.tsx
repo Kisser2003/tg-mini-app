@@ -26,7 +26,6 @@ import {
 } from "@/features/release/createRelease/actions";
 import { logClientError } from "@/lib/logger";
 import { firstRhfErrorMessage } from "@/lib/rhf-first-error";
-import { MagneticButton } from "@/components/MagneticButton";
 import { hapticMap } from "@/lib/haptic-map";
 import { toast } from "sonner";
 import { getTelegramUserId } from "@/lib/telegram";
@@ -59,9 +58,9 @@ const ArtistProfileLinksSection = dynamic(
 );
 
 const RELEASE_TYPE_SEGMENTS: { value: ReleaseType; label: string }[] = [
-  { value: "single", label: "Single" },
+  { value: "single", label: "Сингл" },
   { value: "ep", label: "EP" },
-  { value: "album", label: "Album" }
+  { value: "album", label: "Альбом" }
 ];
 
 function borderForField(
@@ -378,34 +377,34 @@ function CreateMetadataPageInner() {
     Boolean(values.language);
 
   return (
-    <CreateShell title="Релиз · Паспорт">
-      <div className="glass-glow glass-glow-charged px-5 py-6">
+    <CreateShell>
+      <div>
         {isHydrating ? (
           <div
             className="pointer-events-none flex flex-col gap-4"
             aria-busy
             aria-label="Загрузка данных релиза"
           >
-            <div className="h-3 w-40 animate-pulse rounded-md bg-white/10" />
+            <div className="h-3 w-40 animate-pulse rounded-md bg-omf-surface" />
             <div className="space-y-2">
-              <div className="h-2.5 w-16 animate-pulse rounded bg-white/10" />
-              <div className="h-12 w-full animate-pulse rounded-[14px] bg-white/[0.07]" />
+              <div className="h-2.5 w-16 animate-pulse rounded bg-omf-surface" />
+              <div className="h-12 w-full animate-pulse rounded-[14px] bg-omf-surface" />
             </div>
             <div className="space-y-2">
-              <div className="h-2.5 w-28 animate-pulse rounded bg-white/10" />
-              <div className="h-12 w-full animate-pulse rounded-[14px] bg-white/[0.07]" />
+              <div className="h-2.5 w-28 animate-pulse rounded bg-omf-surface" />
+              <div className="h-12 w-full animate-pulse rounded-[14px] bg-omf-surface" />
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div className="h-14 animate-pulse rounded-[14px] bg-white/[0.06]" />
-              <div className="h-14 animate-pulse rounded-[14px] bg-white/[0.06]" />
-              <div className="h-14 animate-pulse rounded-[14px] bg-white/[0.06]" />
-              <div className="h-14 animate-pulse rounded-[14px] bg-white/[0.06]" />
+              <div className="h-14 animate-pulse rounded-[14px] bg-omf-surface" />
+              <div className="h-14 animate-pulse rounded-[14px] bg-omf-surface" />
+              <div className="h-14 animate-pulse rounded-[14px] bg-omf-surface" />
+              <div className="h-14 animate-pulse rounded-[14px] bg-omf-surface" />
             </div>
             <div className="space-y-2">
-              <div className="h-2.5 w-36 animate-pulse rounded bg-white/10" />
-              <div className="h-12 w-full animate-pulse rounded-[14px] bg-white/[0.07]" />
+              <div className="h-2.5 w-36 animate-pulse rounded bg-omf-surface" />
+              <div className="h-12 w-full animate-pulse rounded-[14px] bg-omf-surface" />
             </div>
-            <div className="h-14 animate-pulse rounded-[20px] bg-white/[0.08]" />
+            <div className="h-14 animate-pulse rounded-[20px] bg-omf-surface" />
           </div>
         ) : (
           <form
@@ -417,7 +416,7 @@ function CreateMetadataPageInner() {
             className="flex flex-col gap-6"
           >
             {hydrateError && (
-              <p className="break-words rounded-[14px] border border-red-500/30 bg-red-950/40 px-3 py-2 text-[12px] leading-relaxed text-red-100">
+              <p className="break-words rounded-control border border-omf-red px-3 py-2.5 text-[14px] leading-relaxed text-omf-ink">
                 {hydrateError}
               </p>
             )}
@@ -441,11 +440,11 @@ function CreateMetadataPageInner() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -8 }}
                   transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-                  className="rounded-[14px] border border-sky-500/35 bg-sky-950/40 px-3 py-3 text-[12px] leading-relaxed text-sky-50/95"
+                  className="rounded-control border border-omf-line-strong bg-omf-surface px-4 py-4 text-[14px] leading-relaxed"
                 >
-                  <p className="font-medium text-white">Найден незавершённый черновик</p>
-                  <p className="mt-1 text-white/70">
-                    Продолжить правки или начать новый релиз — локальный черновик сейчас не открыт.
+                  <p className="text-[16px] font-bold tracking-tight text-omf-ink">У тебя есть незавершённый релиз</p>
+                  <p className="mt-1 text-omf-graphite">
+                    Продолжить с того места, где остановился, или начать новый?
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button
@@ -455,7 +454,7 @@ function CreateMetadataPageInner() {
                         continueDraftNavIdRef.current = draftOfferId;
                         setIsDraftBannerVisible(false);
                       }}
-                      className="rounded-[14px] bg-sky-500/90 px-4 py-2 text-[13px] font-medium text-white shadow-sm hover:bg-sky-500"
+                      className="omf-btn-primary min-h-[44px] px-4 text-[14px]"
                     >
                       Продолжить
                     </button>
@@ -470,7 +469,7 @@ function CreateMetadataPageInner() {
                         continueDraftNavIdRef.current = null;
                         setIsDraftBannerVisible(false);
                       }}
-                      className="rounded-[14px] border border-white/20 bg-white/5 px-4 py-2 text-[13px] font-medium text-white/85 hover:bg-white/10"
+                      className="omf-btn-secondary min-h-[44px] px-4 text-[14px]"
                     >
                       Начать новый
                     </button>
@@ -482,7 +481,7 @@ function CreateMetadataPageInner() {
               <label
                 className={`mb-2.5 flex items-center gap-2 ${WIZARD_FIELD_LABEL_CLASS}`}
               >
-                <Mic2 className="h-3.5 w-3.5 text-white/35" aria-hidden />
+                <Mic2 className="h-3.5 w-3.5 text-omf-faint" aria-hidden />
                 Артист
               </label>
               <Controller
@@ -604,7 +603,7 @@ function CreateMetadataPageInner() {
               <label
                 className={`mb-3 flex items-center gap-2 ${WIZARD_FIELD_LABEL_CLASS}`}
               >
-                <Disc className="h-3.5 w-3.5 text-white/35" aria-hidden />
+                <Disc className="h-3.5 w-3.5 text-omf-faint" aria-hidden />
                 Тип релиза
               </label>
               <div className="flex gap-2">
@@ -623,20 +622,12 @@ function CreateMetadataPageInner() {
                         });
                       }}
                       whileTap={{ scale: 0.96 }}
-                      className={`flex-1 rounded-xl py-3.5 text-sm font-bold tracking-tight transition-all duration-200 ${
+                      aria-pressed={active}
+                      className={`omf-focus min-h-[48px] flex-1 rounded-control text-[15px] transition-colors duration-150 ${
                         active
-                          ? "text-white"
-                          : "border border-white/[0.05] bg-white/[0.03] text-white/25"
+                          ? "bg-omf-ink font-bold text-omf-bg"
+                          : "border border-omf-line-strong font-medium text-omf-graphite hover:text-omf-ink"
                       }`}
-                      style={
-                        active
-                          ? {
-                              background:
-                                "linear-gradient(135deg, var(--ss-neon-blue), var(--ss-neon-pink))",
-                              boxShadow: "0 0 24px rgba(129,140,248,0.3)"
-                            }
-                          : undefined
-                      }
                     >
                       {label}
                     </motion.button>
@@ -651,7 +642,7 @@ function CreateMetadataPageInner() {
                 <label
                   className={`mb-2.5 flex items-center gap-2 ${WIZARD_FIELD_LABEL_CLASS}`}
                 >
-                  <Calendar className="h-3.5 w-3.5 text-white/35" strokeWidth={1.5} aria-hidden />
+                  <Calendar className="h-3.5 w-3.5 text-omf-faint" strokeWidth={1.5} aria-hidden />
                   Плановая дата релиза
                 </label>
                 <div
@@ -665,20 +656,14 @@ function CreateMetadataPageInner() {
                     type="date"
                     min={minReleaseDate}
                     {...register("releaseDate")}
-                    className="glass-date-native cursor-pointer bg-transparent text-[16px] text-white [color-scheme:dark]"
-                  />
-                  <Calendar
-                    className="pointer-events-none ml-auto h-5 w-5 shrink-0 pr-3 text-white/35"
-                    strokeWidth={1.5}
-                    aria-hidden
+                    className="glass-date-native cursor-pointer bg-transparent text-[16px] text-omf-ink [color-scheme:dark]"
                   />
                 </div>
                 <FormFieldError message={errors.releaseDate?.message} />
               </div>
               {isEarlyReleaseDate && (
-                <p className="rounded-[12px] border border-sky-500/30 bg-sky-950/35 px-3 py-2.5 text-[11px] leading-relaxed text-sky-100/90">
-                  Внимание: при раннем релизе шанс попасть в редакционные плейлисты снижается.
-                  Рекомендуем выбирать дату за 2 недели.
+                <p className="rounded-control border border-omf-line-strong px-3 py-2.5 text-[13px] leading-relaxed text-omf-graphite">
+                  Если выпустить раньше чем через 2 недели, шансов попасть в редакционные плейлисты меньше. Лучше выбрать дату позже.
                 </p>
               )}
               <div className="min-w-0 space-y-1.5">
@@ -686,27 +671,27 @@ function CreateMetadataPageInner() {
                   Лейбл
                 </label>
                 <div
-                  className={`${WIZARD_INPUT_CLASS} cursor-not-allowed border-white/10 bg-white/[0.03] text-white/75`}
+                  className={`${WIZARD_INPUT_CLASS} cursor-not-allowed text-omf-graphite`}
                   aria-readonly="true"
                 >
                   {FIXED_RELEASE_LABEL}
                 </div>
                 <input type="hidden" {...register("label")} />
-                <p className="text-[11px] leading-relaxed text-white/40">
-                  Значение лейбла задано сервисом и не редактируется.
+                <p className="text-[13px] leading-relaxed text-omf-faint">
+                  Лейбл задан сервисом, поменять его нельзя.
                 </p>
               </div>
             </div>
 
             <ArtistProfileLinksSection />
 
-            <MagneticButton
+            <button
               type="submit"
               disabled={!canProceed || isSubmitting}
-              className="create-flow-submit-target pulse-glow mt-1 inline-flex h-14 w-full items-center justify-center rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-[16px] font-bold text-white drop-shadow-[0_0_20px_rgba(168,85,247,0.45)] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+              className="create-flow-submit-target omf-btn-primary mt-1 h-14 w-full text-[16px]"
             >
-              {isSubmitting ? "Сохраняем…" : "Далее"}
-            </MagneticButton>
+              {isSubmitting ? "Сохраняем…" : "Дальше: обложка"}
+            </button>
           </form>
         )}
       </div>

@@ -35,13 +35,13 @@ export default function CreateSuccessPage() {
 
   if (leaving) {
     return (
-      <CreateShell title="Релиз · Готово">
+      <CreateShell>
         <div className="flex min-h-[40vh] flex-col items-center justify-center gap-4 px-4">
           <div
-            className="h-9 w-9 animate-spin rounded-full border-2 border-white/10 border-t-[#7C3AED]"
+            className="h-9 w-9 animate-spin rounded-full border-2 border-omf-line border-t-omf-ultra"
             aria-hidden="true"
           />
-          <p className="text-center text-[13px] text-muted-foreground">
+          <p className="text-center text-[14px] text-omf-graphite">
             {leaving === "home" ? "Переход на главную…" : "Открываем новый релиз…"}
           </p>
         </div>
@@ -50,12 +50,12 @@ export default function CreateSuccessPage() {
   }
 
   return (
-    <CreateShell title="Релиз · Готово">
+    <CreateShell>
       {!summary ? (
         <StepGate
           title="Нет данных об отправке"
-          description="Похоже, вы ещё не отправили релиз. Вернитесь к началу мастера."
-          actionLabel="Перейти к паспорту"
+          description="Похоже, релиз ещё не отправлен. Начни с паспорта релиза."
+          actionLabel="Начать релиз"
           onAction={() => router.push("/create/metadata")}
         />
       ) : (

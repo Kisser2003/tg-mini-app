@@ -552,7 +552,9 @@ button {
     transform: scale(0.98);
   }
   .omf-btn-primary:disabled {
-    opacity: 0.45;
+    background: var(--omf-surface-2);
+    color: var(--omf-faint);
+    cursor: not-allowed;
   }
 
   .omf-btn-secondary {

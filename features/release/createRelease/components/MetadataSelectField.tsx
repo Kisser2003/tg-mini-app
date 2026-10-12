@@ -6,7 +6,7 @@ import { ChevronDown } from "lucide-react";
 import { FormFieldError } from "@/components/FormFieldError";
 import { GLASS_FIELD_BASE, WIZARD_FIELD_LABEL_CLASS } from "@/lib/glass-form-classes";
 
-const METADATA_LABEL_CLASS = `mb-2.5 flex items-center gap-1.5 ${WIZARD_FIELD_LABEL_CLASS}`;
+const METADATA_LABEL_CLASS = `mb-2 flex items-center gap-1.5 ${WIZARD_FIELD_LABEL_CLASS}`;
 
 export type MetadataSelectFieldProps = {
   label: string;
@@ -26,7 +26,7 @@ export const MetadataSelectField = forwardRef<HTMLSelectElement, MetadataSelectF
     const autoId = useId();
     const selectId = id ?? autoId;
 
-    const iconTone = iconClassName ?? "text-white/40";
+    const iconTone = iconClassName ?? "text-omf-faint";
 
     return (
       <div className="min-w-0">
@@ -44,7 +44,7 @@ export const MetadataSelectField = forwardRef<HTMLSelectElement, MetadataSelectF
             {children}
           </select>
           <ChevronDown
-            className="pointer-events-none absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-white/35"
+            className="pointer-events-none absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-omf-graphite"
             strokeWidth={2}
             aria-hidden
           />

@@ -29,7 +29,7 @@ export function FormFieldError({ message, className = "", messageClassName = "" 
             className="overflow-hidden"
           >
             <p
-              className={`break-words pt-1.5 text-[11px] leading-relaxed text-red-400 ${messageClassName}`.trim()}
+              className={`break-words pt-1.5 text-[13px] leading-relaxed text-omf-red ${messageClassName}`.trim()}
             >
               {text}
             </p>

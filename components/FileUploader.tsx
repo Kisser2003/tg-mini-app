@@ -1,9 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { motion, useMotionValue, useSpring } from "framer-motion";
-import { Music2, Image as ImageIcon } from "lucide-react";
-import confetti from "canvas-confetti";
+import { Check, ImagePlus, Music2 } from "lucide-react";
 import { FormFieldError } from "@/components/FormFieldError";
 import { ALLOWED_AUDIO_MIME } from "@/repositories/releases.repo";
 import { triggerHaptic } from "@/lib/telegram";
@@ -95,32 +93,6 @@ export function FileUploader({
     };
   }, []);
 
-  const cursorX = useMotionValue(0);
-  const cursorY = useMotionValue(0);
-  const magneticX = useSpring(cursorX, { stiffness: 300, damping: 30 });
-  const magneticY = useSpring(cursorY, { stiffness: 300, damping: 30 });
-
-  const handleMouseMove = (event: React.MouseEvent<HTMLLabelElement>) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    const x = event.clientX - (rect.left + rect.width / 2);
-    const y = event.clientY - (rect.top + rect.height / 2);
-    const distance = Math.sqrt(x * x + y * y);
-    const radius = 14;
-
-    if (distance < radius) {
-      cursorX.set(x * 0.25);
-      cursorY.set(y * 0.25);
-    } else {
-      cursorX.set(0);
-      cursorY.set(0);
-    }
-  };
-
-  const handleMouseLeave = () => {
-    cursorX.set(0);
-    cursorY.set(0);
-  };
-
   useEffect(() => {
     return () => {
       if (successFlashTimerRef.current != null) {
@@ -157,7 +129,7 @@ export function FileUploader({
 
     const sizeMb = selected.size / (1024 * 1024);
     if (sizeMb > maxSizeMb) {
-      setError(`Максимальный размер файла ${maxSizeMb}MB`);
+      setError(`Файл больше ${maxSizeMb} МБ. Выбери файл поменьше.`);
       setFile(null);
       onFileChange(null);
       if (previewUrl) {
@@ -170,7 +142,7 @@ export function FileUploader({
 
     if (type === "wav") {
       if (!selected.name.toLowerCase().endsWith(".wav")) {
-        setError("Допустим только формат .wav");
+        setError("Нужен файл в формате WAV.");
         setFile(null);
         onFileChange(null);
         if (previewUrl) {
@@ -187,7 +159,7 @@ export function FileUploader({
         mime === "application/octet-stream" ||
         (mime.startsWith("audio/") && selected.name.toLowerCase().endsWith(".wav"));
       if (!mimeOk) {
-        setError(`Неподдерживаемый тип файла (${mime || "пусто"}). Нужен WAV.`);
+        setError("Этот файл не похож на WAV. Выбери файл с расширением .wav.");
         setFile(null);
         onFileChange(null);
         if (previewUrl) {
@@ -217,7 +189,7 @@ export function FileUploader({
             lowerName.endsWith(".jpg") ||
             lowerName.endsWith(".jpeg")));
       if (!isJpgOrPng) {
-        setError("Допустимы только JPG или PNG (проверьте расширение файла).");
+        setError("Обложка должна быть в формате JPG или PNG.");
         setFile(null);
         onFileChange(null);
         if (previewUrl) {
@@ -232,18 +204,17 @@ export function FileUploader({
       const img = new Image();
       img.onload = () => {
         if (img.width < 3000 || img.height < 3000) {
-          setError("Минимальное разрешение обложки 3000x3000");
+          setError("Обложка меньше 3000×3000 пикселей. Выбери изображение побольше.");
           URL.revokeObjectURL(objectUrl);
         } else {
           URL.revokeObjectURL(objectUrl);
           // Parent updates `initialFile` → sync effect sets file + owned blob preview.
           onFileChange(selected);
           scheduleSuccessFlash();
-          confetti({ particleCount: 30, spread: 50, origin: { y: 0.4 } });
         }
       };
       img.onerror = () => {
-        setError("Не удалось прочитать изображение");
+        setError("Не получилось открыть изображение. Попробуй другой файл.");
         URL.revokeObjectURL(objectUrl);
         setIsUploading(false);
       };
@@ -256,162 +227,101 @@ export function FileUploader({
     // WAV: реальная загрузка в Supabase Storage запускается с родителя — без «фейкового» прогресса.
     if (type !== "wav") {
       scheduleSuccessFlash();
-      confetti({ particleCount: 30, spread: 50, origin: { y: 0.4 } });
     }
   };
 
-  const showSelectedState = Boolean(file) || (type === "cover" && Boolean(previewUrl));
+  const hasCover = type === "cover" && Boolean(previewUrl);
   const clampedProgress =
     uploadProgressPercent != null && Number.isFinite(uploadProgressPercent)
       ? Math.round(Math.min(100, Math.max(0, uploadProgressPercent)))
       : null;
   const isWavUploading = type === "wav" && clampedProgress != null;
+  const hasError = invalid || Boolean(error);
+
+  const frame = `omf-focus relative flex cursor-pointer overflow-hidden transition-colors duration-150 focus-within:border-omf-ultra ${
+    hasError ? "border-omf-red" : "border-omf-line-strong hover:border-omf-graphite"
+  }`;
 
   return (
     <div className="space-y-2">
-      <label className="block text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-        {label}
-      </label>
-      <motion.label
-        whileHover={{ scale: 1.02 }}
-        whileTap={{ scale: 0.96 }}
-        animate={{
-          boxShadow: uploadSuccess
-            ? "0 0 0 3px rgba(34,197,94,0.45)"
-            : "0 14px 40px rgba(0,0,0,0.65)"
-        }}
-        transition={{
-          type: "spring",
-          stiffness: 400,
-          damping: 30
-        }}
-        onMouseMove={handleMouseMove}
-        onMouseLeave={handleMouseLeave}
-        style={{
-          x: magneticX,
-          y: magneticY
-        }}
-        className={`relative flex min-h-[140px] cursor-pointer flex-col items-center justify-center overflow-hidden rounded-[1.25rem] border-2 border-dashed px-4 py-5 text-center text-xs text-muted-foreground transition-[border-color,background-color,box-shadow] duration-200 focus-within:ring-1 focus-within:ring-[var(--ss-neon-blue)]/40 focus-within:ring-offset-0 ${
-          invalid || error
-            ? "border-red-500/55 bg-red-950/20 ring-2 ring-red-500/25 hover:border-red-400/60"
-            : "border-white/[0.08] bg-white/[0.03] ring-2 ring-transparent hover:border-[var(--ss-neon-blue)]/35 hover:bg-white/[0.05]"
-        }`}
-      >
-        {type === "cover" && !previewUrl && (
-          <div
-            className="pointer-events-none absolute inset-4 overflow-hidden rounded-xl border border-dashed border-white/[0.06]"
-            aria-hidden
-          >
-            <div
-              className="scanner-line absolute left-0 right-0 h-[2px]"
-              style={{
-                background:
-                  "linear-gradient(90deg, transparent, var(--ss-neon-blue), var(--ss-neon-pink), transparent)",
-                boxShadow: "0 0 24px rgba(129,140,248,0.4)"
-              }}
-            />
-          </div>
-        )}
-        <input
-          type="file"
-          accept={accept}
-          className="hidden"
-          onChange={handleChange}
-        />
-        {isWavUploading && (
-            <div
-              className="absolute inset-0 z-10 flex flex-col justify-end bg-black/50"
-              aria-live="polite"
-              aria-label={`Загрузка ${clampedProgress}%`}
-            >
-              <div className="absolute inset-0 flex items-center justify-center">
-                <span className="rounded-full border border-white/20 bg-black/35 px-3 py-1 text-xl font-semibold tabular-nums text-white shadow-lg">
-                  {clampedProgress}%
-                </span>
+      {label ? <p className="text-[13px] text-omf-graphite">{label}</p> : null}
+
+      {type === "cover" ? (
+        <label
+          className={`${frame} mx-auto aspect-square w-full max-w-[320px] flex-col items-center justify-center rounded-sleeve ${
+            hasCover ? "border border-omf-line" : "border-[1.5px] border-dashed px-6 text-center"
+          }`}
+        >
+          <input type="file" accept={accept} className="sr-only" onChange={handleChange} />
+          {hasCover && previewUrl ? (
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={previewUrl} alt="Предпросмотр обложки" className="absolute inset-0 h-full w-full object-cover" />
+              <span className="absolute inset-x-0 bottom-0 bg-omf-bg/85 px-3 py-2.5 text-center text-[14px] text-omf-ink">
+                {isUploading ? "Обложка выбрана" : "Нажми, чтобы заменить"}
+              </span>
+            </>
+          ) : (
+            <>
+              <ImagePlus className="h-8 w-8 text-omf-graphite" strokeWidth={1.5} aria-hidden />
+              <span className="mt-3 text-[16px] font-medium text-omf-ink">Выбери обложку</span>
+              <span className="mt-1 text-[13px] leading-snug text-omf-graphite">
+                JPG или PNG, от 3000×3000 пикселей
+              </span>
+            </>
+          )}
+        </label>
+      ) : (
+        <label
+          className={`${frame} min-h-[88px] flex-col justify-center rounded-control px-4 py-4 ${
+            file || isWavUploading ? "border bg-omf-surface" : "border-[1.5px] border-dashed"
+          }`}
+        >
+          <input type="file" accept={accept} className="sr-only" onChange={handleChange} />
+          {isWavUploading ? (
+            <div aria-live="polite">
+              <div className="flex items-baseline justify-between gap-3 text-[14px]">
+                <span className="min-w-0 truncate">{file?.name ?? "Загружаем WAV"}</span>
+                <span className="shrink-0 tabular-nums text-omf-ultra-text">{clampedProgress}%</span>
               </div>
-              <div className="h-3.5 w-full bg-black/45">
+              <div
+                className="mt-3 h-1 w-full overflow-hidden rounded-full bg-omf-line"
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={clampedProgress ?? 0}
+              >
                 <div
-                  className="h-full bg-gradient-to-r from-sky-400 via-blue-500 to-indigo-500 transition-[width] duration-200 ease-out"
-                  style={{
-                    width: `${clampedProgress}%`
-                  }}
+                  className="h-full rounded-full bg-omf-ultra transition-[width] duration-200 ease-out"
+                  style={{ width: `${clampedProgress}%` }}
                 />
               </div>
             </div>
-          )}
-        <div className="flex h-full flex-col items-center justify-center gap-2">
-          <span className="flex items-center gap-2 text-sm font-medium text-foreground">
-            {type === "wav" ? (
-              <Music2 className="h-4 w-4 text-primary" />
-            ) : (
-              <ImageIcon className="h-4 w-4 text-primary" />
-            )}
-            {type === "wav" ? "WAV file" : "Cover"}
-          </span>
-          {!showSelectedState && !isWavUploading ? (
-            <span className="text-center text-[11px] leading-snug text-muted-foreground">
-              {type === "wav"
-                ? "Drag & drop WAV or click to browse"
-                : "Drag & drop cover or click to browse"}
-            </span>
-          ) : null}
-          {showSelectedState && (
-            <div className="mt-1 w-full max-w-full space-y-2 text-[11px] text-foreground">
-              {file ? (
-                <div className="flex max-w-full items-center justify-center gap-1 text-emerald-400">
-                  <span className="shrink-0 text-base leading-none">✓</span>
-                  <span className="min-w-0 truncate text-left" title={file.name}>
-                    {file.name}
-                  </span>
-                </div>
-              ) : type === "cover" && previewUrl ? (
-                <p className="text-center text-[10px] text-white/50">Saved cover</p>
-              ) : null}
-              {type !== "wav" && isUploading && (
-                <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-black/30">
-                  <motion.div
-                    initial={{ width: "0%" }}
-                    animate={{ width: "100%" }}
-                    transition={{
-                      duration: 1.1,
-                      ease: "easeOut"
-                    }}
-                    className="relative h-full rounded-full bg-gradient-to-r from-emerald-400 via-white to-emerald-400"
-                  >
-                    <motion.span
-                      aria-hidden
-                      className="absolute -right-1 top-1/2 h-3 w-3 -translate-y-1/2 rounded-full bg-white"
-                      style={{
-                        boxShadow: "0 0 14px rgba(52,211,153,0.9)"
-                      }}
-                      animate={{
-                        opacity: [0.7, 1, 0.7]
-                      }}
-                      transition={{
-                        repeat: Infinity,
-                        duration: 0.8,
-                        ease: "easeInOut"
-                      }}
-                    />
-                  </motion.div>
-                </div>
-              )}
-              {previewUrl && type === "cover" && (
-                <motion.img
-                  key={previewUrl}
-                  src={previewUrl}
-                  alt="Предпросмотр обложки"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ duration: 0.35, ease: "easeOut" }}
-                  className="mx-auto mt-2 h-24 w-24 rounded-lg object-cover shadow-lg"
-                />
-              )}
+          ) : file ? (
+            <div className="flex items-center gap-3">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-omf-green text-white">
+                <Check className="h-4 w-4" strokeWidth={3} aria-hidden />
+              </span>
+              <div className="min-w-0">
+                <p className="truncate text-[15px] text-omf-ink" title={file.name}>
+                  {file.name}
+                </p>
+                <p className="text-[13px] text-omf-graphite">Нажми, чтобы заменить</p>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3">
+              <Music2 className="h-6 w-6 shrink-0 text-omf-graphite" strokeWidth={1.5} aria-hidden />
+              <div>
+                <p className="text-[16px] font-medium text-omf-ink">Выбери WAV</p>
+                <p className="text-[13px] text-omf-graphite">Файл до {maxSizeMb} МБ</p>
+              </div>
             </div>
           )}
-        </div>
-      </motion.label>
-      {helperText ? <p className="text-[11px] text-white/45">{helperText}</p> : null}
+        </label>
+      )}
+
+      {helperText ? <p className="text-[13px] text-omf-graphite">{helperText}</p> : null}
 
       <FormFieldError message={error ?? undefined} />
     </div>

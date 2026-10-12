@@ -71,11 +71,11 @@ export function ArtistProfileLinksSection() {
   };
 
   return (
-    <div ref={panelRef} className="min-w-0 space-y-3 rounded-[16px] border border-white/[0.08] bg-black/25 p-3">
+    <div ref={panelRef} className="min-w-0 space-y-3 border-t border-omf-line pt-5">
       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1">
         <label
           htmlFor="artist-has-profiles"
-          className="min-w-0 cursor-pointer text-[13px] leading-snug text-white/85"
+          className="min-w-0 cursor-pointer text-[15px] leading-snug text-omf-ink"
         >
           У меня уже есть профили на площадках
         </label>
@@ -86,20 +86,20 @@ export function ArtistProfileLinksSection() {
           aria-checked={hasProfiles}
           onClick={() => toggleProfiles(!hasProfiles)}
           className={`relative inline-flex h-8 w-[52px] shrink-0 items-center justify-start rounded-full px-[3px] transition-colors ${
-            hasProfiles ? "bg-blue-600" : "bg-white/15"
+            hasProfiles ? "bg-omf-ultra" : "bg-omf-line-strong"
           }`}
         >
           <motion.span
             layout
             transition={{ type: "spring", stiffness: 500, damping: 32 }}
             animate={{ x: hasProfiles ? 22 : 0 }}
-            className="h-6 w-6 rounded-full bg-white shadow-sm"
+            className="h-6 w-6 rounded-full bg-white"
           />
         </button>
       </div>
-      <p className="text-[10px] leading-snug text-white/40">
-        Не включайте, если вы только начинаете — ссылки необязательны. При включении укажите хотя бы
-        одну корректную ссылку на карточку артиста.
+      <p className="text-[13px] leading-relaxed text-omf-graphite">
+        Если ты только начинаешь, оставь выключенным: ссылки не обязательны. Если включишь, добавь
+        хотя бы одну ссылку на свой профиль.
       </p>
 
       <AnimatePresence initial={false}>
@@ -111,11 +111,11 @@ export function ArtistProfileLinksSection() {
             transition={{ type: "spring", bounce: 0, duration: 0.32 }}
             className="overflow-hidden"
           >
-            <div className="flex flex-col gap-3 border-t border-white/[0.06] pt-3">
+            <div className="flex flex-col gap-4 border-t border-omf-line pt-4">
               {FIELDS.map(({ key, label, Icon, placeholder }) => (
                 <div key={key} className="min-w-0 space-y-1">
-                  <label className="flex items-center gap-2 text-[10px] font-medium uppercase tracking-[0.14em] text-white/55">
-                    <Icon className="h-3.5 w-3.5 text-white/40" aria-hidden />
+                  <label className="flex items-center gap-2 text-[13px] text-omf-graphite">
+                    <Icon className="h-3.5 w-3.5 text-omf-faint" aria-hidden />
                     {label}
                   </label>
                   <input
@@ -125,7 +125,7 @@ export function ArtistProfileLinksSection() {
                     value={releaseArtistLinks[key]}
                     onChange={(e) => setReleaseArtistLinks({ [key]: e.target.value })}
                     placeholder={placeholder}
-                    className={`${GLASS_FIELD_BASE} min-h-[44px] text-[15px] placeholder:text-white/35`}
+                    className={`${GLASS_FIELD_BASE} min-h-[48px] text-[15px]`}
                   />
                 </div>
               ))}

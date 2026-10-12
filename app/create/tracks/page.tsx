@@ -7,7 +7,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useFieldArray, useForm } from "react-hook-form";
 import { motion } from "framer-motion";
 import { CheckCircle2, ChevronDown, ChevronUp, UserPlus, X } from "lucide-react";
-import { MagneticButton } from "@/components/MagneticButton";
 import { CreateShell } from "@/features/release/createRelease/components/CreateShell";
 import { StepGate } from "@/features/release/createRelease/components/StepGate";
 import { useStepGuard } from "@/features/release/createRelease/guards";
@@ -334,7 +333,7 @@ export default function CreateTracksPage() {
   );
 
   return (
-    <CreateShell title="Релиз · Треки">
+    <CreateShell title="Треки">
       {!guard.allowed ? (
         <StepGate
           title={guard.title}
@@ -345,11 +344,10 @@ export default function CreateTracksPage() {
       ) : (
         <form onSubmit={handleSubmit(handleNext)} className="space-y-6">
           {showResumeAudioBanner && (
-            <div className="rounded-[18px] border border-sky-500/30 bg-sky-950/35 px-4 py-3 text-[12px] leading-relaxed text-sky-100/95">
-              В базе уже есть привязанные WAV для этого черновика, но после возврата из списка
-              релизов их нужно{" "}
-              <span className="font-semibold text-white">прикрепить заново в этой сессии</span> —
-              иначе отправка на модерацию будет недоступна.
+            <div className="rounded-control border border-omf-line-strong bg-omf-surface px-4 py-3.5 text-[14px] leading-relaxed text-omf-graphite">
+              <span className="font-bold text-omf-ink">Выбери WAV-файлы заново.</span> Мы сохранили
+              их в черновике, но после возврата из списка релизов приложение не видит файлы на
+              телефоне. Без этого отправить релиз на проверку не получится.
             </div>
           )}
 
@@ -358,7 +356,7 @@ export default function CreateTracksPage() {
               key={field.id}
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
-              className="glass-glow glass-glow-charged space-y-6 px-5 py-5"
+              className="space-y-5 border-t border-omf-line pt-6 first:border-t-0 first:pt-0"
             >
               {!isSingle ? (
                 <div className="flex items-center gap-2">
@@ -374,17 +372,16 @@ export default function CreateTracksPage() {
                     }
                     className="flex min-w-0 flex-1 items-center gap-2 text-left"
                   >
-                    <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/60">
-                      ТРЕК {index + 1}
+                    <span className="shrink-0 text-[16px] font-bold tracking-tight text-omf-ink">
+                      Трек {index + 1}
                     </span>
-                    <span className="min-w-0 flex-1 truncate text-[12px] text-white/70">
+                    <span className="min-w-0 flex-1 truncate text-[14px] text-omf-graphite">
                       {(values.tracks[index]?.title ?? "").trim() || "Без названия"}
                     </span>
-                    <span className="text-white/35">↕</span>
                     {expandedTracks[index] ? (
-                      <ChevronUp className="h-4 w-4 text-white/55" />
+                      <ChevronUp className="h-4 w-4 text-omf-graphite" />
                     ) : (
-                      <ChevronDown className="h-4 w-4 text-white/55" />
+                      <ChevronDown className="h-4 w-4 text-omf-graphite" />
                     )}
                   </button>
                   {canAddTrack && fields.length > 1 && (
@@ -400,47 +397,47 @@ export default function CreateTracksPage() {
                           return next;
                         });
                       }}
-                      className="text-[12px] text-white/40 hover:text-white/70"
+                      className="omf-focus shrink-0 rounded-control px-2 py-1.5 text-[13px] text-omf-graphite transition-colors hover:text-omf-red"
                       aria-label={`Удалить трек ${index + 1}`}
                     >
-                      🗑
+                      Удалить
                     </button>
                   )}
                 </div>
               ) : (
                 <div className="flex items-center justify-between gap-2">
-                  <span className="min-w-0 truncate text-[11px] font-medium uppercase tracking-[0.18em] text-white/60">
+                  <span className="min-w-0 truncate text-[16px] font-bold tracking-tight text-omf-ink">
                     Трек {index + 1}
                   </span>
                 </div>
               )}
 
               <div className="space-y-1.5">
-                <label className={`mb-2.5 block ${WIZARD_FIELD_LABEL_CLASS}`}>WAV ФАЙЛ</label>
+                <label className={`mb-2 block ${WIZARD_FIELD_LABEL_CLASS}`}>WAV-файл</label>
                 {!isSingle && !expandedTracks[index] ? (
-                  <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-xs text-white/65">
+                  <div className="rounded-control border border-omf-line bg-omf-surface px-4 py-3 text-[14px] text-omf-graphite">
                     {storeTrackFiles[index] || trackFilesMeta[index]
-                      ? "WAV прикреплён"
-                      : "WAV не прикреплён"}
+                      ? "WAV выбран"
+                      : "WAV не выбран"}
                   </div>
                 ) : trackFilesMeta[index] && !storeTrackFiles[index] ? (
-                  <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--ss-green)]/15">
-                      <CheckCircle2 className="h-4 w-4 text-[var(--ss-green)]" />
+                  <div className="flex items-center gap-3 rounded-control border border-omf-line bg-omf-surface px-4 py-3">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-omf-green">
+                      <CheckCircle2 className="h-4 w-4 text-white" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-white">
+                      <p className="truncate text-[15px] text-omf-ink">
                         {trackFilesMeta[index].name}
                       </p>
-                      <p className="text-xs text-white/55">
-                        {(trackFilesMeta[index].size / 1024 / 1024).toFixed(1)} MB • Прикреплён
-                        ранее
+                      <p className="text-[13px] text-omf-graphite">
+                        {(trackFilesMeta[index].size / 1024 / 1024).toFixed(1)} МБ, загружен раньше
                       </p>
                     </div>
                     <button
                       type="button"
                       onClick={() => clearTrackFile(index)}
-                      className="text-white/40 transition-colors hover:text-white/70"
+                      aria-label="Убрать файл"
+                      className="omf-focus rounded-full p-1.5 text-omf-graphite transition-colors hover:text-omf-ink"
                     >
                       <X className="h-4 w-4" />
                     </button>
@@ -448,7 +445,7 @@ export default function CreateTracksPage() {
                 ) : (
                   <>
                     <FileUploader
-                      label="WAV трека"
+                      label=""
                       accept=".wav,audio/wav,audio/x-wav,audio/wave,audio/vnd.wave"
                       maxSizeMb={200}
                       type="wav"
@@ -527,10 +524,8 @@ export default function CreateTracksPage() {
                   {isSingle && index === 0 ? (
                     <div className="space-y-1.5">
                       <label className={`mb-2.5 block ${WIZARD_FIELD_LABEL_CLASS}`}>Название трека</label>
-                      <p className="mb-1 text-[12px] leading-relaxed text-white/50">
-                        Обычно совпадает с названием релиза. Участников / фит укажите в блоке
-                        «Дополнительные артисты» ниже; при необходимости допишите отображаемое
-                        название трека здесь (как в сторе).
+                      <p className="mb-1 text-[13px] leading-relaxed text-omf-graphite">
+                        Обычно совпадает с названием релиза.
                       </p>
                       <input
                         {...register(`tracks.${index}.title` as const, {
@@ -539,7 +534,7 @@ export default function CreateTracksPage() {
                             singleTrackTitleTouchedRef.current = v.trim().length > 0;
                           }
                         })}
-                        placeholder={releaseTitle.trim() || "Как на обложке / в сторе"}
+                        placeholder={releaseTitle.trim() || "Название трека"}
                         className={`${WIZARD_INPUT_CLASS} ${
                           errors.tracks?.[index]?.title && dirtyFields.tracks?.[index]?.title
                             ? GLASS_FIELD_ERROR_STRONG
@@ -555,7 +550,7 @@ export default function CreateTracksPage() {
                       </label>
                       <input
                         {...register(`tracks.${index}.title` as const)}
-                        placeholder="Например, Track 1"
+                        placeholder="Название трека"
                         className={`${WIZARD_INPUT_CLASS} ${
                           errors.tracks?.[index]?.title && dirtyFields.tracks?.[index]?.title
                             ? GLASS_FIELD_ERROR_STRONG
@@ -567,27 +562,26 @@ export default function CreateTracksPage() {
                   )}
 
                   {isSingle ? (
-                    <div className="space-y-3 rounded-[14px] border border-white/[0.06] bg-white/[0.02] px-4 py-4">
+                    <div className="space-y-3 border-t border-omf-line pt-4">
                       <button
                         type="button"
                         onClick={() => setShowFeat((v) => !v)}
                         className="flex w-full items-center justify-between text-left"
                       >
-                        <label className={`mb-0 block ${WIZARD_FIELD_LABEL_CLASS}`}>
+                        <label className="mb-0 block cursor-pointer text-[15px] text-omf-ink">
                           Дополнительные артисты
                         </label>
                         {showFeat ? (
-                          <ChevronUp className="h-4 w-4 text-white/55" />
+                          <ChevronUp className="h-4 w-4 text-omf-graphite" />
                         ) : (
-                          <ChevronDown className="h-4 w-4 text-white/55" />
+                          <ChevronDown className="h-4 w-4 text-omf-graphite" />
                         )}
                       </button>
                       {showFeat && (
                         <>
-                          <p className="text-[12px] leading-relaxed text-white/50">
-                            Если на этом треке есть фит или другой участник (кроме основного артиста
-                            из паспорта), нажмите «Добавить» и введите имя — имена со всех треков
-                            попадут в метаданные релиза для модерации.
+                          <p className="text-[13px] leading-relaxed text-omf-graphite">
+                            Если на треке есть фит или другой участник, кроме основного артиста, добавь
+                            его имя. Имена со всех треков попадут в данные релиза.
                           </p>
                           <ul className="space-y-2">
                             {(values.tracks[index]?.featuringArtistNames ?? []).map((name, featIdx) => (
@@ -602,7 +596,7 @@ export default function CreateTracksPage() {
                                 <button
                                   type="button"
                                   onClick={() => removeFeaturingAt(index, featIdx)}
-                                  className="shrink-0 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-2 text-[11px] text-white/55 hover:bg-white/[0.08] hover:text-white/80"
+                                  className="omf-focus shrink-0 rounded-control px-3 py-3 text-[13px] text-omf-graphite transition-colors hover:text-omf-ink"
                                 >
                                   Убрать
                                 </button>
@@ -614,7 +608,7 @@ export default function CreateTracksPage() {
                             <button
                               type="button"
                               onClick={() => addFeaturingSlot(index)}
-                              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-violet-400/30 bg-violet-500/10 py-2.5 text-[13px] font-medium text-violet-100/95 hover:bg-violet-500/[0.16]"
+                              className="omf-btn-secondary min-h-[44px] w-full text-[14px]"
                             >
                               <UserPlus className="h-4 w-4 shrink-0 opacity-90" />
                               Добавить артиста
@@ -624,15 +618,14 @@ export default function CreateTracksPage() {
                       )}
                     </div>
                   ) : (
-                    <div className="space-y-3 rounded-[14px] border border-white/[0.06] bg-white/[0.02] px-4 py-4">
+                    <div className="space-y-3 border-t border-omf-line pt-4">
                       <div>
-                        <label className={`mb-2 block ${WIZARD_FIELD_LABEL_CLASS}`}>
+                        <label className="mb-2 block text-[15px] text-omf-ink">
                           Дополнительные артисты
                         </label>
-                        <p className="text-[12px] leading-relaxed text-white/50">
-                          Если на этом треке есть фит или другой участник (кроме основного артиста из
-                          паспорта), нажмите «Добавить» и введите имя — имена со всех треков попадут в
-                          метаданные релиза для модерации.
+                        <p className="text-[13px] leading-relaxed text-omf-graphite">
+                          Если на треке есть фит или другой участник, кроме основного артиста, добавь
+                          его имя. Имена со всех треков попадут в данные релиза.
                         </p>
                       </div>
                       <ul className="space-y-2">
@@ -648,7 +641,7 @@ export default function CreateTracksPage() {
                             <button
                               type="button"
                               onClick={() => removeFeaturingAt(index, featIdx)}
-                              className="shrink-0 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-2 text-[11px] text-white/55 hover:bg-white/[0.08] hover:text-white/80"
+                              className="omf-focus shrink-0 rounded-control px-3 py-3 text-[13px] text-omf-graphite transition-colors hover:text-omf-ink"
                             >
                               Убрать
                             </button>
@@ -660,7 +653,7 @@ export default function CreateTracksPage() {
                         <button
                           type="button"
                           onClick={() => addFeaturingSlot(index)}
-                          className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-violet-400/30 bg-violet-500/10 py-2.5 text-[13px] font-medium text-violet-100/95 hover:bg-violet-500/[0.16]"
+                          className="omf-btn-secondary min-h-[44px] w-full text-[14px]"
                         >
                           <UserPlus className="h-4 w-4 shrink-0 opacity-90" />
                           Добавить артиста
@@ -670,7 +663,7 @@ export default function CreateTracksPage() {
                   )}
 
                   {isSingle ? (
-                    <div className="space-y-3 rounded-[14px] border border-white/[0.06] bg-white/[0.02] px-4 py-4">
+                    <div className="space-y-3 border-t border-omf-line pt-4">
                       <button
                         type="button"
                         onClick={() => setShowLyrics((v) => !v)}
@@ -678,14 +671,14 @@ export default function CreateTracksPage() {
                       >
                         <label
                           htmlFor={`track-${field.id}-lyrics`}
-                          className={`mb-0 block ${WIZARD_FIELD_LABEL_CLASS}`}
+                          className="mb-0 block cursor-pointer text-[15px] text-omf-ink"
                         >
                           Текст песни (лирика)
                         </label>
                         {showLyrics ? (
-                          <ChevronUp className="h-4 w-4 text-white/55" />
+                          <ChevronUp className="h-4 w-4 text-omf-graphite" />
                         ) : (
-                          <ChevronDown className="h-4 w-4 text-white/55" />
+                          <ChevronDown className="h-4 w-4 text-omf-graphite" />
                         )}
                       </button>
                       {showLyrics && (
@@ -694,7 +687,7 @@ export default function CreateTracksPage() {
                             id={`track-${field.id}-lyrics`}
                             {...register(`tracks.${index}.lyrics` as const)}
                             rows={5}
-                            placeholder="Необязательно. Можно заполнить во время загрузки WAV — текст сохранится вместе с треком."
+                            placeholder="Необязательно"
                             className={`${WIZARD_INPUT_CLASS} min-h-[120px] resize-y py-3`}
                           />
                           <FormFieldError message={errors.tracks?.[index]?.lyrics?.message} />
@@ -713,7 +706,7 @@ export default function CreateTracksPage() {
                         id={`track-${field.id}-lyrics`}
                         {...register(`tracks.${index}.lyrics` as const)}
                         rows={5}
-                        placeholder="Необязательно. Можно заполнить во время загрузки WAV — текст сохранится вместе с треком."
+                        placeholder="Необязательно"
                         className={`${WIZARD_INPUT_CLASS} min-h-[120px] resize-y py-3`}
                       />
                       <FormFieldError message={errors.tracks?.[index]?.lyrics?.message} />
@@ -733,23 +726,23 @@ export default function CreateTracksPage() {
                 setExpandedTracks((prev) => [...prev, true]);
                 syncTrackFilesLength(fields.length + 1);
               }}
-              className="inline-flex h-[44px] w-full items-center justify-center rounded-xl border border-white/[0.06] bg-white/[0.03] text-[13px] font-medium text-white/70 transition-colors hover:bg-white/[0.06] hover:text-white"
+              className="omf-btn-secondary w-full"
             >
-              + Добавить трек
+              Добавить трек
             </button>
           )}
 
-          <MagneticButton
+          <button
             type="submit"
             disabled={!isValid || isSubmitting || isUploadingWav || isWavTransferActive}
-            className="create-flow-submit-target pulse-glow inline-flex h-14 w-full items-center justify-center rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-[16px] font-bold text-white drop-shadow-[0_0_20px_rgba(168,85,247,0.45)] disabled:opacity-60 disabled:shadow-none"
+            className="create-flow-submit-target omf-btn-primary h-14 w-full text-[16px]"
           >
             {isUploadingWav || isWavTransferActive
               ? "Загружаем WAV…"
               : isSubmitting
                 ? "Сохраняем…"
-                : "Далее"}
-          </MagneticButton>
+                : "Дальше: проверка"}
+          </button>
 
           <FormFieldError message={submitError ?? undefined} messageClassName="text-center" />
         </form>

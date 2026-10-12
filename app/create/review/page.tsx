@@ -4,10 +4,8 @@ import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import Image from "next/image";
 import { toast } from "sonner";
-import { AnimatePresence, motion } from "framer-motion";
-import { Music } from "lucide-react";
+import { ReleaseSleeve } from "@/components/ReleaseSleeve";
 import { CreateShell } from "@/features/release/createRelease/components/CreateShell";
 import { hapticMap } from "@/lib/haptic-map";
 import { StepGate } from "@/features/release/createRelease/components/StepGate";
@@ -42,20 +40,18 @@ const FullScreenLoader = dynamic(
   { ssr: false }
 );
 
-function SectionDivider() {
-  return <div className="my-4 h-px w-full bg-white/10" aria-hidden />;
-}
-
 function formatReleaseDateBadge(iso: string | undefined): string {
   const d = iso?.trim();
   if (!d) return "—";
   const parsed = new Date(`${d}T12:00:00`);
   if (Number.isNaN(parsed.getTime())) return d;
-  return parsed.toLocaleDateString("ru-RU", {
-    day: "numeric",
-    month: "short",
-    year: "numeric"
-  });
+  return parsed
+    .toLocaleDateString("ru-RU", {
+      day: "numeric",
+      month: "long",
+      year: "numeric"
+    })
+    .replace(/\s*г\.?$/, "");
 }
 
 const RELEASE_TYPE_RU: Record<string, string> = {
@@ -64,30 +60,11 @@ const RELEASE_TYPE_RU: Record<string, string> = {
   album: "Альбом"
 };
 
-function PulsingTrackIcon() {
-  return (
-    <motion.span
-      className="inline-flex shrink-0"
-      aria-hidden
-      animate={{
-        scale: [1, 1.08, 1],
-        opacity: [0.75, 1, 0.75]
-      }}
-      transition={{
-        duration: 2,
-        repeat: Infinity,
-        ease: "easeInOut"
-      }}
-    >
-      <Music className="h-[18px] w-[18px] text-violet-400/95 drop-shadow-[0_0_12px_rgba(167,139,250,0.35)]" />
-    </motion.span>
-  );
-}
-
 export default function CreateReviewPage() {
   const router = useRouter();
   const guard = useStepGuard("review");
 
+  const releaseId = useCreateReleaseDraftStore((s) => s.releaseId);
   const metadata = useCreateReleaseDraftStore((s) => s.metadata);
   const artworkUrl = useCreateReleaseDraftStore((s) => s.artworkUrl);
   const tracks = useCreateReleaseDraftStore((s) => s.tracks);
@@ -251,7 +228,7 @@ export default function CreateReviewPage() {
 
   if (submitStatus === "success" && successSummary) {
     return (
-      <CreateShell title="Релиз · Проверка">
+      <CreateShell title="Проверка">
         <FullScreenLoader label="Готово — переходим…" />
       </CreateShell>
     );
@@ -260,20 +237,20 @@ export default function CreateReviewPage() {
   if (!guard.allowed) {
     if (guard.title === "Загрузка…") {
       return (
-        <CreateShell title="Релиз · Проверка">
+        <CreateShell title="Проверка">
           <FullScreenLoader />
         </CreateShell>
       );
     }
     if (isSubmitting || submitStatus === "submitting") {
       return (
-        <CreateShell title="Релиз · Проверка">
+        <CreateShell title="Проверка">
           <FullScreenLoader label="Отправляем релиз…" />
         </CreateShell>
       );
     }
     return (
-      <CreateShell title="Релиз · Проверка">
+      <CreateShell title="Проверка">
         <StepGate
           title={guard.title}
           description={guard.description}
@@ -284,263 +261,145 @@ export default function CreateReviewPage() {
     );
   }
 
+  const passportRows: { label: string; value: string }[] = [
+    { label: "Артист", value: artistName },
+    { label: "Формат", value: RELEASE_TYPE_RU[metadata.releaseType] ?? metadata.releaseType },
+    { label: "Жанр", value: metadata.genre?.trim() || "Не выбран" },
+    {
+      label: "Язык",
+      value:
+        PERFORMANCE_LANGUAGE_LABELS[metadata.language as PerformanceLanguage] ?? metadata.language
+    },
+    { label: "Дата выхода", value: formatReleaseDateBadge(metadata.releaseDate) },
+    { label: "Мат в тексте", value: metadata.explicit ? "Есть" : "Нет" }
+  ];
+  if (featuringLine) passportRows.push({ label: "Участники", value: featuringLine });
+
   return (
-    <CreateShell title="Релиз · Проверка">
-      <div className="relative isolate min-h-[min(100dvh,720px)]">
-          {artworkUrl ? (
-            <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
-              <motion.div
-                className="absolute left-1/2 top-[18%] h-[min(140vw,520px)] w-[min(140vw,520px)] -translate-x-1/2"
-                initial={{ opacity: 0, scale: 1.08 }}
-                animate={{ opacity: 1, scale: [1.1, 1, 1.1] }}
-                transition={{
-                  opacity: { duration: 0.6 },
-                  scale: { duration: 10, repeat: Infinity, ease: "easeInOut" }
-                }}
+    <CreateShell title="Проверка">
+      <div className="space-y-8">
+        <div className="mx-auto w-[64%] max-w-[260px]">
+          <ReleaseSleeve
+            seed={releaseId ?? releaseTitle}
+            title={releaseTitle}
+            artist={artistName}
+            coverUrl={artworkUrl}
+            size="hero"
+          />
+        </div>
+
+        <p className="text-[15px] leading-relaxed text-omf-graphite">
+          Проверь данные: после отправки релиз попадёт к модератору.
+          {tracksWavSyncedToDb
+            ? " Аудио уже загружено, осталось нажать кнопку."
+            : " Аудио мы загрузим при отправке."}
+        </p>
+
+        <section aria-labelledby="review-passport">
+          <h3 id="review-passport" className="text-[13px] text-omf-graphite">
+            Паспорт
+          </h3>
+          <dl className="mt-1">
+            {passportRows.map((row) => (
+              <div
+                key={row.label}
+                className="flex items-baseline justify-between gap-4 border-b border-omf-line py-3"
               >
-                <div
-                  className="h-full w-full scale-150 bg-cover bg-center opacity-30 blur-[100px]"
-                  style={{ backgroundImage: `url(${artworkUrl})` }}
-                  aria-hidden
-                />
-              </motion.div>
+                <dt className="shrink-0 text-[14px] text-omf-graphite">{row.label}</dt>
+                <dd className="min-w-0 break-words text-right text-[15px]">{row.value}</dd>
+              </div>
+            ))}
+            <div className="flex items-baseline justify-between gap-4 border-b border-omf-line py-3">
+              <dt className="shrink-0 text-[14px] text-omf-graphite">Обложка</dt>
+              <dd className={`text-right text-[15px] ${artworkUrl ? "" : "text-omf-red"}`}>
+                {artworkUrl ? "Загружена" : "Не загружена"}
+              </dd>
+            </div>
+          </dl>
+        </section>
+
+        <section aria-labelledby="review-tracks">
+          <h3 id="review-tracks" className="text-[13px] text-omf-graphite">
+            {tracks.length > 1 ? `Треки, ${tracks.length}` : "Трек"}
+          </h3>
+          <ol className="mt-1">
+            {tracks.map((t, i) => {
+              const hasFile = Boolean(trackFiles[i]);
+              const dbUrl = trackAudioUrlsFromDb[i] ?? null;
+              const ok = tracksWavSyncedToDb || hasFile;
+              const wavLabel = tracksWavSyncedToDb
+                ? "аудио на сервере"
+                : hasFile
+                  ? "файл выбран"
+                  : dbUrl
+                    ? "выбери файл заново"
+                    : "нет аудио";
+              return (
+                // eslint-disable-next-line react/no-array-index-key
+                <li
+                  key={i}
+                  className="flex min-w-0 items-baseline gap-3 border-b border-omf-line py-3 text-[15px]"
+                >
+                  {tracks.length > 1 ? (
+                    <span className="w-5 shrink-0 tabular-nums text-omf-faint">{i + 1}</span>
+                  ) : null}
+                  <span className="min-w-0 flex-1 truncate">{t.title || "Без названия"}</span>
+                  <span
+                    className={`shrink-0 text-[13px] ${ok ? "text-omf-graphite" : "text-omf-red"}`}
+                  >
+                    {wavLabel}
+                  </span>
+                </li>
+              );
+            })}
+          </ol>
+        </section>
+
+        {missingFiles && (
+          <div className="rounded-control border border-omf-yellow px-4 py-3.5 text-[14px] leading-relaxed text-omf-ink">
+            Чтобы отправить релиз, выбери WAV-файлы заново: после возврата из черновика приложение
+            их не помнит.{" "}
+            <Link href="/create/tracks" className="font-bold underline underline-offset-4">
+              Вернуться к трекам
+            </Link>
+          </div>
+        )}
+
+        <div>
+          {!progressActive ? (
+            <button
+              type="button"
+              disabled={submitBlocked}
+              onClick={() => void handleSubmit()}
+              className="create-flow-submit-target omf-btn-primary h-14 w-full text-[16px]"
+            >
+              {tracksUploadInProgress ? "Загружаем WAV…" : "Отправить на проверку"}
+            </button>
+          ) : null}
+
+          {showProgressPanel ? (
+            <div className={progressActive ? "" : "mt-4"}>
+              <UploadProgress label={stageLabel} progress={submitProgress} />
             </div>
           ) : null}
 
-          <AnimatePresence mode="wait">
-            <motion.div
-              key="review-premium"
-              className="space-y-5"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -12 }}
-              transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-            >
-              <div className="overflow-hidden rounded-[1.25rem] border border-white/10 bg-[#1A1A1E] p-6">
-                <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:gap-8">
-                  <div className="mx-auto w-full max-w-[168px] shrink-0 sm:mx-0">
-                    <div className="relative aspect-square overflow-hidden rounded-md border border-white/10">
-                      {artworkUrl ? (
-                        <Image
-                          src={artworkUrl}
-                          alt="Обложка релиза"
-                          fill
-                          sizes="168px"
-                          className="object-cover"
-                          unoptimized
-                        />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center text-[11px] font-medium uppercase tracking-[0.18em] text-white/55">
-                          No cover
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div className="min-w-0 flex-1 text-center sm:text-left">
-                    <motion.h2
-                      className="text-[clamp(1.35rem,4.5vw,1.85rem)] font-semibold leading-[1.15] tracking-[0.02em] text-white"
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.08, duration: 0.4 }}
-                    >
-                      {releaseTitle}
-                    </motion.h2>
-                    <motion.p
-                      className="mt-2 text-[15px] font-medium text-white/75"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ delay: 0.16, duration: 0.35 }}
-                    >
-                      {artistName}
-                    </motion.p>
-                  </div>
-                </div>
-
-                <SectionDivider />
-
-                <p className="text-[13px] leading-relaxed text-white/80">
-                  Проверьте данные перед отправкой.
-                  {tracksWavSyncedToDb
-                    ? " Аудиофайлы уже на сервере — осталось отправить релиз в модерацию."
-                    : " После отправки мы загрузим аудио и передадим релиз в модерацию."}
-                </p>
-
-                <SectionDivider />
-
-                <section>
-                  <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-white/55">
-                    Паспорт
-                  </p>
-                  <p className="mt-2 break-words text-[15px] text-white/92">
-                    {artistName} — {releaseTitle}
-                  </p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/90">
-                      {RELEASE_TYPE_RU[metadata.releaseType] ?? metadata.releaseType}
-                    </span>
-                    <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/90">
-                      {metadata.genre?.trim() || "Жанр"}
-                    </span>
-                    <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/90">
-                      {PERFORMANCE_LANGUAGE_LABELS[metadata.language as PerformanceLanguage] ??
-                        metadata.language}
-                    </span>
-                    <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/90">
-                      {formatReleaseDateBadge(metadata.releaseDate)}
-                    </span>
-                    {metadata.explicit ? (
-                      <span className="inline-flex items-center rounded-full border border-red-500/25 bg-red-500/15 px-3 py-1 text-xs font-medium text-red-100/95">
-                        Explicit
-                      </span>
-                    ) : null}
-                  </div>
-                  {featuringLine ? (
-                    <p className="mt-3 text-[13px] text-white/70">
-                      <span className="font-medium text-white/85">Доп. артисты: </span>
-                      {featuringLine}
-                    </p>
-                  ) : null}
-                </section>
-
-                <SectionDivider />
-
-                <section>
-                  <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-white/55">
-                    Обложка
-                  </p>
-                  <p className="mt-2 text-[14px] text-white/88">
-                    {artworkUrl ? "Загружена" : "Не загружена"}
-                  </p>
-                </section>
-
-                <SectionDivider />
-
-                <section>
-                  <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-white/55">
-                    Треки
-                  </p>
-                  <ul className="mt-3 space-y-3 text-white/85">
-                    {tracks.map((t, i) => {
-                      const hasFile = Boolean(trackFiles[i]);
-                      const dbUrl = trackAudioUrlsFromDb[i] ?? null;
-                      const wavLabel = tracksWavSyncedToDb
-                        ? "Аудио на сервере ✓"
-                        : hasFile
-                          ? "Файл в черновике ✓"
-                          : dbUrl
-                            ? "Нужна повторная загрузка аудио для отправки"
-                            : "Аудио не добавлено";
-                      return (
-                        // eslint-disable-next-line react/no-array-index-key
-                        <motion.li
-                          key={i}
-                          className="flex min-w-0 items-center justify-between gap-3"
-                          initial={{ opacity: 0, x: -6 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: 0.05 * i, duration: 0.35 }}
-                        >
-                          <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                            <PulsingTrackIcon />
-                            <span className="min-w-0 truncate text-[14px]">
-                              {i + 1}. {t.title || "Без названия"}
-                            </span>
-                          </div>
-                          <span className="line-clamp-2 max-w-[min(52%,168px)] shrink-0 text-right text-[10px] leading-tight text-white/65">
-                            {wavLabel}
-                          </span>
-                        </motion.li>
-                      );
-                    })}
-                  </ul>
-                </section>
-
-                {missingFiles && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: "auto" }}
-                    className="mt-6 overflow-hidden rounded-xl border border-amber-500/30 bg-amber-950/25 px-4 py-3 text-[12px] text-amber-100/90"
-                  >
-                    <p>
-                      Для отправки нужны WAV-файлы в этой сессии (после возврата из черновика их
-                      нужно прикрепить заново).{" "}
-                      <Link
-                        href="/create/tracks"
-                        className="font-medium text-amber-200 underline underline-offset-2"
-                      >
-                        Вернуться и загрузить треки
-                      </Link>
-                    </p>
-                  </motion.div>
-                )}
-
-                <div className="mt-6 border-t border-white/10 pt-6">
-                  <AnimatePresence mode="wait">
-                    {!progressActive ? (
-                      <motion.div
-                        key="submit-cta"
-                        initial={{ opacity: 0, y: 4 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -4 }}
-                        transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-                      >
-                        <motion.button
-                          type="button"
-                          disabled={submitBlocked}
-                          onClick={() => void handleSubmit()}
-                          whileTap={submitBlocked ? undefined : { scale: 0.98 }}
-                          whileHover={submitBlocked ? undefined : { scale: 1.01 }}
-                          transition={{ type: "spring", stiffness: 420, damping: 28 }}
-                          className="create-flow-submit-target relative inline-flex h-[52px] w-full items-center justify-center rounded-2xl bg-gradient-to-r from-[#6366f1] via-[#a855f7] to-[#ec4899] text-[15px] font-semibold text-white ring-1 ring-white/10 transition-transform duration-200 disabled:cursor-not-allowed disabled:bg-none disabled:bg-white/10 disabled:text-white/50 disabled:ring-white/5 disabled:hover:scale-100"
-                        >
-                          <span className="relative z-[1]">
-                            {tracksUploadInProgress ? "Загрузка WAV…" : "Отправить релиз"}
-                          </span>
-                        </motion.button>
-                      </motion.div>
-                    ) : null}
-                  </AnimatePresence>
-
-                  <AnimatePresence mode="wait">
-                    {showProgressPanel ? (
-                      <motion.div
-                        key="upload-progress"
-                        initial={{ opacity: 0, y: 6 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: 8 }}
-                        transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-                        className={progressActive ? "" : "mt-4"}
-                      >
-                        <UploadProgress
-                          label={stageLabel}
-                          progress={submitProgress}
-                          className="border-0 bg-transparent p-0 backdrop-blur-none"
-                        />
-                      </motion.div>
-                    ) : null}
-                  </AnimatePresence>
-                </div>
-
-                {submitError && (
-                  <p className="mt-4 break-words text-center text-[11px] leading-relaxed text-red-400">
-                    {submitError}{" "}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        triggerHaptic("light");
-                        router.push("/create/tracks");
-                      }}
-                      className="inline font-medium text-red-300 underline underline-offset-2"
-                    >
-                      Вернуться и загрузить треки
-                    </button>
-                    {" · "}
-                    Попробуйте снова после загрузки файлов.
-                  </p>
-                )}
-              </div>
-            </motion.div>
-          </AnimatePresence>
+          {submitError && (
+            <p className="mt-4 break-words text-center text-[14px] leading-relaxed text-omf-red">
+              {submitError}{" "}
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic("light");
+                  router.push("/create/tracks");
+                }}
+                className="inline font-bold underline underline-offset-4"
+              >
+                Вернуться к трекам
+              </button>
+            </p>
+          )}
         </div>
+      </div>
     </CreateShell>
   );
 }
