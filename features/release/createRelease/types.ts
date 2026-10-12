@@ -25,5 +25,7 @@ export type CreateReleaseSuccessSummary = {
   trackName: string;
   /** Название релиза для UI (дублирует trackName); опционально для старого persist */
   releaseName?: string;
+  /** Обложка для экрана успеха; опционально для старого persist */
+  coverUrl?: string | null;
 };
 

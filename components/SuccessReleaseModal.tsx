@@ -19,6 +19,7 @@ export function SuccessReleaseModal({ summary, onGoHome, onUploadAnother }: Prop
           seed={`${summary.artistName}-${title}`}
           title={title}
           artist={summary.artistName}
+          coverUrl={summary.coverUrl ?? null}
           status="processing"
           size="hero"
         />

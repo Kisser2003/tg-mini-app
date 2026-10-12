@@ -1780,7 +1780,8 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
       storeOk.setSuccessSummary({
         artistName: verified.artist_name?.trim() || "Артист",
         trackName: title,
-        releaseName: title
+        releaseName: title,
+        coverUrl: verified.artwork_url ?? null
       });
       // Очистить мастер только после подтверждённого статуса в БД; successSummary для /create/success.
       // Состояние submit (прогресс 100%) сохраняем для exit-анимации на Review — см. clearCreateFormKeepSummaryPreserveSubmit.
