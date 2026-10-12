@@ -4,6 +4,7 @@ import { z } from "zod";
 import { requireAdminSupabaseClient } from "@/lib/admin-release-api-guard";
 import { getTelegramAuthContextFromRequest } from "@/lib/api/with-telegram-auth";
 import { getReleaseDisplayTitle, type ReleaseRecord } from "@/repositories/releases.repo";
+import { deleteApprovedReleaseAudio } from "@/lib/release-audio-cleanup.server";
 import { escapeHtml } from "@/lib/telegram-bot.server";
 import { sendTelegramNotification } from "@/lib/telegram-notifications";
 
@@ -109,6 +110,7 @@ async function handleUpdateReleaseStatus(
       return NextResponse.json({ ok: false, error: "Не удалось обновить релиз." }, { status: 500 });
     }
     await notifyArtistOnModerationResult(updated as ReleaseRecord, "approve");
+    await deleteApprovedReleaseAudio(supabase, releaseId);
     return NextResponse.json({ ok: true, record: updated as ReleaseRecord });
   }
 

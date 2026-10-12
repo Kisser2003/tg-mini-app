@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { notifyAdminError } from "@/lib/admin-notify.server";
 import { createClient } from "@supabase/supabase-js";
 
 const bodySchema = z.object({
@@ -81,5 +82,6 @@ export async function POST(req: Request) {
     });
   }
 
+  await notifyAdminError(resolvedScreenName, errorMessage);
   return NextResponse.json({ ok: true }, { status: 200 });
 }

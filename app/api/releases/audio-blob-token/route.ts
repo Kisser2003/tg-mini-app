@@ -63,8 +63,12 @@ export async function POST(request: NextRequest): Promise<Response> {
           throw new Error("Нет доступа к этому релизу.");
         }
         const status = String(row.status ?? "");
-        if (status !== "draft" && status !== "pending") {
+        if (status !== "draft" && status !== "pending" && status !== "failed") {
           throw new Error("Файлы можно менять только у черновика.");
+        }
+        if (status === "failed") {
+          // Прошлая загрузка упала: возвращаем релиз в черновик, чтобы его можно было дозагрузить и отправить.
+          await admin.from("releases").update({ status: "draft", error_message: null }).eq("id", releaseId);
         }
 
         const ownerSegment = Number(row.user_id ?? row.telegram_id);
@@ -86,6 +90,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     });
     return NextResponse.json(result);
   } catch (e) {
+    console.error("[audio-blob-token] failed", e instanceof Error ? e.message : e);
     const message = e instanceof Error ? e.message : "Не удалось подготовить загрузку.";
     const status = message === "Unauthorized" ? 401 : 400;
     return NextResponse.json({ ok: false, error: message }, { status });

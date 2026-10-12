@@ -10,12 +10,18 @@ import {
 } from "@/lib/release-ownership.server";
 import { formatErrorMessage } from "@/lib/errors";
 import { escapeHtml } from "@/lib/telegram-bot.server";
+import { notifyAdminReleaseSubmitted } from "@/lib/admin-notify.server";
 import { sendTelegramNotification } from "@/lib/telegram-notifications";
 import { getReleaseDisplayTitle, type ReleaseRecord } from "@/repositories/releases.repo";
 import { runAiMetadataPrecheckForRelease } from "@/lib/release-ai-moderation.server";
 
 /** Уведомление в Telegram только если у релиза есть реальный `telegram_id` (не веб-only). */
 async function notifyReleaseSubmittedForModeration(record: ReleaseRecord): Promise<void> {
+  await notifyAdminReleaseSubmitted({
+    title: getReleaseDisplayTitle(record),
+    artist: String(record.artist_name ?? ""),
+    telegramId: record.telegram_id
+  });
   const tid =
     record.telegram_id != null && String(record.telegram_id).trim() !== ""
       ? String(record.telegram_id)

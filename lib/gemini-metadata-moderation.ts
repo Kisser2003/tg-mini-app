@@ -7,7 +7,11 @@ import {
   type AiModerationResult
 } from "@/lib/ai-metadata-moderation";
 
+/** AI-проверка метаданных отключена: релизы идут сразу на ручную проверку админом. Чтобы вернуть, поставь true. */
+const AI_PRECHECK_ENABLED = false;
+
 export function isGeminiModerationConfigured(): boolean {
+  if (!AI_PRECHECK_ENABLED) return false;
   const key = process.env.GEMINI_API_KEY?.trim();
   return Boolean(key && key.length > 0);
 }

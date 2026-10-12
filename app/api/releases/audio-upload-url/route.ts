@@ -70,11 +70,16 @@ export async function POST(request: NextRequest): Promise<Response> {
     return NextResponse.json({ ok: false, error: "Нет доступа к этому релизу." }, { status: 403 });
   }
   const status = String(row.status ?? "");
-  if (status !== "draft" && status !== "pending") {
+  if (status !== "draft" && status !== "pending" && status !== "failed") {
+    console.error("[audio-upload-url] bad status", status);
     return NextResponse.json(
       { ok: false, error: "Файлы можно менять только у черновика." },
       { status: 409 }
     );
+  }
+  if (status === "failed") {
+    // Прошлая загрузка упала: возвращаем релиз в черновик, чтобы его можно было дозагрузить и отправить.
+    await admin.from("releases").update({ status: "draft", error_message: null }).eq("id", releaseId);
   }
 
   const ownerSegment = Number(row.user_id ?? row.telegram_id);
