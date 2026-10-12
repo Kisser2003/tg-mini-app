@@ -1,16 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import Image from "next/image";
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { motion } from "framer-motion";
-import { ArrowLeft, Check, ExternalLink, Link2, ShieldCheck } from "lucide-react";
-import { GlassCard } from "@/components/GlassCard";
+import { ArrowLeft, Download, ExternalLink } from "lucide-react";
+import { ReleaseSleeve } from "@/components/ReleaseSleeve";
+import { cn } from "@/lib/utils";
 import { parseCollaboratorsFromDb } from "@/lib/collaborators";
 import { debugInit } from "@/lib/debug";
 import { openSmartLink } from "@/lib/open-smart-link";
 import { PERFORMANCE_LANGUAGE_LABELS, parsePerformanceLanguage } from "@/lib/performance-language";
-import { getReleaseStatusMeta, normalizeReleaseStatus } from "@/lib/release-status";
+import { normalizeReleaseStatus } from "@/lib/release-status";
 import { shouldShowSmartLinkCta } from "@/lib/smart-link-cta";
 import { isAdminUi } from "@/lib/admin";
 import { USER_REQUEST_TIMEOUT_MESSAGE } from "@/lib/errors";
@@ -66,7 +65,9 @@ function formatReleaseDateRu(d: string | null | undefined): string | null {
   if (!raw) return null;
   const parsed = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? new Date(`${raw}T12:00:00`) : new Date(raw);
   if (Number.isNaN(parsed.getTime())) return raw;
-  return parsed.toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" });
+  return parsed
+    .toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" })
+    .replace(/\s*г\.?$/, "");
 }
 
 function formatTrackDurationSec(sec: number | null | undefined): string | null {
@@ -90,7 +91,6 @@ function formatFeaturingProducers(collaboratorsRaw: unknown): string | null {
 }
 
 const RELEASE_DETAILS_TIMEOUT_MS = 12000;
-const ARTWORK_SIZES = "(max-width: 768px) 100vw, 33vw";
 
 export default function ReleaseDetailsClient() {
   const params = useParams<{ id: string }>();
@@ -214,229 +214,231 @@ export default function ReleaseDetailsClient() {
     };
   }, [params.id, userId, webUserId, identityResolved]);
 
-  const moderationChecklist = useMemo(
-    () => [
-      { title: "Проверка метаданных", done: normalizeReleaseStatus(release?.status) !== "failed" },
-      { title: "Проверка обложки", done: normalizeReleaseStatus(release?.status) !== "draft" },
-      { title: "Доставка на платформы", done: normalizeReleaseStatus(release?.status) === "ready" }
-    ],
-    [release]
+  const shell = (children: React.ReactNode) => (
+    <div className="mx-auto w-full max-w-lg px-1 pb-40 pt-4 text-omf-ink">{children}</div>
   );
 
-  if (!identityResolved) {
-    return <GlassCard className="p-5 text-sm text-white/70">Проверяем доступ...</GlassCard>;
+  const backButton = (
+    <button
+      type="button"
+      onClick={() => router.back()}
+      className="omf-focus -ml-2 mb-4 inline-flex items-center gap-1.5 rounded-full px-2 py-1.5 text-[14px] text-omf-graphite transition-colors hover:text-omf-ink"
+    >
+      <ArrowLeft className="h-4 w-4" aria-hidden />
+      Релизы
+    </button>
+  );
+
+  if (!identityResolved || loading) {
+    return shell(
+      <div aria-busy="true">
+        {backButton}
+        <div className="mx-auto aspect-square w-[72%] max-w-[300px] animate-pulse rounded-sleeve bg-omf-surface" />
+        <div className="mx-auto mt-6 h-7 w-1/2 animate-pulse rounded bg-omf-surface" />
+        <div className="mx-auto mt-2 h-4 w-1/3 animate-pulse rounded bg-omf-surface" />
+      </div>
+    );
   }
 
   if (userId == null && webUserId == null && process.env.NODE_ENV === "production") {
-    return (
-      <GlassCard className="p-5">
-        <h1 className="text-xl font-semibold tracking-tight">Карточка релиза</h1>
-        <p className="mt-2 text-sm text-white/65">Войдите в веб-кабинет или откройте приложение из Telegram.</p>
-      </GlassCard>
+    return shell(
+      <>
+        <h1 className="text-[24px] font-extrabold tracking-[-0.03em]">Нужен вход</h1>
+        <p className="mt-2 text-[15px] text-omf-graphite">
+          Открой приложение из Telegram или войди в веб-кабинет, чтобы увидеть релиз.
+        </p>
+      </>
     );
-  }
-
-  if (loading) {
-    return <GlassCard className="p-5 text-sm text-white/70">Загружаем карточку релиза...</GlassCard>;
   }
 
   if (error) {
-    return <GlassCard className="p-5 text-sm text-rose-200">{error}</GlassCard>;
-  }
-
-  if (!release) {
-    return (
-      <GlassCard className="p-5">
-        <h1 className="text-xl font-semibold tracking-tight">Релиз не найден</h1>
-        <p className="mt-2 text-sm text-white/65">Проверь ссылку или доступ к релизу.</p>
-      </GlassCard>
+    return shell(
+      <>
+        {backButton}
+        <h1 className="text-[24px] font-extrabold tracking-[-0.03em]">Не удалось открыть релиз</h1>
+        <p className="mt-2 text-[15px] text-omf-graphite">{error}</p>
+      </>
     );
   }
 
-  const statusMeta = getReleaseStatusMeta(release.status);
+  if (!release) {
+    return shell(
+      <>
+        {backButton}
+        <h1 className="text-[24px] font-extrabold tracking-[-0.03em]">Релиз не найден</h1>
+        <p className="mt-2 text-[15px] text-omf-graphite">
+          Возможно, его удалили или ссылка открыта с другого аккаунта.
+        </p>
+      </>
+    );
+  }
 
-  const isReady = normalizeReleaseStatus(release.status) === "ready";
+  const canonical = normalizeReleaseStatus(release.status);
   const displayTitle = getReleaseDisplayTitle(release);
-  const genreLine = [release.genre?.trim(), release.sub_genre?.trim()].filter(Boolean).join(" · ");
+  const genreLine = [release.genre?.trim(), release.sub_genre?.trim()].filter(Boolean).join(", ");
   const releaseDateLabel = formatReleaseDateRu(release.release_date ?? null);
   const langLabel = PERFORMANCE_LANGUAGE_LABELS[parsePerformanceLanguage(release.performance_language)];
   const isExplicit = Boolean(release.explicit ?? release.is_explicit);
   const featuringLine = formatFeaturingProducers(release.collaborators);
   const sortedTracks = [...release.tracks].sort((a, b) => a.index - b.index);
+  const smartLink =
+    shouldShowSmartLinkCta(release.status, release.smart_link) && release.smart_link?.trim()
+      ? release.smart_link.trim()
+      : null;
 
-  const aboutRows: { label: string; value: string }[] = [
+  const passportRows: { label: string; value: string }[] = [
     { label: "Формат", value: formatReleaseTypeLabel(release.release_type) }
   ];
-  if (genreLine.length > 0) aboutRows.push({ label: "Жанр", value: genreLine });
-  if (releaseDateLabel) aboutRows.push({ label: "Дата выхода", value: releaseDateLabel });
-  aboutRows.push({
-    label: "Мат / 18+",
-    value: isExplicit ? "Да (explicit)" : "Нет"
-  });
-  aboutRows.push({ label: "Язык исполнения", value: langLabel });
-  const isrc = release.isrc?.trim();
-  if (isrc) aboutRows.push({ label: "ISRC", value: isrc });
-  const upc = release.upc?.trim();
-  if (upc) aboutRows.push({ label: "UPC", value: upc });
+  if (genreLine.length > 0) passportRows.push({ label: "Жанр", value: genreLine });
+  if (releaseDateLabel) passportRows.push({ label: "Дата выхода", value: releaseDateLabel });
+  passportRows.push({ label: "Язык", value: langLabel });
+  passportRows.push({ label: "Мат в тексте", value: isExplicit ? "Есть" : "Нет" });
   const musicAuthor = release.music_author?.trim();
-  if (musicAuthor) aboutRows.push({ label: "Автор музыки", value: musicAuthor });
-  if (featuringLine) aboutRows.push({ label: "Фиты и продюсеры", value: featuringLine });
+  if (musicAuthor) passportRows.push({ label: "Автор музыки", value: musicAuthor });
+  if (featuringLine) passportRows.push({ label: "Участники", value: featuringLine });
+  const isrc = release.isrc?.trim();
+  if (isrc) passportRows.push({ label: "ISRC", value: isrc });
+  const upc = release.upc?.trim();
+  if (upc) passportRows.push({ label: "UPC", value: upc });
 
-  return (
-    <div className="flex flex-col gap-4 pb-10">
-      <GlassCard className="p-5" variant={isReady ? "success" : "default"}>
-        <motion.button
-          type="button"
-          whileHover={{ scale: 0.99 }}
-          whileTap={{ scale: 0.98 }}
-          transition={{ type: "spring", stiffness: 320, damping: 22 }}
-          onClick={() => router.back()}
-          className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs text-white/80"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          Назад
-        </motion.button>
-        <div className="flex items-center gap-3">
-          {release.artwork_url ? (
-            <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-2xl border border-white/15">
-              <Image
-                src={release.artwork_url}
-                alt={displayTitle}
-                fill
-                sizes={ARTWORK_SIZES}
-                className="object-cover"
-                priority
-              />
-            </div>
-          ) : (
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-white/15 bg-black/30 text-[10px] text-white/45">
-              NO ART
-            </div>
-          )}
-          <div className="min-w-0">
-            <h1 className="truncate text-xl font-semibold">{displayTitle}</h1>
-            <p className="text-sm text-white/60">{release.artist_name}</p>
-          </div>
-        </div>
-      </GlassCard>
+  const statusCopy: Record<typeof canonical, { title: string; body: string }> = {
+    draft: {
+      title: "Черновик",
+      body: "Релиз ещё не отправлен. Открой его из списка релизов и закончи заполнение."
+    },
+    pending: {
+      title: "Не отправлен",
+      body: "Файлы загружены, но релиз ещё не ушёл на модерацию. Открой черновик и нажми «Отправить на проверку»."
+    },
+    processing: {
+      title: "На проверке",
+      body: "Модератор проверяет паспорт, обложку и аудио. Когда проверка закончится, статус обновится здесь."
+    },
+    ready: {
+      title: "Одобрен",
+      body: smartLink
+        ? "Релиз прошёл модерацию и отправлен на площадки. Ссылка на все площадки — ниже."
+        : "Релиз прошёл модерацию и отправлен на площадки. Ссылка появится, когда площадки опубликуют релиз."
+    },
+    failed: {
+      title: "Отклонён",
+      body:
+        release.error_message?.trim() ||
+        "Модератор не указал причину. Напиши в поддержку, чтобы узнать, что исправить."
+    },
+    unknown: {
+      title: "Статус уточняется",
+      body: "Не получилось определить статус релиза. Обнови страницу чуть позже."
+    }
+  };
+  const status = statusCopy[canonical];
 
-      <GlassCard className="p-5">
-        <p className="mb-3 text-sm font-medium tracking-tight text-white/85">О релизе</p>
-        <div className="space-y-2 rounded-2xl border border-white/10 bg-black/25 p-3 text-sm text-white/75">
-          {aboutRows.map((row) => (
-            <p key={row.label}>
-              <span className="text-white/50">{row.label}: </span>
-              {row.value}
-            </p>
-          ))}
-        </div>
-        {sortedTracks.length > 0 ? (
-          <div className="mt-4">
-            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-white/45">
-              {sortedTracks.length > 1 ? `Треки (${sortedTracks.length})` : "Трек"}
-            </p>
-            <ul className="space-y-2">
-              {sortedTracks.map((t, i) => {
-                const dur = formatTrackDurationSec(t.duration);
-                const name = t.title.trim() || "Без названия";
-                return (
-                  <li
-                    key={`${t.index}-${i}`}
-                    className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white/80"
-                  >
-                    {sortedTracks.length > 1 ? (
-                      <span className="w-5 shrink-0 tabular-nums text-white/40">{i + 1}.</span>
-                    ) : null}
-                    <span className="min-w-0 flex-1 font-medium text-white/85">{name}</span>
-                    {t.explicit ? (
-                      <span className="shrink-0 rounded border border-amber-500/35 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-200/90">
-                        E
-                      </span>
-                    ) : null}
-                    {dur ? <span className="shrink-0 tabular-nums text-white/45">{dur}</span> : null}
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        ) : null}
-      </GlassCard>
+  return shell(
+    <>
+      {backButton}
 
-      <GlassCard className="p-5">
-        <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-2">
-          <div className="flex min-w-0 items-center gap-2 text-sm text-white/75">
-            <ShieldCheck className="h-4 w-4 shrink-0" aria-hidden />
-            <span className="min-w-0">Статус модерации</span>
-          </div>
-          <span
-            className={`inline-flex shrink-0 rounded-full border px-3 py-1 text-xs ${statusMeta.badgeClassName} ${statusMeta.badgeGlowClassName ?? ""} ${statusMeta.badgeShimmerClassName ?? ""}`}
-          >
-            {statusMeta.label}
-          </span>
-        </div>
-        <p className="mt-3 text-sm text-white/70">
-          {release.error_message?.trim()
-            ? release.error_message
-            : normalizeReleaseStatus(release.status) === "failed"
-              ? "Причина отклонения не указана. Обратитесь в поддержку OMF."
-              : "Ошибок модерации не зафиксировано."}
-        </p>
+      <div className="mx-auto w-[72%] max-w-[300px]">
+        <ReleaseSleeve
+          seed={release.id}
+          title={displayTitle}
+          artist={release.artist_name}
+          coverUrl={release.artwork_url}
+          status={canonical}
+          size="hero"
+          priority
+        />
+      </div>
 
-        <div className="mt-4 space-y-2">
-          {moderationChecklist.map((item, index) => (
-            <motion.div
-              key={item.title}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              whileHover={{ scale: 0.995 }}
-              whileTap={{ scale: 0.98 }}
-              transition={{ delay: index * 0.06, type: "spring", stiffness: 280, damping: 24 }}
-              className="flex items-center gap-3 rounded-xl border border-white/10 bg-black/20 px-3 py-2"
-            >
-              <motion.span
-                initial={false}
-                animate={{
-                  backgroundColor: item.done ? "rgba(16,185,129,0.25)" : "rgba(255,255,255,0.06)",
-                  borderColor: item.done ? "rgba(16,185,129,0.5)" : "rgba(255,255,255,0.15)"
-                }}
-                className="inline-flex h-5 w-5 items-center justify-center rounded-md border"
-              >
-                {item.done && <Check className="h-3.5 w-3.5 text-emerald-300" />}
-              </motion.span>
-              <span className="text-sm text-white/75">{item.title}</span>
-            </motion.div>
-          ))}
-        </div>
+      <h1 className="mt-7 break-words text-center text-[32px] font-extrabold leading-[0.95] tracking-[-0.04em]">
+        {displayTitle}
+      </h1>
+      <p className="mt-2 text-center text-[15px] text-omf-graphite">{release.artist_name}</p>
 
-        {shouldShowSmartLinkCta(release.status, release.smart_link) && release.smart_link?.trim() ? (
-          <motion.button
-            type="button"
-            whileHover={{ scale: 0.99 }}
-            whileTap={{ scale: 0.98 }}
-            transition={{ type: "spring", stiffness: 320, damping: 22 }}
-            onClick={() => openSmartLink(release.smart_link!)}
-            className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-violet-400/35 bg-gradient-to-r from-violet-500/20 to-fuchsia-500/15 py-2.5 text-sm font-semibold text-violet-100 shadow-[0_0_18px_rgba(139,92,246,0.2)]"
-          >
-            <ExternalLink className="h-4 w-4 shrink-0" aria-hidden />
-            Слушать / Smart Link
-          </motion.button>
-        ) : null}
-
-        {release.audio_url && (
-          <motion.a
-            href={release.audio_url}
-            target="_blank"
-            rel="noreferrer"
-            whileHover={{ scale: 0.99 }}
-            whileTap={{ scale: 0.98 }}
-            transition={{ type: "spring", stiffness: 320, damping: 22 }}
-            className="mt-4 inline-flex items-center gap-2 rounded-full border border-sky-300/35 bg-sky-500/15 px-3 py-1.5 text-xs text-sky-100"
-          >
-            <Link2 className="h-3.5 w-3.5" />
-            Открыть аудио
-          </motion.a>
+      <section
+        aria-labelledby="release-status-title"
+        className={cn(
+          "mt-8 rounded-control border p-4",
+          canonical === "failed" ? "border-omf-red" : "border-omf-line"
         )}
-      </GlassCard>
-    </div>
+      >
+        <h2 id="release-status-title" className="text-[16px] font-bold tracking-tight">
+          {status.title}
+        </h2>
+        <p className="mt-1.5 whitespace-pre-wrap text-[14px] leading-relaxed text-omf-graphite">{status.body}</p>
+        {smartLink ? (
+          <button
+            type="button"
+            onClick={() => openSmartLink(smartLink)}
+            className="omf-btn-primary mt-4 w-full"
+          >
+            <ExternalLink className="h-4 w-4" aria-hidden />
+            Открыть ссылку на релиз
+          </button>
+        ) : null}
+      </section>
+
+      {sortedTracks.length > 0 ? (
+        <section aria-labelledby="release-tracks-title" className="mt-8">
+          <h2 id="release-tracks-title" className="text-[13px] text-omf-graphite">
+            {sortedTracks.length > 1 ? `Треки, ${sortedTracks.length}` : "Трек"}
+          </h2>
+          <ol className="mt-1">
+            {sortedTracks.map((t, i) => {
+              const dur = formatTrackDurationSec(t.duration);
+              const name = t.title.trim() || "Без названия";
+              return (
+                <li
+                  key={`${t.index}-${i}`}
+                  className="flex items-baseline gap-3 border-b border-omf-line py-3 text-[15px]"
+                >
+                  {sortedTracks.length > 1 ? (
+                    <span className="w-5 shrink-0 tabular-nums text-omf-faint">{i + 1}</span>
+                  ) : null}
+                  <span className="min-w-0 flex-1 truncate">{name}</span>
+                  {t.explicit ? (
+                    <span
+                      className="shrink-0 rounded-[4px] bg-omf-surface-2 px-1.5 py-0.5 text-[11px] font-bold text-omf-graphite"
+                      title="Есть мат"
+                    >
+                      E
+                    </span>
+                  ) : null}
+                  {dur ? <span className="shrink-0 tabular-nums text-omf-graphite">{dur}</span> : null}
+                </li>
+              );
+            })}
+          </ol>
+        </section>
+      ) : null}
+
+      <section aria-labelledby="release-passport-title" className="mt-8">
+        <h2 id="release-passport-title" className="text-[13px] text-omf-graphite">
+          Паспорт релиза
+        </h2>
+        <dl className="mt-1">
+          {passportRows.map((row) => (
+            <div
+              key={row.label}
+              className="flex items-baseline justify-between gap-4 border-b border-omf-line py-3"
+            >
+              <dt className="shrink-0 text-[14px] text-omf-graphite">{row.label}</dt>
+              <dd className="min-w-0 break-words text-right text-[15px]">{row.value}</dd>
+            </div>
+          ))}
+        </dl>
+      </section>
+
+      {release.audio_url ? (
+        <a
+          href={release.audio_url}
+          target="_blank"
+          rel="noreferrer"
+          className="omf-btn-secondary mt-6 w-full"
+        >
+          <Download className="h-4 w-4" aria-hidden />
+          Скачать аудио
+        </a>
+      ) : null}
+    </>
   );
 }
