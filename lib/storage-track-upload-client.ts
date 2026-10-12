@@ -73,9 +73,52 @@ async function uploadReleaseTrackFileViaTus(
   });
 }
 
-/** true, если аудио нужно грузить во внешнее S3-хранилище (флаг задаётся на сборке). */
+/** Куда грузить WAV: "blob" (Vercel Blob), "s3" (S3-совместимое хранилище) или null (Supabase Storage). */
+export function getExternalAudioStorage(): "blob" | "s3" | null {
+  const v = process.env.NEXT_PUBLIC_AUDIO_STORAGE;
+  return v === "blob" || v === "s3" ? v : null;
+}
+
 export function isExternalAudioStorageEnabled(): boolean {
-  return process.env.NEXT_PUBLIC_AUDIO_STORAGE === "s3";
+  return getExternalAudioStorage() !== null;
+}
+
+/** Прямая загрузка WAV в Vercel Blob: токен выдаёт наш сервер, файл идёт из браузера (с прогрессом). */
+async function uploadReleaseTrackFileToVercelBlob(
+  objectPath: string,
+  releaseId: string,
+  trackIndex: number,
+  file: File,
+  onProgress?: (percent: number) => void
+): Promise<string> {
+  const { upload } = await import("@vercel/blob/client");
+  try {
+    const blob = await upload(objectPath, file, {
+      access: "public",
+      handleUploadUrl: "/api/releases/audio-blob-token",
+      clientPayload: JSON.stringify({ releaseId, trackIndex }),
+      headers: getTelegramApiAuthHeaders(),
+      contentType: "audio/wav",
+      multipart: file.size > 20 * 1024 * 1024,
+      onUploadProgress: ({ percentage }) => {
+        onProgress?.(Math.min(99, Math.max(0, Math.round(percentage))));
+      }
+    });
+    onProgress?.(100);
+    return blob.url;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/too large|maximum|size/i.test(msg)) {
+      throw new Error(`Файл слишком большой (лимит ${MAX_WAV_MB} МБ). Сожми WAV или выбери файл поменьше.`);
+    }
+    if (/unauthor|forbidden|доступ/i.test(msg)) {
+      throw new Error("Нет доступа к загрузке. Открой приложение из Telegram заново и попробуй ещё раз.");
+    }
+    if (/suspend|blocked|quota|limit/i.test(msg)) {
+      throw new Error("Хранилище временно недоступно: исчерпан бесплатный лимит. Напиши в поддержку.");
+    }
+    throw new Error(`Не получилось загрузить файл: ${msg}`);
+  }
 }
 
 /** Прямая загрузка WAV в S3-совместимое хранилище по presigned URL (с прогрессом). */
@@ -147,7 +190,17 @@ export async function uploadReleaseTrackFileClient(
     throw new Error("Загрузка трека доступна только в браузере.");
   }
 
-  if (isExternalAudioStorageEnabled() && options?.releaseId != null && options.trackIndex != null) {
+  const external = getExternalAudioStorage();
+  if (external && options?.releaseId != null && options.trackIndex != null) {
+    if (external === "blob") {
+      return uploadReleaseTrackFileToVercelBlob(
+        objectPath,
+        options.releaseId,
+        options.trackIndex,
+        file,
+        options.onProgress
+      );
+    }
     return uploadReleaseTrackFileToS3(options.releaseId, options.trackIndex, file, options.onProgress);
   }
 
