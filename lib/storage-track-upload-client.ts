@@ -5,6 +5,7 @@
 import { MAX_WAV_MB, STORAGE_BUCKET_RELEASE_TRACKS } from "@/lib/storage-buckets";
 import { getTelegramUserIdForSupabaseRequests } from "@/lib/telegram";
 import { Upload } from "tus-js-client";
+import { getTelegramApiAuthHeaders } from "@/lib/telegram";
 
 function getSupabasePublicConfig(): { url: string; anonKey: string } {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -72,16 +73,83 @@ async function uploadReleaseTrackFileViaTus(
   });
 }
 
+/** true, если аудио нужно грузить во внешнее S3-хранилище (флаг задаётся на сборке). */
+export function isExternalAudioStorageEnabled(): boolean {
+  return process.env.NEXT_PUBLIC_AUDIO_STORAGE === "s3";
+}
+
+/** Прямая загрузка WAV в S3-совместимое хранилище по presigned URL (с прогрессом). */
+async function uploadReleaseTrackFileToS3(
+  releaseId: string,
+  trackIndex: number,
+  file: File,
+  onProgress?: (percent: number) => void
+): Promise<string> {
+  const res = await fetch("/api/releases/audio-upload-url", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json", ...getTelegramApiAuthHeaders() },
+    body: JSON.stringify({ releaseId, trackIndex })
+  });
+  const json = (await res.json().catch(() => null)) as {
+    ok?: boolean;
+    uploadUrl?: string;
+    publicUrl?: string;
+    error?: string;
+  } | null;
+  if (!res.ok || !json?.ok || !json.uploadUrl || !json.publicUrl) {
+    throw new Error(json?.error || "Не получилось подготовить загрузку файла. Попробуй ещё раз.");
+  }
+  const { uploadUrl, publicUrl } = json;
+
+  await new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", uploadUrl);
+    xhr.setRequestHeader("Content-Type", file.type?.trim() || "audio/wav");
+    xhr.upload.onprogress = (e) => {
+      if (!e.lengthComputable || e.total <= 0) return;
+      onProgress?.(Math.min(99, Math.max(0, Math.round((e.loaded / e.total) * 100))));
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        onProgress?.(100);
+        resolve();
+      } else if (xhr.status === 413) {
+        reject(new Error("Файл слишком большой для хранилища. Сожми WAV или выбери файл поменьше."));
+      } else {
+        reject(new Error(`Хранилище отклонило файл (код ${xhr.status}). Попробуй ещё раз.`));
+      }
+    };
+    xhr.onerror = () =>
+      reject(new Error("Загрузка прервалась: проверь интернет и попробуй ещё раз."));
+    xhr.onabort = () => reject(new Error("Загрузка отменена."));
+    xhr.send(file);
+  });
+
+  return publicUrl;
+}
+
+/**
+ * Загружает WAV трека. Возвращает публичный URL, если файл ушёл во внешнее хранилище,
+ * или null, если в Supabase Storage (тогда URL строит вызывающий код).
+ */
 export async function uploadReleaseTrackFileClient(
   objectPath: string,
   file: File,
   options?: {
     onProgress?: (percent: number) => void;
+    releaseId?: string;
+    trackIndex?: number;
   }
-): Promise<void> {
+): Promise<string | null> {
   if (typeof window === "undefined") {
     throw new Error("Загрузка трека доступна только в браузере.");
   }
 
+  if (isExternalAudioStorageEnabled() && options?.releaseId != null && options.trackIndex != null) {
+    return uploadReleaseTrackFileToS3(options.releaseId, options.trackIndex, file, options.onProgress);
+  }
+
   await uploadReleaseTrackFileViaTus(objectPath, file, options?.onProgress);
+  return null;
 }

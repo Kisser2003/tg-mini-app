@@ -210,9 +210,12 @@ export async function uploadReleaseTrackAudio(params: {
 
   await removeStorageObjectsQuiet(STORAGE_BUCKET_RELEASE_TRACKS, [path]);
 
+  let externalPublicUrl: string | null = null;
   try {
-    await uploadReleaseTrackFileClient(path, params.file, {
-      onProgress: params.options?.onProgress
+    externalPublicUrl = await uploadReleaseTrackFileClient(path, params.file, {
+      onProgress: params.options?.onProgress,
+      releaseId: params.releaseId,
+      trackIndex: params.trackIndex
     });
   } catch (err) {
     if (params.options?.markReleaseFailedOnError?.releaseId) {
@@ -224,6 +227,8 @@ export async function uploadReleaseTrackAudio(params: {
     }
     throw err;
   }
+
+  if (externalPublicUrl) return externalPublicUrl;
 
   const {
     data: { publicUrl }
