@@ -89,7 +89,7 @@ async function uploadReleaseTrackFileToS3(
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json", ...getTelegramApiAuthHeaders() },
-    body: JSON.stringify({ releaseId, trackIndex })
+    body: JSON.stringify({ releaseId, trackIndex, sizeBytes: file.size })
   });
   const json = (await res.json().catch(() => null)) as {
     ok?: boolean;
@@ -105,7 +105,8 @@ async function uploadReleaseTrackFileToS3(
   await new Promise<void>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", uploadUrl);
-    xhr.setRequestHeader("Content-Type", file.type?.trim() || "audio/wav");
+    // Должен совпадать с типом, зашитым в подпись (см. S3_AUDIO_CONTENT_TYPE на сервере).
+    xhr.setRequestHeader("Content-Type", "audio/wav");
     xhr.upload.onprogress = (e) => {
       if (!e.lengthComputable || e.total <= 0) return;
       onProgress?.(Math.min(99, Math.max(0, Math.round((e.loaded / e.total) * 100))));

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
+import { MAX_WAV_MB } from "@/lib/storage-buckets";
 import { resolveReleaseActor } from "@/lib/api/resolve-submit-actor";
 import { isReleaseActorOwner } from "@/lib/release-ownership.server";
 import { createS3UploadUrls, getS3Config } from "@/lib/s3-config.server";
@@ -11,7 +12,9 @@ export const runtime = "nodejs";
 
 const bodySchema = z.object({
   releaseId: z.string().uuid(),
-  trackIndex: z.number().int().min(0).max(99)
+  trackIndex: z.number().int().min(0).max(99),
+  /** Размер файла в байтах: входит в подпись ссылки, поэтому больше заявленного залить нельзя. */
+  sizeBytes: z.number().int().positive()
 });
 
 /**
@@ -47,7 +50,13 @@ export async function POST(request: NextRequest): Promise<Response> {
   if (!parsed.success) {
     return NextResponse.json({ ok: false, error: "Некорректное тело запроса." }, { status: 400 });
   }
-  const { releaseId, trackIndex } = parsed.data;
+  const { releaseId, trackIndex, sizeBytes } = parsed.data;
+  if (sizeBytes > MAX_WAV_MB * 1024 * 1024) {
+    return NextResponse.json(
+      { ok: false, error: `Файл больше ${MAX_WAV_MB} МБ. Выбери файл поменьше.` },
+      { status: 413 }
+    );
+  }
 
   const { data: row, error } = await admin
     .from("releases")
@@ -74,6 +83,6 @@ export async function POST(request: NextRequest): Promise<Response> {
   }
 
   const objectKey = getReleaseTrackAudioPath(Math.trunc(ownerSegment), releaseId, trackIndex);
-  const { uploadUrl, publicUrl } = createS3UploadUrls(cfg, objectKey);
+  const { uploadUrl, publicUrl } = createS3UploadUrls(cfg, objectKey, sizeBytes);
   return NextResponse.json({ ok: true, uploadUrl, publicUrl });
 }

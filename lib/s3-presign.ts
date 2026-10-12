@@ -15,6 +15,12 @@ export type S3PresignInput = {
   accessKeyId: string;
   secretAccessKey: string;
   expiresSeconds: number;
+  /**
+   * Дополнительные заголовки, которые войдут в подпись (имена в нижнем регистре).
+   * Хранилище отклонит запрос, если клиент пришлёт другие значения: так фиксируются
+   * `content-length` и `content-type` загружаемого файла.
+   */
+  signedHeaders?: Record<string, string>;
   now?: Date;
 };
 
@@ -49,12 +55,20 @@ export function presignS3Url(input: S3PresignInput): string {
   const dateStamp = amzDate.slice(0, 8);
   const scope = `${dateStamp}/${input.region}/s3/aws4_request`;
 
+  const headers: Record<string, string> = { host: input.host };
+  for (const [name, value] of Object.entries(input.signedHeaders ?? {})) {
+    headers[name.toLowerCase()] = value.trim();
+  }
+  const headerNames = Object.keys(headers).sort();
+  const signedHeadersList = headerNames.join(";");
+  const canonicalHeaders = headerNames.map((n) => `${n}:${headers[n]}\n`).join("");
+
   const query: [string, string][] = [
     ["X-Amz-Algorithm", "AWS4-HMAC-SHA256"],
     ["X-Amz-Credential", `${input.accessKeyId}/${scope}`],
     ["X-Amz-Date", amzDate],
     ["X-Amz-Expires", String(input.expiresSeconds)],
-    ["X-Amz-SignedHeaders", "host"]
+    ["X-Amz-SignedHeaders", signedHeadersList]
   ];
   query.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
   const canonicalQuery = query
@@ -66,8 +80,8 @@ export function presignS3Url(input: S3PresignInput): string {
     input.method,
     canonicalPath,
     canonicalQuery,
-    `host:${input.host}\n`,
-    "host",
+    canonicalHeaders,
+    signedHeadersList,
     "UNSIGNED-PAYLOAD"
   ].join("\n");
 
