@@ -1,3 +1,4 @@
+import { MAX_WAV_MB } from "@/lib/storage-buckets";
 import {
   RELEASE_STATUS_VALUES,
   RELEASE_TYPE_VALUES,
@@ -10,7 +11,7 @@ export { RELEASE_STATUS_VALUES, RELEASE_TYPE_VALUES };
 
 /** Лимиты и допустимые MIME (строгая проверка до загрузки в Storage) */
 export const RELEASE_FILE_LIMITS = {
-  audioMaxMb: 200,
+  audioMaxMb: MAX_WAV_MB,
   /** PNG 3000×3000 без сильного сжатия часто > 20 МБ; лимит согласован с клиентом и Storage. */
   artworkMaxMb: 35
 } as const;

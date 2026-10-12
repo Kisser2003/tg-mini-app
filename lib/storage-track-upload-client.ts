@@ -2,7 +2,7 @@
  * Resumable WAV upload to Supabase Storage via TUS.
  */
 
-import { STORAGE_BUCKET_RELEASE_TRACKS } from "@/lib/storage-buckets";
+import { MAX_WAV_MB, STORAGE_BUCKET_RELEASE_TRACKS } from "@/lib/storage-buckets";
 import { getTelegramUserIdForSupabaseRequests } from "@/lib/telegram";
 import { Upload } from "tus-js-client";
 
@@ -50,6 +50,16 @@ async function uploadReleaseTrackFileViaTus(
         onProgress?.(Math.min(100, Math.max(0, pct)));
       },
       onError(error) {
+        const status = (error as { originalResponse?: { getStatus?: () => number } | null })
+          .originalResponse?.getStatus?.();
+        if (status === 413) {
+          reject(
+            new Error(
+              `Файл слишком большой для хранилища (лимит ${MAX_WAV_MB} МБ). Сожми WAV или выбери файл поменьше.`
+            )
+          );
+          return;
+        }
         reject(error);
       },
       onSuccess() {

@@ -19,6 +19,7 @@ import {
   uploadTracksForDraftStep
 } from "@/features/release/createRelease/actions";
 import { FormFieldError } from "@/components/FormFieldError";
+import { MAX_WAV_MB } from "@/lib/storage-buckets";
 import {
   GLASS_FIELD_ERROR_STRONG,
   WIZARD_FIELD_LABEL_CLASS,
@@ -447,7 +448,7 @@ export default function CreateTracksPage() {
                     <FileUploader
                       label=""
                       accept=".wav,audio/wav,audio/x-wav,audio/wave,audio/vnd.wave"
-                      maxSizeMb={200}
+                      maxSizeMb={MAX_WAV_MB}
                       type="wav"
                       initialFile={storeTrackFiles[index] ?? null}
                       onFileChange={(file) => {
