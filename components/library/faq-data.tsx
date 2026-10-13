@@ -14,17 +14,9 @@ import {
   Users,
 } from "lucide-react";
 import { MAX_WAV_MB } from "@/lib/storage-buckets";
+import type { FaqTopicKey } from "@/lib/faq-topics";
 
-export type FaqTopicKey =
-  | "audio"
-  | "cover"
-  | "release-date"
-  | "release-type"
-  | "collab"
-  | "metadata"
-  | "moderation"
-  | "wav-warning"
-  | "where-to-open";
+export type { FaqTopicKey };
 
 export type FaqItem = {
   id: FaqTopicKey;

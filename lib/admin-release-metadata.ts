@@ -199,3 +199,73 @@ export function buildReleaseExportPayload(release: AdminReleaseRow, tracks: Rele
     tracks: tracks.map((t) => ({ ...t }))
   };
 }
+
+/**
+ * Следующий релиз очереди после решения по `currentId`: следующий по списку,
+ * если текущий был последним — первый оставшийся. `null` — очередь разобрана.
+ */
+export function pickNextReleaseId(queueIds: readonly string[], currentId: string): string | null {
+  const rest = queueIds.filter((id) => id !== currentId);
+  if (rest.length === 0) return null;
+  const idx = queueIds.indexOf(currentId);
+  if (idx === -1) return rest[0];
+  return queueIds.slice(idx + 1).find((id) => id !== currentId) ?? rest[0];
+}
+
+function shortReleaseType(type: unknown): string | null {
+  if (type === "single") return "Сингл";
+  if (type === "ep") return "EP";
+  if (type === "album") return "Альбом";
+  return typeof type === "string" && type.trim() ? type.trim() : null;
+}
+
+function shortDateRu(value: unknown): string | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  const raw = value.trim();
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? new Date(`${raw}T12:00:00`) : new Date(raw);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString("ru-RU", { day: "numeric", month: "short" }).replace(".", "");
+}
+
+/** Короткая сводка для решения с первого экрана: формат, жанр, мат, треки, дата выхода. */
+export function buildAdminReleaseSummary(release: AdminReleaseRow, tracks: ReleaseTrackRow[]): string[] {
+  const parts: (string | null)[] = [];
+  parts.push(shortReleaseType(release.release_type));
+  parts.push(typeof release.genre === "string" && release.genre.trim() ? release.genre.trim() : null);
+  const trackCount = tracks.length;
+  if (trackCount > 1) {
+    const mod10 = trackCount % 10;
+    const mod100 = trackCount % 100;
+    const word =
+      mod10 === 1 && mod100 !== 11
+        ? "трек"
+        : mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)
+          ? "трека"
+          : "треков";
+    parts.push(`${trackCount} ${word}`);
+  }
+  const explicit = Boolean(release.explicit) || tracks.some((t) => Boolean(t.explicit));
+  parts.push(explicit ? "есть мат" : "без мата");
+  const date = shortDateRu(release.release_date);
+  if (date) parts.push(`выход ${date}`);
+  return parts.filter((p): p is string => Boolean(p));
+}
+
+/** «5 мин назад», «3 ч назад», «2 дн назад». */
+export function formatAgoRu(iso: string, now: Date = new Date()): string {
+  const min = Math.max(0, Math.round((now.getTime() - new Date(iso).getTime()) / 60000));
+  if (!Number.isFinite(min)) return "";
+  if (min < 60) return `${min} мин назад`;
+  const h = Math.round(min / 60);
+  if (h < 24) return `${h} ч назад`;
+  return `${Math.round(h / 24)} дн назад`;
+}
+
+/** Предыдущий релиз очереди (по кругу); `null`, если листать некуда. */
+export function pickPrevReleaseId(queueIds: readonly string[], currentId: string): string | null {
+  const rest = queueIds.filter((id) => id !== currentId);
+  if (rest.length === 0) return null;
+  const idx = queueIds.indexOf(currentId);
+  if (idx <= 0) return rest[rest.length - 1];
+  return queueIds[idx - 1];
+}

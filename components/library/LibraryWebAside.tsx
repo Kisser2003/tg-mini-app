@@ -1,15 +1,25 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FAQ_ITEMS } from "@/components/library/faq-data";
+import type { FaqTopicKey } from "@/lib/faq-topics";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { cn } from "@/lib/utils";
 
 /**
  * Контент страницы FAQ (/requirements): фактические правила OMF, а не общие шаблоны.
  */
-export function LibraryWebAside() {
+export function LibraryWebAside({ openTopic }: { openTopic?: FaqTopicKey | null } = {}) {
   const [query, setQuery] = useState("");
+
+  /** Переход из «Почему вернули»: раздел уже раскрыт, прокручиваем к нему. */
+  useEffect(() => {
+    if (!openTopic) return;
+    const el = document.getElementById(`faq-${openTopic}`);
+    if (!el) return;
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    el.scrollIntoView({ block: "start", behavior: reduce ? "auto" : "smooth" });
+  }, [openTopic]);
 
   const normalizedQuery = query.trim().toLocaleLowerCase("ru-RU");
 
@@ -33,12 +43,21 @@ export function LibraryWebAside() {
         className="omf-focus min-h-[48px] w-full rounded-control border border-omf-line bg-omf-surface px-4 py-3 text-[16px] text-omf-ink outline-none placeholder:text-omf-faint focus:border-omf-ultra"
       />
 
-      <Accordion type="multiple" className="border-t border-omf-line">
+      <Accordion
+        type="multiple"
+        defaultValue={openTopic ? [openTopic] : undefined}
+        className="border-t border-omf-line"
+      >
         {filteredItems.map((item) => {
           const Icon = item.icon;
 
           return (
-            <AccordionItem key={item.id} value={item.id} className="border-b border-omf-line">
+            <AccordionItem
+              key={item.id}
+              id={`faq-${item.id}`}
+              value={item.id}
+              className="scroll-mt-4 border-b border-omf-line"
+            >
               <AccordionTrigger className="px-0 py-4 text-left text-[17px] font-bold tracking-[-0.01em] text-omf-ink hover:no-underline">
                 <span className="mr-3 inline-flex items-center gap-3">
                   <Icon className={cn("h-[18px] w-[18px] shrink-0", item.iconClassName)} aria-hidden />

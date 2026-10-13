@@ -32,6 +32,8 @@ export type AdminStuckRelease = {
   status: "draft" | "pending";
   artwork_url: string | null;
   telegram_username: string | null;
+  /** Есть Telegram id — бот может написать напоминание. */
+  can_remind?: boolean;
   created_at: string;
   tracks_count: number;
 };

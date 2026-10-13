@@ -3,14 +3,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { History, RefreshCcw, Send } from "lucide-react";
+import { History, RefreshCcw } from "lucide-react";
 import useSWR from "swr";
 import { toast } from "sonner";
 import { AdminApproveSmartLinkModal } from "@/components/AdminApproveSmartLinkModal";
 import { AdminRejectModal } from "@/components/AdminRejectModal";
-import { ADMIN_REJECT_PRESETS } from "@/components/AdminRejectModal";
 import { AdminReleaseCard } from "@/components/AdminReleaseCard";
-import { ReleaseSleeve } from "@/components/ReleaseSleeve";
+import { AdminStatsPanel } from "@/components/admin/AdminStatsPanel";
+import { AdminStuckList } from "@/components/admin/AdminStuckList";
 import { PullRefreshBrand } from "@/components/PullRefreshBrand";
 import { AdminModerationQueueSkeleton } from "@/components/ui/LibrarySkeleton";
 import { publishReleaseWithSmartLink, rejectRelease } from "@/features/admin/actions";
@@ -20,7 +20,6 @@ import { debugInit } from "@/lib/debug";
 import { fetchAdminStats } from "@/lib/fetch-admin-stats";
 import type { ReleaseRecord, ReleaseTrackRow } from "@/repositories/releases.repo";
 import { hapticMap } from "@/lib/haptic-map";
-import { openTelegramChat } from "@/lib/open-smart-link";
 import { getTelegramUserId, initTelegramWebApp, triggerHaptic } from "@/lib/telegram";
 import { errorToUserString, USER_REQUEST_TIMEOUT_MESSAGE } from "@/lib/errors";
 import { SWR_LIST_OPTIONS } from "@/lib/swr-config";
@@ -34,14 +33,6 @@ type ModerationQueueRow = {
 type QueueFilterKey = "all" | "needs_smart_link" | "with_errors";
 
 const ADMIN_QUEUE_TIMEOUT_MS = 15000;
-
-function formatAgo(iso: string): string {
-  const min = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
-  if (min < 60) return `${min} мин назад`;
-  const h = Math.round(min / 60);
-  if (h < 24) return `${h} ч назад`;
-  return `${Math.round(h / 24)} дн назад`;
-}
 
 export default function AdminPage() {
   const router = useRouter();
@@ -197,11 +188,11 @@ export default function AdminPage() {
   );
 
   const handleRejectWithReason = useCallback(
-    async (id: string, reason: string, reasonKey?: string) => {
+    async (id: string, reason: string, reasonKeys: string[]) => {
       setBusyId(id);
       setActionError(null);
       try {
-        await rejectRelease(id, reason, reasonKey);
+        await rejectRelease(id, reason, reasonKeys);
         hapticMap.notificationWarning();
         setRejectModalReleaseId(null);
         await refreshAll();
@@ -233,7 +224,7 @@ export default function AdminPage() {
   }, []);
 
   const handleBulkReject = useCallback(
-    async (reason: string, reasonKey?: string) => {
+    async (reason: string, reasonKeys: string[]) => {
       if (selectedReleaseIds.length === 0) return;
       setBulkBusy(true);
       setActionError(null);
@@ -241,7 +232,7 @@ export default function AdminPage() {
       let failedCount = 0;
       for (const releaseId of selectedReleaseIds) {
         try {
-          await rejectRelease(releaseId, reason, reasonKey);
+          await rejectRelease(releaseId, reason, reasonKeys);
           successCount += 1;
         } catch {
           failedCount += 1;
@@ -314,151 +305,42 @@ export default function AdminPage() {
 
   const showQueueSkeleton = isLoading && data === undefined;
   return (
-    <div className="mx-auto min-h-app max-w-lg px-1 pb-40 pt-6 text-omf-ink">
+    <div className="mx-auto min-h-app max-w-lg px-1 pb-40 pt-6 text-omf-ink lg:max-w-3xl">
       <PullRefreshBrand />
 
       <header className="mb-6 flex items-start justify-between gap-4">
         <div>
-          <p className="text-[13px] text-omf-graphite">В очереди: {moderationQueue.length}</p>
+          <p className="text-[13px] text-omf-graphite">
+            В очереди: {moderationQueue.length}
+            {stats?.oldest_wait_hours != null && moderationQueue.length > 0 ? (
+              <span className={stats.oldest_wait_hours >= 24 ? "text-omf-red" : undefined}>
+                {" "}
+                · ждёт до {stats.oldest_wait_hours} ч
+              </span>
+            ) : null}
+          </p>
           <h1 className="mt-1 text-[40px] font-extrabold leading-[0.92] tracking-[-0.045em]">Модерация</h1>
         </div>
-        <button
-          type="button"
-          onClick={() => void refreshAll()}
-          disabled={isValidating}
-          aria-label="Обновить очередь"
-          className="omf-focus mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-omf-graphite transition-colors hover:bg-omf-surface hover:text-omf-ink disabled:opacity-50"
-        >
-          <RefreshCcw className={`h-[18px] w-[18px] ${isValidating ? "animate-spin" : ""}`} aria-hidden />
-        </button>
+        <div className="mt-1 flex shrink-0 items-center gap-1">
+          <Link
+            href="/admin/history"
+            aria-label="История решений"
+            title="История решений"
+            className="omf-focus flex h-10 w-10 items-center justify-center rounded-full text-omf-graphite transition-colors hover:bg-omf-surface hover:text-omf-ink"
+          >
+            <History className="h-[18px] w-[18px]" aria-hidden />
+          </Link>
+          <button
+            type="button"
+            onClick={() => void refreshAll()}
+            disabled={isValidating}
+            aria-label="Обновить очередь"
+            className="omf-focus flex h-10 w-10 items-center justify-center rounded-full text-omf-graphite transition-colors hover:bg-omf-surface hover:text-omf-ink disabled:opacity-50"
+          >
+            <RefreshCcw className={`h-[18px] w-[18px] ${isValidating ? "animate-spin" : ""}`} aria-hidden />
+          </button>
+        </div>
       </header>
-
-      {stats && !statsErrorMessage ? (
-        <dl className="mb-6 grid grid-cols-3 gap-3 border-y border-omf-line py-4 text-center">
-          <div>
-            <dt className="text-[12px] text-omf-graphite">Ждёт дольше всех</dt>
-            <dd
-              className={`mt-1 text-[22px] font-extrabold tabular-nums ${
-                (stats.oldest_wait_hours ?? 0) >= 24 ? "text-omf-red" : "text-omf-ink"
-              }`}
-            >
-              {stats.oldest_wait_hours == null ? "—" : `${stats.oldest_wait_hours} ч`}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-[12px] text-omf-graphite">Одобрено за сегодня</dt>
-            <dd className="mt-1 text-[22px] font-extrabold tabular-nums">{stats.ready_today}</dd>
-          </div>
-          <div>
-            <dt className="text-[12px] text-omf-graphite">Отказы, 30 дней</dt>
-            <dd className="mt-1 text-[22px] font-extrabold tabular-nums">
-              {stats.ready_30d + stats.failed_30d > 0
-                ? `${Math.round((stats.failed_30d / (stats.ready_30d + stats.failed_30d)) * 100)}%`
-                : "—"}
-            </dd>
-          </div>
-          {stats.top_reject_reasons.length > 0 ? (
-            <p className="col-span-3 text-left text-[13px] text-omf-graphite">
-              Частые причины:{" "}
-              {stats.top_reject_reasons
-                .map((r) => {
-                  const label = ADMIN_REJECT_PRESETS.find((p) => p.key === r.key)?.label ?? "Своя причина";
-                  return `${label} (${r.count})`;
-                })
-                .join(", ")}
-            </p>
-          ) : null}
-        </dl>
-      ) : null}
-
-      {stats && stats.funnel_30d.some((f) => f.users > 0) ? (
-        <section className="mb-6" aria-label="Воронка создания релиза">
-          <h2 className="text-[13px] text-omf-graphite">Воронка, 30 дней (уникальные пользователи)</h2>
-          <ol className="mt-1">
-            {stats.funnel_30d.map((f, i) => {
-              const prev = i > 0 ? stats.funnel_30d[i - 1].users : 0;
-              const label =
-                { metadata: "Паспорт", assets: "Обложка", tracks: "Треки", review: "Проверка", submitted: "Отправили" }[
-                  f.step
-                ] ?? f.step;
-              return (
-                <li key={f.step} className="flex items-baseline justify-between border-b border-omf-line py-2 text-[14px]">
-                  <span>{label}</span>
-                  <span className="tabular-nums">
-                    {f.users}
-                    {i > 0 && prev > 0 ? (
-                      <span className="ml-2 text-omf-faint">{Math.round((f.users / prev) * 100)}%</span>
-                    ) : null}
-                  </span>
-                </li>
-              );
-            })}
-          </ol>
-        </section>
-      ) : null}
-
-      {stats && stats.stuck.length > 0 ? (
-        <section className="mb-6" aria-labelledby="admin-stuck">
-          <h2 id="admin-stuck" className="text-[13px] text-omf-graphite">
-            Застряли до отправки: {stats.stuck.length}
-          </h2>
-          <p className="mt-0.5 text-[13px] text-omf-faint">
-            Начали релиз, но не нажали «Отправить». В очередь они не попадут, пока артист не закончит.
-          </p>
-          <ul className="mt-1">
-            {stats.stuck.map((s) => (
-              <li key={s.id} className="flex items-center gap-3 border-b border-omf-line py-3">
-                <Link
-                  href={`/admin/release/${s.id}`}
-                  className="omf-focus flex min-w-0 flex-1 items-center gap-3 rounded-[10px]"
-                >
-                  <div className="w-12 shrink-0">
-                    <ReleaseSleeve seed={s.id} title={s.title} artist={s.artist_name} coverUrl={s.artwork_url} size="thumb" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="truncate text-[15px] font-bold leading-tight tracking-[-0.01em]">{s.title}</p>
-                    <p className="mt-0.5 truncate text-[13px] text-omf-graphite">
-                      {s.artist_name}
-                      {s.telegram_username ? ` · @${s.telegram_username}` : ""}
-                    </p>
-                    <p className="mt-0.5 text-[12px] text-omf-faint">
-                      {s.status === "pending" ? "Файлы загружены" : "Черновик"} · треков: {s.tracks_count} ·{" "}
-                      {formatAgo(s.created_at)}
-                    </p>
-                  </div>
-                </Link>
-                {s.telegram_username ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      hapticMap.impactLight();
-                      openTelegramChat(s.telegram_username!);
-                    }}
-                    aria-label={`Написать @${s.telegram_username}`}
-                    className="omf-focus flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-omf-ultra-text transition-colors hover:bg-omf-surface hover:text-omf-ink"
-                  >
-                    <Send className="h-[18px] w-[18px]" aria-hidden />
-                  </button>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
-      {statsErrorMessage && (
-        <p className="mb-4 text-[14px] text-omf-yellow">Не удалось загрузить счётчики: {statsErrorMessage}</p>
-      )}
-
-      <div className="mb-6">
-        <Link
-          href="/admin/history"
-          className="omf-focus inline-flex items-center gap-2 rounded-full py-1.5 text-[14px] text-omf-ultra-text hover:text-omf-ink"
-        >
-          <History className="h-4 w-4 shrink-0" aria-hidden />
-          История решений
-        </Link>
-      </div>
 
       <AdminApproveSmartLinkModal
         releaseId={approveModalReleaseId}
@@ -468,43 +350,21 @@ export default function AdminPage() {
       />
 
       <AdminRejectModal
-        releaseId={rejectModalReleaseId}
-        busy={busyId === rejectModalReleaseId}
+        open={rejectModalReleaseId != null}
+        busy={rejectModalReleaseId != null && busyId === rejectModalReleaseId}
         onClose={() => setRejectModalReleaseId(null)}
-        onSelectReason={(id, reason, key) => void handleRejectWithReason(id, reason, key)}
+        onSubmit={(reason, keys) => {
+          if (rejectModalReleaseId) void handleRejectWithReason(rejectModalReleaseId, reason, keys);
+        }}
       />
 
-      {bulkRejectOpen && (
-        <div className="fixed inset-0 z-[110] flex flex-col justify-end">
-          <button
-            type="button"
-            aria-label="Закрыть"
-            className="absolute inset-0 bg-black/60"
-            onClick={() => !bulkBusy && setBulkRejectOpen(false)}
-          />
-          <div className="relative z-10 mx-auto w-full max-w-md rounded-t-[24px] border border-b-0 border-omf-line bg-omf-surface p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))]">
-            <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-omf-line-strong" aria-hidden />
-            <h3 className="text-[20px] font-bold tracking-tight">Вернуть выбранные релизы</h3>
-            <p className="mt-1 text-[14px] text-omf-graphite">
-              Выбрано: {selectedReleaseIds.length}. Причину увидят все артисты.
-            </p>
-            <div className="mt-4 flex flex-col">
-              {ADMIN_REJECT_PRESETS.map((preset) => (
-                <button
-                  key={preset.key}
-                  type="button"
-                  disabled={bulkBusy}
-                  onClick={() => void handleBulkReject(preset.message, preset.key)}
-                  className="omf-focus border-t border-omf-line py-3.5 text-left transition-colors hover:bg-omf-surface-2 disabled:opacity-50"
-                >
-                  <span className="block text-[16px] font-medium">{preset.label}</span>
-                  <span className="mt-0.5 block text-[14px] leading-snug text-omf-graphite">{preset.message}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+      <AdminRejectModal
+        open={bulkRejectOpen}
+        busy={bulkBusy}
+        count={selectedReleaseIds.length}
+        onClose={() => setBulkRejectOpen(false)}
+        onSubmit={(reason, keys) => void handleBulkReject(reason, keys)}
+      />
 
       <div
         className="mb-4 flex gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
@@ -643,6 +503,12 @@ export default function AdminPage() {
           })}
         </div>
       )}
+
+      {stats ? <AdminStuckList stuck={stats.stuck} /> : null}
+      {stats && !statsErrorMessage ? <AdminStatsPanel stats={stats} /> : null}
+      {statsErrorMessage ? (
+        <p className="mt-6 text-[14px] text-omf-yellow">Не удалось загрузить счётчики: {statsErrorMessage}</p>
+      ) : null}
     </div>
   );
 }

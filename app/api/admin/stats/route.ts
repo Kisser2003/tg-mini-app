@@ -122,7 +122,7 @@ async function handleAdminStats(request: NextRequest): Promise<Response> {
     const stuckBefore = new Date(Date.now() - STUCK_AFTER_MIN * 60 * 1000).toISOString();
     const { data: stuckRows } = await supabase
       .from("releases")
-      .select("id, title, track_name, artist_name, status, artwork_url, telegram_username, created_at, tracks(count)")
+      .select("id, title, track_name, artist_name, status, artwork_url, telegram_username, telegram_id, created_at, tracks(count)")
       .in("status", ["draft", "pending"])
       .lte("created_at", stuckBefore)
       .gte("created_at", since30)
@@ -137,6 +137,7 @@ async function handleAdminStats(request: NextRequest): Promise<Response> {
         status: "draft" | "pending";
         artwork_url: string | null;
         telegram_username: string | null;
+        telegram_id: string | number | null;
         created_at: string;
         tracks: { count: number }[] | null;
       };
@@ -147,6 +148,7 @@ async function handleAdminStats(request: NextRequest): Promise<Response> {
         status: row.status,
         artwork_url: row.artwork_url,
         telegram_username: row.telegram_username,
+        can_remind: /^\d+$/.test(String(row.telegram_id ?? "").trim()),
         created_at: row.created_at,
         tracks_count: row.tracks?.[0]?.count ?? 0
       });

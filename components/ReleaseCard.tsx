@@ -8,8 +8,10 @@ export type ReleaseCardProps = {
   id: string;
   title: string;
   artist?: string | null;
-  /** Одна строка под названием: тип и дата, без статуса — статус на наклейке. */
+  /** Тип и дата: мелко, под строкой «что дальше». */
   subtitle: string;
+  /** Что делать дальше / сколько ждать (цвет по смыслу). */
+  nextStep?: { text: string; className: string } | null;
   status: CanonicalReleaseStatus;
   coverUrl?: string | null;
   priority?: boolean;
@@ -30,6 +32,7 @@ export function ReleaseCard({
   priority,
   busy,
   isNew,
+  nextStep,
   onClick
 }: ReleaseCardProps) {
   return (
@@ -63,9 +66,20 @@ export function ReleaseCard({
       <span className="mt-2.5 block truncate text-[14px] font-medium leading-tight text-omf-ink">
         {title}
       </span>
-      <span className="mt-0.5 block truncate text-[12px] text-omf-graphite">
-        {busy ? "Открываем черновик…" : subtitle}
-      </span>
+      {busy ? (
+        <span className="mt-0.5 block truncate text-[12px] text-omf-graphite">Открываем…</span>
+      ) : (
+        <>
+          {nextStep?.text ? (
+            <span className={cn("mt-0.5 block truncate text-[13px] leading-snug", nextStep.className)}>
+              {nextStep.text}
+            </span>
+          ) : null}
+          {subtitle ? (
+            <span className="mt-0.5 block truncate text-[12px] text-omf-faint">{subtitle}</span>
+          ) : null}
+        </>
+      )}
     </button>
   );
 }

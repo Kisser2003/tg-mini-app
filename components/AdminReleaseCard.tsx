@@ -14,6 +14,8 @@ import {
 import { normalizeReleaseStatus, type CanonicalReleaseStatus } from "@/lib/release-status";
 import { triggerHaptic } from "@/lib/telegram";
 import { featuringNamesFromCollaboratorsJson } from "@/lib/collaborators";
+import { describeHistoryDecision, describePreviousRejection } from "@/lib/rejection-reasons";
+import { pluralRu } from "@/lib/release-next-step";
 
 const STATUS_LABEL: Record<CanonicalReleaseStatus, string> = {
   draft: "черновик",
@@ -111,6 +113,9 @@ function AdminReleaseCardInner({
     [release.created_at]
   );
   const hasError = (release.error_message ?? "").trim().length > 0;
+  const previousRejection = showModerationActions ? describePreviousRejection(release) : null;
+  /** В истории: почему вернули / какая ссылка ушла артисту. */
+  const decisionLine = showModerationActions ? null : describeHistoryDecision(release);
   const noSmartLink = showModerationActions && (release.smart_link ?? "").trim().length === 0;
   const metaLine = [
     releaseTypeLabel(release.release_type),
@@ -120,48 +125,76 @@ function AdminReleaseCardInner({
     .filter(Boolean)
     .join(" · ");
 
+  const header = (
+    <>
+      <div className="w-[72px] shrink-0">
+        <ReleaseSleeve
+          seed={release.id}
+          title={displayTitle}
+          artist={release.artist_name}
+          coverUrl={release.artwork_url}
+          size="thumb"
+          priority={artworkPriority}
+        />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className={`truncate text-[17px] font-bold leading-tight tracking-[-0.02em] ${showModerationActions ? "pr-9" : ""}`}>
+          {displayTitle}
+        </p>
+        <div className={`mt-0.5 flex items-baseline justify-between gap-2 ${showModerationActions ? "pr-9" : ""}`}>
+          <p className="min-w-0 truncate text-[14px] text-omf-graphite">{release.artist_name}</p>
+          {detailHref ? (
+            <span className="inline-flex shrink-0 items-center gap-0.5 text-[13px] text-omf-ultra-text">
+              Открыть
+              <ChevronRight className="h-3.5 w-3.5" aria-hidden />
+            </span>
+          ) : null}
+        </div>
+        {featuringNames.length > 0 ? (
+          <p className="truncate text-[13px] text-omf-graphite" title={featuringLabel}>
+            feat. {featuringLabel}
+          </p>
+        ) : null}
+        <p className="mt-1.5 text-[13px] text-omf-faint">{metaLine}</p>
+        {decisionLine ? (
+          <p className="mt-1.5 line-clamp-2 break-words text-[13px] leading-snug text-omf-graphite">
+            {decisionLine}
+          </p>
+        ) : null}
+        {previousRejection ? (
+          <p className="mt-1.5 text-[13px] leading-snug">
+            <span className="font-medium text-omf-yellow">
+              Повторно
+              {previousRejection.count > 1
+                ? `, вернули ${previousRejection.count} ${pluralRu(previousRejection.count, ["раз", "раза", "раз"])}`
+                : ""}
+            </span>
+            {previousRejection.summary ? (
+              <span className="text-omf-graphite"> · проверь: {previousRejection.summary}</span>
+            ) : null}
+          </p>
+        ) : null}
+        <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">
+          <span className={statusTextClass(canonical)}>{STATUS_LABEL[canonical]}</span>
+          {noSmartLink ? <span className="text-omf-yellow">нет ссылки на релиз</span> : null}
+          {hasError ? <span className="text-omf-red">есть ошибка</span> : null}
+        </p>
+      </div>
+    </>
+  );
+
   return (
     <article className="border-b border-omf-line py-5">
-      <div className="flex gap-3.5">
-        <div className="w-[72px] shrink-0">
-          <ReleaseSleeve
-            seed={release.id}
-            title={displayTitle}
-            artist={release.artist_name}
-            coverUrl={release.artwork_url}
-            size="thumb"
-            priority={artworkPriority}
-          />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className={`truncate text-[17px] font-bold leading-tight tracking-[-0.02em] ${showModerationActions ? "pr-9" : ""}`}>
-            {displayTitle}
-          </p>
-          <div className={`mt-0.5 flex items-baseline justify-between gap-2 ${showModerationActions ? "pr-9" : ""}`}>
-            <p className="min-w-0 truncate text-[14px] text-omf-graphite">{release.artist_name}</p>
-            {detailHref ? (
-              <Link
-                href={detailHref}
-                className="omf-focus inline-flex shrink-0 items-center gap-0.5 rounded-full text-[13px] text-omf-ultra-text hover:text-omf-ink"
-              >
-                Открыть
-                <ChevronRight className="h-3.5 w-3.5" aria-hidden />
-              </Link>
-            ) : null}
-          </div>
-          {featuringNames.length > 0 ? (
-            <p className="truncate text-[13px] text-omf-graphite" title={featuringLabel}>
-              feat. {featuringLabel}
-            </p>
-          ) : null}
-          <p className="mt-1.5 text-[13px] text-omf-faint">{metaLine}</p>
-          <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">
-            <span className={statusTextClass(canonical)}>{STATUS_LABEL[canonical]}</span>
-            {noSmartLink ? <span className="text-omf-yellow">нет ссылки на релиз</span> : null}
-            {hasError ? <span className="text-omf-red">есть ошибка</span> : null}
-          </p>
-        </div>
-      </div>
+      {detailHref ? (
+        <Link
+          href={detailHref}
+          className="omf-focus -mx-1 flex gap-3.5 rounded-[12px] px-1 transition-colors hover:bg-omf-surface"
+        >
+          {header}
+        </Link>
+      ) : (
+        <div className="flex gap-3.5">{header}</div>
+      )}
 
       {showAudioPreview ? (
         <div className="mt-4 space-y-2">
