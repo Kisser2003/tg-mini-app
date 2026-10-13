@@ -94,18 +94,19 @@ function rv(e, t, tIn, tOut, { dy = 40, dur = .6, outDur = .3 } = {}) {
 }
 
 // =================== timeline (seconds) ===================
-// music: ВРЕМЕННАЯ сетка 128 BPM, клэп раз в такт — трека ещё нет. Под трек меняются только BAR и CLAP0.
-const BAR = 60 / 128 * 4, CLAP0 = 0.47;
+// music: track from 1:04 (fade-in 1.5 s), 140 BPM, clap once per bar (1.2–4 kHz onsets, fit ±10 ms) → video t = 0.258 + 1.7143k;
+// the kick lands half a bar after each clap → DOWN
+const BAR = 60 / 140 * 4, CLAP0 = 0.258;
 const CLAP = k => CLAP0 + k * BAR, DOWN = k => CLAP(k) - BAR / 2;
 const T = {
   cardIn: .35, libMount: .55,
-  act0: CLAP(1), act1: DOWN(2),                                          // «Нужно твоё действие»: строка 1, строка 2
-  tiles: [CLAP(2), DOWN(3), CLAP(3), DOWN(4), CLAP(4), DOWN(5)],          // шесть строк «что дальше», по полтакта
-  pullBack: CLAP(5), tapHolod: DOWN(6),                                   // общий план → тап по «Холод»
-  statusCam: CLAP(6),                                                     // экран релиза: блок статуса
-  endCut: DOWN(8),
+  act0: DOWN(2), act1: CLAP(2),                                          // «Нужно твоё действие»: строка 1, строка 2
+  tiles: [DOWN(3), CLAP(3), DOWN(4), CLAP(4), DOWN(5), CLAP(5)],          // шесть строк «что дальше», по полтакта
+  pullBack: DOWN(6), tapHolod: CLAP(6),                                   // общий план → тап по «Холод» на клэп
+  statusCam: DOWN(7),                                                     // экран релиза: блок статуса
+  endCut: DOWN(9),
 };
-const DUR = Math.ceil(T.endCut + 2.3); // whole seconds: render.mjs cuts 30-frame chunks
+const DUR = Math.round(T.endCut + 2.3); // whole seconds: render.mjs cuts 30-frame chunks
 window.DUR = DUR;
 const EYEBROWS = [[T.act0, 'Нужно твоё действие'], [T.tiles[0], 'У каждого релиза — следующий шаг'], [T.tapHolod, 'Экран релиза'], [T.endCut, '']];
 
