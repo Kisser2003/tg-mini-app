@@ -3,6 +3,9 @@ import { normalizeReleaseStatus } from "@/lib/release-status";
 /** Обещанный артисту срок проверки (тот же, что в тексте после отправки). */
 export const MODERATION_SLA_HOURS = 24;
 
+/** Сколько обычно идёт модерация на площадках после того, как мы приняли релиз. */
+export const DSP_REVIEW_DAYS_TEXT = "3–5 дней";
+
 export type NextStepKind =
   | "finish_draft"
   | "submit"
@@ -108,24 +111,26 @@ export function getReleaseNextStep(input: NextStepInput, now: Date = new Date())
         needsAction: false
       };
     }
-    case "ready":
+    case "ready": {
+      const notify = input.notifiesInTelegram ? " сюда и в Telegram" : " сюда";
       return link
         ? {
             kind: "approved_link",
             tone: "done",
             cardLine: "Ссылка готова",
-            title: "Одобрен",
-            body: "Релиз прошёл проверку и отправлен на площадки. Ссылка на все площадки — ниже.",
+            title: "Ссылка готова",
+            body: "Релиз прошёл модерацию площадок. Ссылка на пресейв — ниже: отправляй её слушателям и в соцсети.",
             needsAction: false
           }
         : {
             kind: "approved_no_link",
             tone: "done",
-            cardLine: "Одобрен · ссылка скоро",
-            title: "Одобрен",
-            body: "Релиз прошёл проверку и отправлен на площадки. Ссылка появится, когда площадки его опубликуют.",
+            cardLine: "Ссылка через 3–5 дн",
+            title: "Принят",
+            body: `Релиз принят и отправлен на площадки. Их модерация обычно занимает ${DSP_REVIEW_DAYS_TEXT} — когда пройдёт, пришлём ссылку на пресейв${notify}.`,
             needsAction: false
           };
+    }
     default:
       return {
         kind: "unknown",

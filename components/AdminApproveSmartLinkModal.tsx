@@ -1,35 +1,97 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
 import { SPRING_UI } from "@/lib/motion-spring";
+import { normalizeUpc } from "@/lib/admin-release-publish";
+import { DSP_REVIEW_DAYS_TEXT } from "@/lib/release-next-step";
+
+export type ApproveModalMode = "accept" | "link";
 
 type Props = {
   releaseId: string | null;
+  /** accept — релиз на проверке («Принять», ссылка по желанию); link — уже принят, нужна ссылка. */
+  mode: ApproveModalMode;
   busy: boolean;
   onClose: () => void;
-  /** newStatus уходит на API (например RELEASED); smartLink — публичный URL. */
-  onSubmit: (releaseId: string, newStatus: string, smartLink: string) => void;
+  /** Принять без ссылки. */
+  onAccept: (releaseId: string) => void;
+  /** Ссылка на пресейв (+ UPC по желанию): принять сразу со ссылкой или добавить к принятому. */
+  onSubmitLink: (releaseId: string, smartLink: string, upc: string) => void;
 };
 
-export function AdminApproveSmartLinkModal({ releaseId, busy, onClose, onSubmit }: Props) {
+function validateLink(raw: string): string | null {
+  try {
+    const u = new URL(raw);
+    if (u.protocol !== "https:" && u.protocol !== "http:") return "Ссылка должна начинаться с http:// или https://";
+    return null;
+  } catch {
+    return "Это не похоже на ссылку. Проверь, что скопировал её целиком.";
+  }
+}
+
+export function AdminApproveSmartLinkModal({ releaseId, mode, busy, onClose, onAccept, onSubmitLink }: Props) {
   const open = releaseId != null;
   const [smartLink, setSmartLink] = useState("");
+  const [upc, setUpc] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
     if (open) {
       setSmartLink("");
+      setUpc("");
       setLocalError(null);
     }
   }, [open, releaseId]);
 
-  return (
+  const link = smartLink.trim();
+  const isLinkMode = mode === "link";
+  const showUpc = isLinkMode || link.length > 0;
+
+  const submit = () => {
+    if (!releaseId) return;
+    if (!link) {
+      if (isLinkMode) {
+        setLocalError("Вставь ссылку на пресейв.");
+        return;
+      }
+      onAccept(releaseId);
+      return;
+    }
+    const linkError = validateLink(link);
+    if (linkError) {
+      setLocalError(linkError);
+      return;
+    }
+    try {
+      normalizeUpc(upc);
+    } catch (e: unknown) {
+      setLocalError(e instanceof Error ? e.message : "Проверь UPC.");
+      return;
+    }
+    setLocalError(null);
+    onSubmitLink(releaseId, link, upc);
+  };
+
+  const primaryLabel = busy
+    ? "Сохраняем…"
+    : isLinkMode
+      ? "Отправить"
+      : link
+        ? "Принять со ссылкой"
+        : "Принять";
+
+  // Портал: у обёртки страницы есть transform, и `fixed` внутри неё оказывается под нижней навигацией.
+  if (!mounted) return null;
+  return createPortal(
     <AnimatePresence>
       {open && releaseId && (
         <motion.div
-          className="fixed inset-0 z-[100] flex flex-col justify-end"
+          className="fixed inset-0 z-[110] flex flex-col justify-end"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -48,17 +110,18 @@ export function AdminApproveSmartLinkModal({ releaseId, busy, onClose, onSubmit 
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={SPRING_UI}
-            className="relative z-10 mx-auto w-full max-w-md rounded-t-[24px] border border-b-0 border-omf-line bg-omf-surface p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))]"
+            className="relative z-10 mx-auto w-full max-w-md rounded-t-[24px] border border-b-0 border-omf-line bg-omf-surface p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] sm:mb-6 sm:rounded-[24px] sm:border-b"
           >
-            <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-omf-line-strong" aria-hidden />
+            <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-omf-line-strong sm:hidden" aria-hidden />
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 id="admin-approve-smart-title" className="text-[20px] font-bold tracking-tight">
-                  Одобрить релиз
+                  {isLinkMode ? "Ссылка на пресейв" : "Принять релиз"}
                 </h2>
                 <p className="mt-1 text-[14px] leading-relaxed text-omf-graphite">
-                  Вставь ссылку на релиз на всех площадках. Артист получит её в Telegram, а релиз
-                  получит статус «одобрен».
+                  {isLinkMode
+                    ? "Артист получит ссылку в боте и увидит её в приложении. После этого WAV удалятся из хранилища — скачай их заранее, если ещё нужны."
+                    : `Артист получит сообщение, что релиз принят и ушёл на площадки (обычно ${DSP_REVIEW_DAYS_TEXT}). Ссылку добавишь позже в блоке «Ждут ссылку».`}
                 </p>
               </div>
               <button
@@ -73,7 +136,7 @@ export function AdminApproveSmartLinkModal({ releaseId, busy, onClose, onSubmit 
             </div>
 
             <label htmlFor="admin-smart-link" className="mt-5 block text-[13px] text-omf-graphite">
-              Ссылка на релиз
+              {isLinkMode ? "Ссылка BandLink" : "Ссылка на пресейв, если уже есть"}
             </label>
             <input
               id="admin-smart-link"
@@ -86,47 +149,45 @@ export function AdminApproveSmartLinkModal({ releaseId, busy, onClose, onSubmit 
                 setSmartLink(e.target.value);
                 setLocalError(null);
               }}
-              placeholder="https://ffm.to/…"
-              className={`mt-2 min-h-[52px] w-full rounded-control border bg-omf-bg px-4 py-3 text-[16px] text-omf-ink outline-none placeholder:text-omf-faint focus:border-omf-ultra disabled:opacity-50 ${
-                localError ? "border-omf-red" : "border-omf-line"
-              }`}
+              placeholder="https://band.link/…"
+              className="mt-2 min-h-[52px] w-full rounded-control border border-omf-line bg-omf-bg px-4 py-3 text-[16px] text-omf-ink outline-none placeholder:text-omf-faint focus:border-omf-ultra disabled:opacity-50"
             />
+
+            {showUpc ? (
+              <>
+                <label htmlFor="admin-upc" className="mt-4 block text-[13px] text-omf-graphite">
+                  UPC, если прислали (необязательно)
+                </label>
+                <input
+                  id="admin-upc"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  disabled={busy}
+                  value={upc}
+                  onChange={(e) => {
+                    setUpc(e.target.value);
+                    setLocalError(null);
+                  }}
+                  placeholder="12 или 13 цифр"
+                  className="mt-2 min-h-[52px] w-full rounded-control border border-omf-line bg-omf-bg px-4 py-3 text-[16px] tabular-nums text-omf-ink outline-none placeholder:text-omf-faint focus:border-omf-ultra disabled:opacity-50"
+                />
+              </>
+            ) : null}
+
             {localError && <p className="mt-2 text-[14px] text-omf-red">{localError}</p>}
 
             <div className="mt-5 grid grid-cols-2 gap-2.5">
               <button type="button" disabled={busy} onClick={() => onClose()} className="omf-btn-secondary w-full disabled:opacity-50">
                 Отмена
               </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => {
-                  const t = smartLink.trim();
-                  if (!t) {
-                    setLocalError("Вставь ссылку на релиз.");
-                    return;
-                  }
-                  try {
-                    const u = new URL(t);
-                    if (u.protocol !== "https:" && u.protocol !== "http:") {
-                      setLocalError("Ссылка должна начинаться с http:// или https://");
-                      return;
-                    }
-                  } catch {
-                    setLocalError("Это не похоже на ссылку. Проверь, что скопировал её целиком.");
-                    return;
-                  }
-                  setLocalError(null);
-                  onSubmit(releaseId, "RELEASED", t);
-                }}
-                className="omf-btn-primary w-full"
-              >
-                {busy ? "Сохраняем…" : "Одобрить"}
+              <button type="button" disabled={busy} onClick={submit} className="omf-btn-primary w-full disabled:opacity-50">
+                {primaryLabel}
               </button>
             </div>
           </motion.div>
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 }

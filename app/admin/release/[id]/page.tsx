@@ -11,9 +11,9 @@ import { AudioPlayerLazy } from "@/components/AudioPlayerLazy";
 import { AdminReleaseDownloads } from "@/components/admin/AdminReleaseDownloads";
 import { AdminReleaseMetadataCard } from "@/components/admin/AdminReleaseMetadataCard";
 import { ReleaseSleeve } from "@/components/ReleaseSleeve";
-import { AdminApproveSmartLinkModal } from "@/components/AdminApproveSmartLinkModal";
+import { AdminApproveSmartLinkModal, type ApproveModalMode } from "@/components/AdminApproveSmartLinkModal";
 import { AdminRejectModal } from "@/components/AdminRejectModal";
-import { publishReleaseWithSmartLink, rejectRelease } from "@/features/admin/actions";
+import { approveRelease, publishReleaseWithSmartLink, rejectRelease } from "@/features/admin/actions";
 import { fetchAdminReleaseDetail } from "@/features/admin/release-detail";
 import { fetchAdminModerationQueue } from "@/features/admin/moderation-queue";
 import {
@@ -72,7 +72,7 @@ export default function AdminReleaseDetailPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
-  const [approveModalReleaseId, setApproveModalReleaseId] = useState<string | null>(null);
+  const [approveModal, setApproveModal] = useState<{ id: string; mode: ApproveModalMode } | null>(null);
   const [metaOpen, setMetaOpen] = useState(false);
   /** Широкая раскладка только в веб-версии: в Telegram Desktop окно бывает широким, а контент — 450px и без сайдбара. */
   const wide = !useIsTelegramMiniApp();
@@ -97,7 +97,7 @@ export default function AdminReleaseDetailPage() {
     setLoading(true);
     setLoadError(null);
     setRejectOpen(false);
-    setApproveModalReleaseId(null);
+    setApproveModal(null);
     setMetaOpen(false);
     try {
       const { release: row, tracks: tr } = await fetchAdminReleaseDetail(releaseId);
@@ -153,22 +153,44 @@ export default function AdminReleaseDetailPage() {
     [releaseId, router]
   );
 
-  const handlePublishSmartLink = useCallback(
-    async (releaseId: string, newStatus: string, smartLink: string) => {
+  const handleAccept = useCallback(
+    async (id: string) => {
       setBusy(true);
       try {
-        await publishReleaseWithSmartLink(releaseId, newStatus, smartLink);
+        await approveRelease(id);
         triggerHaptic("success");
-        setApproveModalReleaseId(null);
-        await goNext(releaseId, "Одобрено");
+        setApproveModal(null);
+        await goNext(id, "Принят");
       } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : "Не удалось выпустить релиз.";
-        toast.error(msg);
+        toast.error(e instanceof Error ? e.message : "Не удалось принять релиз.");
       } finally {
         setBusy(false);
       }
     },
     [goNext]
+  );
+
+  /** Ссылка на пресейв: из очереди — принять сразу со ссылкой; у принятого — добавить ссылку. */
+  const handleSubmitLink = useCallback(
+    async (id: string, smartLink: string, upc: string, fromQueue: boolean) => {
+      setBusy(true);
+      try {
+        await publishReleaseWithSmartLink(id, "RELEASED", smartLink, upc);
+        triggerHaptic("success");
+        setApproveModal(null);
+        if (fromQueue) {
+          await goNext(id, "Принят со ссылкой");
+        } else {
+          toast.success("Ссылка отправлена артисту");
+          router.push("/admin");
+        }
+      } catch (e: unknown) {
+        toast.error(e instanceof Error ? e.message : "Не удалось сохранить ссылку.");
+      } finally {
+        setBusy(false);
+      }
+    },
+    [goNext, router]
   );
 
   const handleReject = useCallback(async (comment: string, reasonKeys: string[]) => {
@@ -190,12 +212,12 @@ export default function AdminReleaseDetailPage() {
   const releaseCanModerate = release != null && normalizeReleaseStatus(release.status) === "processing";
   useAdminHotkeys(
     {
-      approve: () => releaseCanModerate && setApproveModalReleaseId(releaseId),
+      approve: () => releaseCanModerate && setApproveModal({ id: releaseId, mode: "accept" }),
       reject: () => releaseCanModerate && setRejectOpen(true),
       next: () => openRelease(pickNextReleaseId(queueIds, releaseId)),
       prev: () => openRelease(pickPrevReleaseId(queueIds, releaseId))
     },
-    isAdmin && inQueue && !loading && !busy && !rejectOpen && approveModalReleaseId == null
+    isAdmin && inQueue && !loading && !busy && !rejectOpen && approveModal == null
   );
 
   if (userId == null && !isAdmin && process.env.NODE_ENV === "production") {
@@ -238,6 +260,7 @@ export default function AdminReleaseDetailPage() {
   const canonical = normalizeReleaseStatus(release.status);
   const audioItems = buildAudioItems(release, tracks);
   const canModerate = canonical === "processing";
+  const awaitingLink = canonical === "ready" && !(release.smart_link ?? "").trim();
   const displayTitle = getReleaseDisplayTitle(release);
   const featuringNames = featuringNamesFromCollaboratorsJson(release.collaborators);
   const previousRejection = describePreviousRejection(release);
@@ -262,10 +285,12 @@ export default function AdminReleaseDetailPage() {
       />
 
       <AdminApproveSmartLinkModal
-        releaseId={approveModalReleaseId}
-        busy={approveModalReleaseId != null && busy}
-        onClose={() => setApproveModalReleaseId(null)}
-        onSubmit={(id, newStatus, smartLink) => void handlePublishSmartLink(id, newStatus, smartLink)}
+        releaseId={approveModal?.id ?? null}
+        mode={approveModal?.mode ?? "accept"}
+        busy={approveModal != null && busy}
+        onClose={() => setApproveModal(null)}
+        onAccept={(id) => void handleAccept(id)}
+        onSubmitLink={(id, link, upc) => void handleSubmitLink(id, link, upc, approveModal?.mode !== "link")}
       />
 
       <div className="mb-4 flex items-center justify-between gap-3">
@@ -421,7 +446,7 @@ export default function AdminReleaseDetailPage() {
             <div className={cn("mx-auto flex max-w-lg items-center gap-2.5 px-4 py-3", wide && "lg:max-w-5xl")}>
               {inQueue && wide ? (
                 <p className="mr-auto hidden text-[13px] text-omf-faint lg:block">
-                  <kbd className="font-sans text-omf-graphite">A</kbd> одобрить ·{" "}
+                  <kbd className="font-sans text-omf-graphite">A</kbd> принять ·{" "}
                   <kbd className="font-sans text-omf-graphite">R</kbd> вернуть ·{" "}
                   <kbd className="font-sans text-omf-graphite">J</kbd> /{" "}
                   <kbd className="font-sans text-omf-graphite">K</kbd> следующий / предыдущий
@@ -443,17 +468,37 @@ export default function AdminReleaseDetailPage() {
                 disabled={busy}
                 onClick={() => {
                   triggerHaptic("light");
-                  setApproveModalReleaseId(release.id);
+                  setApproveModal({ id: release.id, mode: "accept" });
                 }}
                 className={cn("omf-btn-ink flex-1 disabled:opacity-50", wide && "lg:w-44 lg:flex-none")}
               >
-                Одобрить
+                Принять
               </button>
             </div>
           </div>,
           document.body
         )
-      ) : canModerate ? null : (
+      ) : canModerate ? null : awaitingLink ? (
+        <section className="mt-8 border-t border-omf-line pt-6" aria-labelledby="admin-awaiting">
+          <h2 id="admin-awaiting" className="text-[16px] font-bold tracking-tight">
+            Принят, ждёт ссылку
+          </h2>
+          <p className="mt-1.5 text-[14px] leading-relaxed text-omf-graphite">
+            Релиз ушёл на площадки. Когда придёт UPC и будет готов BandLink, добавь ссылку — артист получит её в боте.
+          </p>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              triggerHaptic("light");
+              setApproveModal({ id: release.id, mode: "link" });
+            }}
+            className="omf-btn-primary mt-4 w-full disabled:opacity-50"
+          >
+            Добавить ссылку
+          </button>
+        </section>
+      ) : (
         <p className="mt-8 border-t border-omf-line pt-6 text-[14px] leading-relaxed text-omf-graphite">
           Релиз сейчас не «на проверке», поэтому решение здесь принять нельзя.
         </p>

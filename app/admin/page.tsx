@@ -6,14 +6,16 @@ import { useRouter } from "next/navigation";
 import { History, RefreshCcw } from "lucide-react";
 import useSWR from "swr";
 import { toast } from "sonner";
-import { AdminApproveSmartLinkModal } from "@/components/AdminApproveSmartLinkModal";
+import { AdminApproveSmartLinkModal, type ApproveModalMode } from "@/components/AdminApproveSmartLinkModal";
+import { AdminAwaitingLinkList } from "@/components/admin/AdminAwaitingLinkList";
+import { fetchAdminAwaitingLink } from "@/features/admin/awaiting-link";
 import { AdminRejectModal } from "@/components/AdminRejectModal";
 import { AdminReleaseCard } from "@/components/AdminReleaseCard";
 import { AdminStatsPanel } from "@/components/admin/AdminStatsPanel";
 import { AdminStuckList } from "@/components/admin/AdminStuckList";
 import { PullRefreshBrand } from "@/components/PullRefreshBrand";
 import { AdminModerationQueueSkeleton } from "@/components/ui/LibrarySkeleton";
-import { publishReleaseWithSmartLink, rejectRelease } from "@/features/admin/actions";
+import { approveRelease, publishReleaseWithSmartLink, rejectRelease } from "@/features/admin/actions";
 import { fetchAdminModerationQueue } from "@/features/admin/moderation-queue";
 import { isAdminUi, isAdminUiByWebSession } from "@/lib/admin";
 import { debugInit } from "@/lib/debug";
@@ -30,7 +32,7 @@ type ModerationQueueRow = {
   tracks: ReleaseTrackRow[];
 };
 
-type QueueFilterKey = "all" | "needs_smart_link" | "with_errors";
+type QueueFilterKey = "all" | "with_errors";
 
 const ADMIN_QUEUE_TIMEOUT_MS = 15000;
 
@@ -40,7 +42,8 @@ export default function AdminPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [rejectModalReleaseId, setRejectModalReleaseId] = useState<string | null>(null);
-  const [approveModalReleaseId, setApproveModalReleaseId] = useState<string | null>(null);
+  /** «Принять» для релиза из очереди или «Добавить ссылку» для принятого. */
+  const [approveModal, setApproveModal] = useState<{ id: string; mode: ApproveModalMode } | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminResolved, setAdminResolved] = useState(false);
   const [activeFilter, setActiveFilter] = useState<QueueFilterKey>("all");
@@ -103,11 +106,7 @@ export default function AdminPage() {
   const moderationQueueFilteredByPreset = useMemo(
     () =>
       moderationQueue.filter((row) => {
-        const smartLink = (row.release.smart_link ?? "").trim();
-        const hasSmartLink = smartLink.length > 0;
         const hasError = (row.release.error_message ?? "").trim().length > 0;
-
-        if (activeFilter === "needs_smart_link") return !hasSmartLink;
         if (activeFilter === "with_errors") return hasError;
         return true;
       }),
@@ -115,7 +114,6 @@ export default function AdminPage() {
   );
   const filterCounts: Record<QueueFilterKey, number> = {
     all: moderationQueue.length,
-    needs_smart_link: moderationQueue.filter((row) => (row.release.smart_link ?? "").trim().length === 0).length,
     with_errors: moderationQueue.filter((row) => (row.release.error_message ?? "").trim().length > 0).length
   };
   const searchNeedle = searchQuery.trim().toLowerCase();
@@ -142,17 +140,19 @@ export default function AdminPage() {
   );
   const errorMessage = errorToUserString(error);
   const statsErrorMessage = errorToUserString(statsError);
-  const selectedRows = moderationQueueFiltered.filter((row) =>
-    selectedReleaseIds.includes(row.release.id)
-  );
-  const selectedWithSmartLinkCount = selectedRows.filter(
-    (row) => (row.release.smart_link ?? "").trim().length > 0
-  ).length;
-  const selectedWithoutSmartLinkCount = selectedRows.length - selectedWithSmartLinkCount;
+  const awaitingKey = isAdmin ? (["admin-awaiting-link"] as const) : null;
+  const { data: awaitingLink, mutate: mutateAwaiting } = useSWR(awaitingKey, fetchAdminAwaitingLink, {
+    ...SWR_LIST_OPTIONS,
+    refreshInterval: 30000
+  });
 
   const refreshAll = useCallback(async () => {
-    await Promise.all([mutate(undefined, { revalidate: true }), mutateStats(undefined, { revalidate: true })]);
-  }, [mutate, mutateStats]);
+    await Promise.all([
+      mutate(undefined, { revalidate: true }),
+      mutateStats(undefined, { revalidate: true }),
+      mutateAwaiting(undefined, { revalidate: true })
+    ]);
+  }, [mutate, mutateStats, mutateAwaiting]);
 
   useEffect(() => {
     setSelectedReleaseIds((prev) => {
@@ -164,27 +164,46 @@ export default function AdminPage() {
     });
   }, [moderationQueueFiltered]);
 
-  const handlePublishSmartLink = useCallback(
-    async (releaseId: string, newStatus: string, smartLink: string) => {
+  const handleAccept = useCallback(
+    async (releaseId: string) => {
       setBusyId(releaseId);
       setActionError(null);
       try {
-        await publishReleaseWithSmartLink(releaseId, newStatus, smartLink);
+        await approveRelease(releaseId);
         triggerHaptic("success");
-        setRejectModalReleaseId(null);
-        setApproveModalReleaseId(null);
+        setApproveModal(null);
         await refreshAll();
-        toast.success("Релиз выпущен, smart link сохранён");
-        router.replace("/admin");
+        toast.success("Принят. Артисту ушло сообщение, ссылку добавишь позже");
       } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : "Не удалось выпустить релиз.";
+        const msg = e instanceof Error ? e.message : "Не удалось принять релиз.";
         setActionError(msg);
         toast.error(msg);
       } finally {
         setBusyId(null);
       }
     },
-    [refreshAll, router]
+    [refreshAll]
+  );
+
+  const handleSubmitLink = useCallback(
+    async (releaseId: string, smartLink: string, upc: string) => {
+      setBusyId(releaseId);
+      setActionError(null);
+      try {
+        await publishReleaseWithSmartLink(releaseId, "RELEASED", smartLink, upc);
+        triggerHaptic("success");
+        setApproveModal(null);
+        await refreshAll();
+        toast.success("Ссылка отправлена артисту");
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "Не удалось сохранить ссылку.";
+        setActionError(msg);
+        toast.error(msg);
+      } finally {
+        setBusyId(null);
+      }
+    },
+    [refreshAll]
   );
 
   const handleRejectWithReason = useCallback(
@@ -252,22 +271,15 @@ export default function AdminPage() {
     [refreshAll, selectedReleaseIds]
   );
 
-  const handleBulkApprove = useCallback(async () => {
+  const handleBulkAccept = useCallback(async () => {
     if (selectedReleaseIds.length === 0) return;
     setBulkBusy(true);
     setActionError(null);
     let successCount = 0;
     let failedCount = 0;
-    let skippedCount = 0;
     for (const releaseId of selectedReleaseIds) {
-      const row = moderationQueue.find((item) => item.release.id === releaseId);
-      const smartLink = (row?.release.smart_link ?? "").trim();
-      if (!smartLink) {
-        skippedCount += 1;
-        continue;
-      }
       try {
-        await publishReleaseWithSmartLink(releaseId, "RELEASED", smartLink);
+        await approveRelease(releaseId);
         successCount += 1;
       } catch {
         failedCount += 1;
@@ -276,17 +288,13 @@ export default function AdminPage() {
     await refreshAll();
     setBulkBusy(false);
     setSelectedReleaseIds([]);
-    if (failedCount === 0 && skippedCount === 0) {
-      triggerHaptic("success");
-      toast.success(`Одобрено релизов: ${successCount}`);
-      return;
-    }
     if (failedCount === 0) {
-      toast.success(`Одобрено: ${successCount}. Пропущено без smart-link: ${skippedCount}`);
+      triggerHaptic("success");
+      toast.success(`Принято релизов: ${successCount}`);
       return;
     }
-    toast.error(`Одобрено: ${successCount}, пропущено: ${skippedCount}, с ошибкой: ${failedCount}`);
-  }, [moderationQueue, refreshAll, selectedReleaseIds]);
+    toast.error(`Принято: ${successCount}, с ошибкой: ${failedCount}`);
+  }, [refreshAll, selectedReleaseIds]);
 
   if (adminResolved && !isAdmin) {
     return null;
@@ -343,10 +351,12 @@ export default function AdminPage() {
       </header>
 
       <AdminApproveSmartLinkModal
-        releaseId={approveModalReleaseId}
-        busy={approveModalReleaseId != null && busyId === approveModalReleaseId}
-        onClose={() => setApproveModalReleaseId(null)}
-        onSubmit={(id, newStatus, smartLink) => void handlePublishSmartLink(id, newStatus, smartLink)}
+        releaseId={approveModal?.id ?? null}
+        mode={approveModal?.mode ?? "accept"}
+        busy={approveModal != null && busyId === approveModal.id}
+        onClose={() => setApproveModal(null)}
+        onAccept={(id) => void handleAccept(id)}
+        onSubmitLink={(id, link, upc) => void handleSubmitLink(id, link, upc)}
       />
 
       <AdminRejectModal
@@ -373,7 +383,6 @@ export default function AdminPage() {
       >
         {([
           { key: "all", label: "Все" },
-          { key: "needs_smart_link", label: "Без ссылки" },
           { key: "with_errors", label: "С ошибками" }
         ] as const).map((filter) => {
           const isActive = activeFilter === filter.key;
@@ -428,11 +437,11 @@ export default function AdminPage() {
               </button>
               <button
                 type="button"
-                onClick={() => void handleBulkApprove()}
-                disabled={selectedWithSmartLinkCount === 0 || bulkBusy}
+                onClick={() => void handleBulkAccept()}
+                disabled={bulkBusy}
                 className="omf-focus rounded-full px-2.5 py-1.5 font-medium text-omf-green hover:text-omf-ink disabled:opacity-40"
               >
-                Одобрить выбранные ({selectedWithSmartLinkCount})
+                Принять выбранные ({selectedReleaseIds.length})
               </button>
               <button
                 type="button"
@@ -442,9 +451,6 @@ export default function AdminPage() {
               >
                 Вернуть выбранные ({selectedReleaseIds.length})
               </button>
-              {selectedWithoutSmartLinkCount > 0 ? (
-                <span className="px-2.5 text-omf-yellow">без ссылки: {selectedWithoutSmartLinkCount}</span>
-              ) : null}
             </>
           ) : null}
         </div>
@@ -492,7 +498,7 @@ export default function AdminPage() {
                   index={index}
                   listVariants={undefined}
                   busy={busyId === row.release.id}
-                  onOpenApprove={() => setApproveModalReleaseId(row.release.id)}
+                  onOpenApprove={() => setApproveModal({ id: row.release.id, mode: "accept" })}
                   onOpenReject={() => setRejectModalReleaseId(row.release.id)}
                   showAudioPreview={false}
                   detailHref={`/admin/release/${row.release.id}`}
@@ -504,6 +510,12 @@ export default function AdminPage() {
         </div>
       )}
 
+      {awaitingLink && awaitingLink.length > 0 ? (
+        <AdminAwaitingLinkList
+          rows={awaitingLink}
+          onAddLink={(id) => setApproveModal({ id, mode: "link" })}
+        />
+      ) : null}
       {stats ? <AdminStuckList stuck={stats.stuck} /> : null}
       {stats && !statsErrorMessage ? <AdminStatsPanel stats={stats} /> : null}
       {statsErrorMessage ? (

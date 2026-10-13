@@ -29,3 +29,13 @@ export function assertHttpsUrl(raw: string): string {
   }
   return u.toString();
 }
+
+/** UPC (12 цифр) или EAN-13; пустая строка — не указан. Пробелы и дефисы убираем. */
+export function normalizeUpc(raw: string | null | undefined): string | null {
+  const digits = String(raw ?? "").replace(/[\s-]/g, "");
+  if (!digits) return null;
+  if (!/^\d{12,13}$/.test(digits)) {
+    throw new Error("UPC — это 12 или 13 цифр.");
+  }
+  return digits;
+}

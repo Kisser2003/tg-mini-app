@@ -28,7 +28,7 @@ type HistoryRow = {
 const HISTORY_LIMIT = 300;
 const HISTORY_TABS: { key: HistoryStatusFilter; label: string }[] = [
   { key: "all", label: "Все" },
-  { key: "ready", label: "Одобрены" },
+  { key: "ready", label: "Приняты" },
   { key: "failed", label: "Возвращены" }
 ];
 const ADMIN_HISTORY_TIMEOUT_MS = 20000;
@@ -154,7 +154,7 @@ export default function AdminModerationHistoryPage() {
       </div>
 
       <header className="mb-6">
-        <p className="text-[13px] text-omf-graphite">Одобренные и возвращённые релизы</p>
+        <p className="text-[13px] text-omf-graphite">Принятые и возвращённые релизы</p>
         <h1 className="mt-1 text-[40px] font-extrabold leading-[0.92] tracking-[-0.045em]">История</h1>
       </header>
 
