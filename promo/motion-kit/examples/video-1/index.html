@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>omf — Приятно трогать</title>
+<link rel="stylesheet" href="assets/fonts.css">
+<style>
+:root { --vbg: hsl(240 5% 4%); --fg: hsl(240 5% 96%); --muted: hsl(240 3% 62%); --border: hsl(240 4% 19%); --tg: #6ab3f3; --app-bg: #1a1d24; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1080px; height: 1920px; overflow: hidden; background: var(--vbg); }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: var(--fg); -webkit-font-smoothing: antialiased; }
+#world { position: absolute; inset: 0; overflow: hidden; background: var(--vbg); }
+#glow { position: absolute; left: 540px; top: 1100px; width: 1500px; height: 1700px; margin: -850px 0 0 -750px; background: radial-gradient(closest-side, hsl(218 75% 34% / .5), hsl(218 75% 30% / .16) 55%, transparent); }
+#cam { position: absolute; inset: 0; transform-origin: 540px 1100px; }
+.c { position: absolute; left: 0; width: 1080px; text-align: center; }
+h1 { font-weight: 600; letter-spacing: -.045em; line-height: 1.06; }
+.muted { color: var(--muted); }
+.eyebrow { font-size: 32px; font-weight: 500; letter-spacing: .01em; color: var(--muted); }
+#hook h1 { font-size: 84px; white-space: nowrap; }
+#clip { position: absolute; left: 0; top: 410px; width: 1080px; height: 1510px; overflow: hidden; -webkit-mask-image: linear-gradient(transparent 0, #000 90px); }
+#card { position: absolute; left: 0; top: 0; width: 390px; height: 894px; border-radius: 30px; overflow: hidden; background: var(--app-bg); transform-origin: 0 0;
+  box-shadow: 0 0 0 1px rgba(255,255,255,.07), 0 40px 120px rgba(0,0,0,.65); }
+.tgh { position: absolute; left: 0; top: 0; width: 390px; height: 50px; z-index: 5; background: var(--app-bg); display: flex; align-items: center; justify-content: space-between; padding: 0 16px; border-bottom: 1px solid rgba(255,255,255,.04); }
+.tgh .close { color: var(--tg); font-size: 16px; display: flex; align-items: center; gap: 4px; width: 90px; }
+.tgh .ttl { text-align: center; line-height: 1.15; }
+.tgh .ttl b { display: block; font-size: 16px; font-weight: 600; }
+.tgh .ttl i { display: block; font-style: normal; font-size: 12px; color: #8c93a1; }
+.tgh .more { width: 90px; display: flex; justify-content: flex-end; }
+.tgh .more span { width: 30px; height: 30px; border-radius: 50%; background: rgba(255,255,255,.08); display: grid; place-items: center; }
+#app { position: absolute; left: 0; top: 50px; width: 390px; height: 844px; overflow: hidden; }
+.host { position: absolute; left: 0; top: 0; width: 390px; height: 844px; overflow: hidden; contain: layout paint; transform: translateZ(0); visibility: hidden; }
+.tap { position: absolute; width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%; border: 2px solid rgba(255,255,255,.8); background: rgba(255,255,255,.14); z-index: 20; display: none; }
+.vib { position: absolute; z-index: 21; display: none; align-items: center; gap: 5px; height: 24px; padding: 0 9px 0 7px; border-radius: 12px; background: rgba(12,13,17,.86); border: 1px solid rgba(255,255,255,.14);
+  font-family: -apple-system, sans-serif; font-size: 11px; font-weight: 500; color: #eceef0; white-space: nowrap; }
+.vib svg { display: block; }
+svg.i { display: block; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+#end { position: absolute; inset: 0; display: none; }
+#bear { position: absolute; left: 540px; top: 700px; width: 190px; margin-left: -95px; }
+.brand { font-size: 150px; font-weight: 700; letter-spacing: -.06em; line-height: 1; }
+#grain, #grain2 { position: absolute; left: 0; top: 0; width: 1080px; height: 1920px; pointer-events: none; }
+#grain { opacity: .11; mix-blend-mode: screen; } #grain2 { opacity: .1; mix-blend-mode: multiply; }
+#vignette { position: absolute; inset: 0; background: radial-gradient(ellipse 85% 70% at 50% 50%, transparent 50%, rgba(0,0,0,.6) 100%); pointer-events: none; }
+#flash { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(60% 50% at 50% 50%, hsl(212 90% 80% / .9), hsl(218 80% 45% / .25) 60%, transparent); opacity: 0; mix-blend-mode: screen; }
+#black { position: absolute; inset: 0; background: #000; opacity: 0; }
+</style>
+</head>
+<body>
+<div id="world">
+  <div id="glow"></div>
+  <div id="cam">
+    <div class="c" id="hook" style="top:190px"><h1 id="h1a">Каждый тап —</h1><h1 class="muted" id="h1b">как в нативном приложении.</h1></div>
+    <div class="c eyebrow" id="eb" style="top:330px"></div>
+    <div id="clip"><div id="card">
+      <div class="tgh"><div class="close"><svg class="i" width="18" height="18" viewBox="0 0 24 24" style="color:var(--tg)"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>Закрыть</div>
+        <div class="ttl"><b>omf</b><i>мини-приложение</i></div>
+        <div class="more"><span><svg class="i" width="18" height="18" viewBox="0 0 24 24" style="color:#fff"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></span></div></div>
+      <div id="app"></div>
+      <div class="tap" id="tap"></div>
+      <div class="vib" id="vib"><svg width="14" height="14" viewBox="0 0 24 24" class="i" style="color:#eceef0;stroke-width:2"><rect x="8" y="4" width="8" height="16" rx="2"/><path d="M4 9v6"/><path d="M20 9v6"/><path d="M1.5 11v2"/><path d="M22.5 11v2"/></svg>вибрация</div>
+    </div></div>
+    <div id="end">
+      <img id="bear" src="assets/logo-bear.png">
+      <div class="c" style="top:960px" id="endB"><div class="brand">omf</div></div>
+      <div class="c" style="top:1150px" id="endT"><h1 style="font-size:64px" class="muted">выпуск музыки прямо из Telegram</h1></div>
+      <div class="c" style="top:1290px;font-size:36px;color:var(--muted)" id="endH">@OMF_Distribution_BOT</div>
+    </div>
+  </div>
+  <canvas id="grain" width="540" height="960"></canvas>
+  <canvas id="grain2" width="540" height="960"></canvas>
+  <div id="vignette"></div>
+  <div id="flash"></div>
+  <div id="black"></div>
+</div>
+<script>
+// =================== helpers ===================
+const DUR = 23;
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, p) => a + (b - a) * p;
+// the app's one curve: cubic-bezier(0.22, 1, 0.36, 1)
+function bezier(x1, y1, x2, y2) {
+  const cx = 3 * x1, bx = 3 * (x2 - x1) - cx, ax = 1 - cx - bx, cy = 3 * y1, by = 3 * (y2 - y1) - cy, ay = 1 - cy - by;
+  const sx = t => ((ax * t + bx) * t + cx) * t, sy = t => ((ay * t + by) * t + cy) * t, dx = t => (3 * ax * t + 2 * bx) * t + cx;
+  return p => { if (p <= 0) return 0; if (p >= 1) return 1; let t = p; for (let i = 0; i < 8; i++) { const e = sx(t) - p; if (Math.abs(e) < 1e-6) break; t -= e / (dx(t) || 1e-6); } return sy(clamp(t)); };
+}
+const OMF = bezier(0.22, 1, 0.36, 1);
+const E = { omf: OMF, inOut: p => p < .5 ? 4*p*p*p : 1 - Math.pow(-2*p + 2, 3) / 2, outQuint: p => 1 - Math.pow(1 - p, 5), in: p => p*p*p, out: p => 1 - Math.pow(1 - p, 3) };
+const tw = (t, a, b, e = E.inOut) => e(clamp((t - a) / (b - a)));
+// framer-motion spring (mass 1, v0 0), progress 0→1
+function spring(k, c) { const w0 = Math.sqrt(k), z = c / (2 * w0);
+  if (z < 1) { const wd = w0 * Math.sqrt(1 - z * z); return t => t <= 0 ? 0 : 1 - Math.exp(-z * w0 * t) * (Math.cos(wd * t) + z * w0 / wd * Math.sin(wd * t)); }
+  return t => t <= 0 ? 0 : 1 - Math.exp(-w0 * t) * (1 + w0 * t); }
+const SP_PILL = spring(520, 40), SP_TAB = spring(500, 40), SP_SHEET = spring(300, 30);
+const $ = id => document.getElementById(id);
+const css = (e, o) => { for (const k in o) e.style[k] = o[k]; };
+function rv(e, t, tIn, tOut, { dy = 40, dur = .6, outDur = .3 } = {}) {
+  const pi = tw(t, tIn, tIn + dur, E.outQuint), po = tOut == null ? 0 : tw(t, tOut, tOut + outDur, E.in);
+  css(e, { opacity: pi * (1 - po), transform: `translateY(${(1 - pi) * dy - po * dy * .5}px)`, filter: `blur(${(1 - pi) * 14 + po * 14}px)` });
+}
+
+// =================== timeline (seconds) ===================
+// music: track from 0:26 (fade-in), 132 BPM, clap once per bar → video t = 0.39 + 1.8208k
+const BAR = 1.8208, CLAP = k => 0.39 + k * BAR, DOWN = k => CLAP(k) - BAR / 2;
+const T = {
+  cardIn: .35, libMount: .55,
+  chipsCam: DOWN(2), tapReview: CLAP(2), tapRejected: CLAP(3),
+  tabCam: DOWN(4), tapHelp: CLAP(4),
+  wizCut: DOWN(5), scroll0: DOWN(5) + .25, scroll1: DOWN(5) + .7, tapNext: CLAP(5), tapBack: CLAP(6),
+  sheetCut: DOWN(7), tapTile: CLAP(7),
+  successCut: CLAP(9) - .72,
+  endCut: CLAP(11),
+};
+const EYEBROWS = [[T.chipsCam, 'Фильтры'], [T.tabCam, 'Меню'], [T.wizCut, 'Мастер релиза'], [T.sheetCut, 'Если вернули'], [T.successCut, 'Отправлено'], [T.endCut, '']];
+
+// =================== screens (real app DOM + CSS in shadow roots) ===================
+const SCREENS = {};
+async function mount(id, file) {
+  const d = await (await fetch('screens/' + file + '.json')).json();
+  const host = document.createElement('div'); host.className = 'host'; $('app').appendChild(host);
+  const sr = host.attachShadow({ mode: 'open' });
+  sr.innerHTML = `<style>${d.css}\n.shroot{width:390px;height:844px;overflow:hidden;position:relative}\nnextjs-portal{display:none}</style><div class="shroot ${d.cls}">${d.html}</div>`;
+  const root = sr.querySelector('.shroot');
+  // artist build: no moderation tab
+  sr.querySelectorAll('nav a').forEach(a => { if (a.textContent.trim() === 'Модерация') a.remove(); });
+  const nav = [...sr.querySelectorAll('nav')].find(n => n.querySelector('a') && n.getBoundingClientRect && n.closest('.fixed, [class*="fixed"]')) || [...sr.querySelectorAll('nav')].pop();
+  SCREENS[id] = { host, sr, root, nav, anims: [], t0: 0 };
+  return SCREENS[id];
+}
+const relRect = (S, el) => { const h = S.host.getBoundingClientRect(), r = el.getBoundingClientRect(); return { x: r.left - h.left, y: r.top - h.top, w: r.width, h: r.height }; };
+
+function setupScreens() {
+  // page / step enter classes the app adds on navigation
+  const pageWrap = S => S.sr.querySelector('.min-h-app.overflow-x-hidden');
+  pageWrap(SCREENS.help).classList.add('omf-page-enter');
+  for (const [id, from] of [['step2', '28px'], ['step1b', '-28px']]) {
+    const w = SCREENS[id].sr.querySelector('.flex.flex-col.gap-5').parentElement; w.classList.add('omf-step-enter'); w.style.setProperty('--omf-step-from', from);
+  }
+  // chips pill + nav indicator: hide framer's layoutId spans, drive our own
+  for (const S of Object.values(SCREENS)) {
+    S.sr.querySelectorAll('button.rounded-full > span.absolute.inset-0.rounded-full').forEach(e => e.style.display = 'none');
+    if (S.nav) S.nav.querySelectorAll('span.absolute.top-0').forEach(e => e.style.display = 'none');
+    const chips = [...S.sr.querySelectorAll('button.rounded-full.shrink-0')].filter(b => ['Все', 'На проверке', 'Приняты', 'Отклонены'].includes(b.textContent.trim()));
+    if (chips.length) {
+      S.chips = chips.map(c => ({ el: c, txt: c.querySelector('span.relative') || c.lastElementChild, r: relRect(S, c) }));
+      S.pill = document.createElement('div'); css(S.pill, { position: 'absolute', borderRadius: '999px', background: 'var(--omf-ink)', zIndex: 0, pointerEvents: 'none' });
+      S.root.prepend(S.pill);
+    }
+    if (S.nav) {
+      S.tabs = [...S.nav.querySelectorAll('a')].map(a => relRect(S, a));
+      S.ind = document.createElement('div'); css(S.ind, { position: 'absolute', height: '2px', width: '32px', borderRadius: '999px', background: 'var(--omf-ink)', zIndex: 3 });
+      S.navBox = relRect(S, S.nav); S.nav.appendChild(S.ind); S.nav.style.position = S.nav.style.position || '';
+      S.navLinks = [...S.nav.querySelectorAll('a')];
+    }
+  }
+  const sh = SCREENS.sheet; sh.dialog = sh.sr.querySelector('[role="dialog"]'); sh.overlay = sh.dialog.parentElement;
+  const st = id => SCREENS[id].sr.querySelectorAll('[role="progressbar"] span span');
+  SCREENS.step2.prog = st('step2'); SCREENS.step1b.prog = st('step1b');
+  // freeze every CSS animation; we seek them per frame
+  for (const S of Object.values(SCREENS)) { S.anims = S.sr.getAnimations(); S.anims.forEach(a => a.pause()); }
+}
+
+// which screen is on, and since when (local clock for its CSS animations)
+const PLAN = [
+  ['lib', T.libMount], ['libReview', T.tapReview], ['libRej', T.tapRejected], ['help', T.tapHelp],
+  ['step1', T.wizCut], ['step2', T.tapNext + .08], ['step1b', T.tapBack + .08],
+  ['lib2', T.sheetCut], ['sheet', T.tapTile + .05], ['success', T.successCut],
+];
+const TAPS = [ // in app px (390×844 space)
+  { t: T.tapReview, s: 'lib', chip: 1 }, { t: T.tapRejected, s: 'libReview', chip: 3, vib: true },
+  { t: T.tapHelp, s: 'libRej', tab: 2 }, { t: T.tapNext, x: 195, y: 790 }, { t: T.tapBack, x: 52, y: 64 },
+  { t: T.tapTile, x: 286, y: 440 },
+];
+TAPS[0].vib = true;
+
+function chipColor(active, p) { // text: graphite → bg when active
+  const a = [140, 147, 161], b = [26, 29, 36]; const q = active ? p : 1 - p;
+  return `rgb(${a.map((v, i) => Math.round(lerp(v, b[i], q))).join(',')})`;
+}
+
+function renderApp(t) {
+  let cur = 0; PLAN.forEach(([, a], i) => { if (t >= a) cur = i; });
+  for (const [id] of PLAN) SCREENS[id].host.style.visibility = 'hidden';
+  const [id, t0] = PLAN[cur], S = SCREENS[id];
+  S.host.style.visibility = 'visible';
+  const local = Math.max(0, (t - t0) * 1000);
+  S.anims.forEach(a => { a.currentTime = local; });
+
+  // --- chips pill (layoutId spring 520/40) across lib → libReview → libRej
+  const pillFor = (sc) => {
+    if (!sc.pill || !['lib', 'lib2', 'sheet', 'libReview', 'libRej'].includes(id)) return;
+    let from = null, to = null, ts = 0, act = 0;
+    if (id === 'lib' || id === 'lib2' || id === 'sheet') { act = 0; to = sc.chips[0].r; }
+    if (id === 'libReview') { from = SCREENS.lib.chips[0].r; to = sc.chips[1].r; ts = T.tapReview; act = 1; }
+    if (id === 'libRej') { from = SCREENS.libReview.chips[1].r; to = sc.chips[3].r; ts = T.tapRejected; act = 3; }
+    const p = from ? SP_PILL(t - ts) : 1; from = from || to;
+    css(sc.pill, { left: lerp(from.x, to.x, p) + 'px', top: lerp(from.y, to.y, p) + 'px', width: lerp(from.w, to.w, p) + 'px', height: lerp(from.h, to.h, p) + 'px' });
+    const cp = ts ? tw(t, ts, ts + .2, E.out) : 1;
+    sc.chips.forEach((c, i) => { const prevAct = id === 'libReview' ? 0 : id === 'libRej' ? 1 : -1;
+      const col = i === act ? chipColor(true, cp) : i === prevAct ? chipColor(false, cp) : chipColor(false, 1);
+      c.txt.style.color = col; c.txt.style.fontWeight = i === act ? '500' : ''; });
+  };
+  pillFor(S);
+  // --- nav indicator (layoutId spring 500/40)
+  if (S.ind) {
+    const tabX = i => S.tabs[i].x + S.tabs[i].w / 2 - 16 - S.navBox.x;
+    let x = tabX(0);
+    if (id === 'help') x = lerp(tabX(0), tabX(2), SP_TAB(t - T.tapHelp));
+    css(S.ind, { left: x + 'px', top: '0px' });
+    S.navLinks.forEach((a, i) => { const on = id === 'help' ? i === 2 : i === 0; const p = id === 'help' ? tw(t, T.tapHelp, T.tapHelp + .15) : 1;
+      a.style.color = on ? `rgba(236,238,240,${.55 + .45 * p})` : (id === 'help' && i === 0 ? `rgb(${Math.round(lerp(236, 140, p))},${Math.round(lerp(238, 147, p))},${Math.round(lerp(240, 161, p))})` : ''); });
+  }
+  // --- wizard: scroll, progress
+  if (id === 'step1') S.root.scrollTop = lerp(0, S.root.scrollHeight - 844, tw(t, T.scroll0, T.scroll1, E.omf));
+  if (id === 'step2') S.prog.forEach((e, i) => e.style.transform = `scaleX(${i === 0 ? 1 : i === 1 ? OMF(clamp((t - t0 - .12) / .55)) : 0})`);
+  if (id === 'step1b') S.prog.forEach((e, i) => e.style.transform = `scaleX(${i === 0 ? 1 : i === 1 ? 1 - OMF(clamp((t - t0) / .55)) : 0})`);
+  // --- sheet: overlay fade .2s, dialog spring 300/30 from 100%
+  if (id === 'sheet') { S.overlay.style.opacity = E.out(clamp((t - t0) / .2)); S.dialog.style.transform = `translateY(${(1 - SP_SHEET(t - t0)) * 100}%)`; }
+
+  // --- press feedback (scale .97 in 80ms, back in 240ms) on tapped elements
+  // --- touch circle + vibration badge
+  const tap = $('tap'), vib = $('vib'); tap.style.display = 'none'; vib.style.display = 'none';
+  for (const k of TAPS) {
+    let x = k.x, y = k.y;
+    if (k.chip != null) { const sc = t >= k.t && SCREENS[id].chips ? SCREENS[id] : SCREENS[k.s]; const r = sc.chips[k.chip].r; x = r.x + r.w / 2; y = r.y + r.h / 2; }
+    if (k.tab != null) { const r = SCREENS[k.s].tabs[k.tab]; x = r.x + r.w / 2; y = r.y + 22; }
+    const d = t - (k.t - .12);
+    if (d >= 0 && d < .5) css(tap, { display: 'block', left: x + 'px', top: 50 + y + 'px', opacity: d < .12 ? d / .12 : 1 - (d - .12) / .38, transform: `scale(${d < .12 ? 1 : 1 + (d - .12) * 1.5})` });
+    const dv = t - k.t;
+    if (k.vib && dv >= 0 && dv < .9) css(vib, { display: 'flex', left: x - 40 + 'px', top: 50 + y + 26 + 'px', opacity: clamp(dv / .08) * (1 - clamp((dv - .65) / .25)), transform: `translateX(${Math.sin(dv * 90) * 2 * Math.exp(-dv * 8)}px)` });
+  }
+  // sticker impact on «Готово»: app fires haptic at SUCCESS_STICKER_IMPACT_MS = 720
+  const imp = T.successCut + .72, dv = t - imp;
+  if (id === 'success' && dv >= 0 && dv < 1.1) css(vib, { display: 'flex', left: '268px', top: 50 + 152 + 'px', opacity: clamp(dv / .08) * (1 - clamp((dv - .8) / .3)), transform: `translateX(${Math.sin(dv * 90) * 2.5 * Math.exp(-dv * 8)}px)` });
+}
+
+// =================== camera on the card ===================
+// [time, zoom, focusX, focusY (app px incl. 50px tg header)], each move eases with the app curve
+const CAMS = [
+  [0, 1, 195, 447], [T.chipsCam, 1.75, 200, 334], [T.tapReview + .02, 1.75, 200, 206],
+  [T.tabCam, 1.08, 195, 500], [T.wizCut, 1, 195, 447], [T.tapNext + .1, 1.35, 195, 330], [T.sheetCut, 1, 195, 447], [T.tapTile + .25, 1.25, 195, 640],
+  [T.successCut, 1, 195, 447], [T.successCut + .5, 1.18, 195, 330],
+];
+function camAt(t) {
+  let i = 0; CAMS.forEach((c, j) => { if (t >= c[0]) i = j; });
+  const cur = CAMS[i], prev = CAMS[Math.max(0, i - 1)];
+  const slow = i === CAMS.length - 1;
+  const p = i === 0 ? 1 : (cur[0] === T.tapReview + .02 ? SP_PILL(t - cur[0]) : tw(t, cur[0], cur[0] + (slow ? 4 : .6), slow ? E.inOut : E.omf));
+  return { z: lerp(prev[1], cur[1], p), fx: lerp(prev[2], cur[2], p), fy: lerp(prev[3], cur[3], p) };
+}
+const BASE = 1.5, FOCUS_X = 540, FOCUS_Y = 1100 - 410; // screen point (inside #clip) where the focus sits
+
+// =================== grain ===================
+let seed = 11; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+const g1 = $('grain').getContext('2d'), g2 = $('grain2').getContext('2d'), GR = [];
+for (let v = 0; v < 6; v++) { const img = g1.createImageData(540, 960); for (let i = 0; i < img.data.length; i += 4) { const g = rnd() * 255; img.data[i] = img.data[i+1] = img.data[i+2] = g; img.data[i+3] = 255; } GR.push(img); }
+
+// =================== render ===================
+function render(t) {
+  const fr = Math.floor(t * 24); g1.putImageData(GR[fr % 6], 0, 0); g2.putImageData(GR[(fr + 3) % 6], 0, 0);
+  let k = 0; for (let i = 0; i < 14; i++) { const d = t - CLAP(i); if (d >= 0) k = Math.max(k, Math.exp(-d / .14)); }
+  css($('glow'), { opacity: .42 + .3 * k, transform: `scale(${1 + .03 * k})` });
+  css($('cam'), { transform: `scale(${1 + .008 * k})` });
+  // hook
+  rv($('h1a'), t, .2, T.chipsCam - .3); rv($('h1b'), t, .45, T.chipsCam - .3);
+  $('hook').style.display = t < T.chipsCam + .2 ? 'block' : 'none';
+  // eyebrow per scene
+  let ei = -1; EYEBROWS.forEach(([a], i) => { if (t >= a) ei = i; });
+  const eb = $('eb'); eb.style.display = ei >= 0 && EYEBROWS[ei][1] ? 'block' : 'none';
+  if (ei >= 0) { eb.textContent = EYEBROWS[ei][1]; rv(eb, t, EYEBROWS[ei][0] + .1, EYEBROWS[ei + 1] ? EYEBROWS[ei + 1][0] - .25 : null, { dy: 16, dur: .45, outDur: .2 }); }
+  // card
+  const ci = tw(t, T.cardIn, T.cardIn + .8, E.omf), co = tw(t, T.endCut - .3, T.endCut + .1, E.in);
+  // scene cuts dip through the background
+  let dip = 0; for (const c of [T.wizCut, T.sheetCut, T.successCut]) dip = Math.max(dip, 1 - clamp(Math.abs(t - c) / .16));
+  const cam = camAt(t), s = BASE * cam.z;
+  css($('card'), { transform: `translate(${FOCUS_X - cam.fx * s}px, ${FOCUS_Y - cam.fy * s + (1 - ci) * 140}px) scale(${s})`, opacity: ci * (1 - co) * (1 - dip * .9), filter: `blur(${(1 - ci) * 14 + co * 14 + dip * 10}px)` });
+  $('clip').style.display = co >= 1 ? 'none' : 'block';
+  renderApp(t);
+  // end card
+  const e = $('end'); e.style.display = t >= T.endCut - .05 ? 'block' : 'none';
+  if (t >= T.endCut - .05) { const a = T.endCut; rv($('bear'), t, a, null, { dy: 24 }); rv($('endB'), t, a + .1, null); rv($('endT'), t, a + .25, null); rv($('endH'), t, a + .5, null); }
+  let f = 0; for (const h of [T.endCut]) if (t >= h) f = Math.max(f, .25 * Math.exp(-(t - h) / .14));
+  $('flash').style.opacity = f;
+  $('black').style.opacity = Math.max(1 - tw(t, 0, .5, E.out), tw(t, DUR - .6, DUR, E.in));
+}
+
+window.seek = t => { render(t); return new Promise(r => requestAnimationFrame(() => r())); };
+window.ready = (async () => {
+  await mount('lib', 'library'); await mount('libReview', 'library-filter'); await mount('libRej', 'library-filter-rej');
+  await mount('help', 'help'); await mount('step1', 'step1'); await mount('step2', 'step2'); await mount('step1b', 'step1');
+  await mount('lib2', 'library'); await mount('sheet', 'library-sheet'); await mount('success', 'success');
+  await document.fonts.ready;
+  await Promise.all([...document.images].map(i => i.complete ? 0 : new Promise(r => { i.onload = r; i.onerror = r; })));
+  await new Promise(r => setTimeout(r, 300));
+  // measure unscaled
+  for (const S of Object.values(SCREENS)) S.host.style.visibility = 'visible';
+  $('card').style.transform = 'none';
+  setupScreens();
+  // lib2/sheet behind the sheet: no re-stagger on return to the list
+  for (const id of ['lib2', 'sheet']) SCREENS[id].anims.forEach(a => { a.currentTime = 5000; });
+  SCREENS.lib2.anims = []; SCREENS.sheet.anims = [];
+  render(0); return true;
+})();
+if (!location.search.includes('render')) { const t0 = performance.now(); const loop = () => { render(((performance.now() - t0) / 1000) % DUR); requestAnimationFrame(loop); }; window.ready.then(loop); }
+</script>
+</body>
+</html>
