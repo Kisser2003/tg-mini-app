@@ -192,39 +192,23 @@ function genreLabel(v: unknown): string | null {
   return GENRE_OPTIONS.find((o) => o.value === g)?.label ?? g;
 }
 
-/**
- * Текст «Формы релиза» в формате, который принимают коллеги при ручной отгрузке.
- * Обложка, WAV и текст отправляются отдельными файлами — в форме только пометка.
- */
-export function buildColleagueReleaseForm(release: AdminReleaseRow, tracks: ReleaseTrackRow[]): string {
-  const dash = "—";
-  const featuring = featuringNamesFromCollaboratorsJson(release.collaborators);
-  const artist = [release.artist_name?.trim(), featuring.length > 0 ? `feat. ${featuring.join(", ")}` : null]
-    .filter(Boolean)
-    .join(" ");
-  const explicit = Boolean(release.explicit ?? release.is_explicit) || tracks.some((t) => t.explicit);
-  const tiktokSec = typeof release.tiktok_start_sec === "number" ? release.tiktok_start_sec : null;
-  const tiktok = tiktokSec != null ? `${formatSecondsAsTimecode(tiktokSec)} (${Math.floor(tiktokSec)} сек)` : null;
-  const license = licenseLabel(release.license_type);
-  const musicAuthor = typeof release.music_author === "string" ? release.music_author.trim() : "";
-  const beat = [license, musicAuthor ? `автор бита: ${musicAuthor}` : null].filter(Boolean).join(", ");
-  const audioCount = tracks.filter((t) => t.file_path?.trim()).length;
+type ColleagueFormCommon = {
+  title: string;
+  artist: string;
+  featuring: string[];
+  fullName: string;
+  tiktok: string;
+  beat: string;
+  musicAuthor: string;
+  genre: string;
+  date: string;
+  linkLines: string[];
+};
 
-  const lines = [
-    "Форма релиза",
-    "",
-    `1. Название релиза: ${getReleaseDisplayTitle(release) || dash}`,
-    `2. Исполнитель: ${artist || dash}`,
-    "3. Обложка (3000 на 3000), JPG: файлом",
-    `4. Трек в формате WAV: файлом${audioCount > 1 ? ` (${audioCount} шт.)` : ""}`,
-    `5. Жанр: ${genreLabel(release.genre) || dash}`,
-    `6. Ненормативная лексика: ${explicit ? "Есть" : "Нет"}`,
-    `7. ФИО артиста(-ов): ${(release.author_full_name as string | undefined)?.trim() || dash}`,
-    `8. Начало отрывка песни в ТикТок: ${tiktok || dash}`,
-    `9. Дата релиза: ${formatReleaseDateRu(release.release_date) || dash}`,
-    `10. Условия использования бита: ${beat || dash}`,
-    "11. Текст релиза: файлом"
-  ];
+function colleagueFormCommon(release: AdminReleaseRow): ColleagueFormCommon {
+  const tiktokSec = typeof release.tiktok_start_sec === "number" ? release.tiktok_start_sec : null;
+  const musicAuthor = typeof release.music_author === "string" ? release.music_author.trim() : "";
+  const license = licenseLabel(release.license_type);
 
   const links = parseArtistLinksFromJson(release.artist_links);
   const primary = parseCollaboratorsFromDb(release.collaborators).find((c) => c.role === "primary");
@@ -234,11 +218,107 @@ export function buildColleagueReleaseForm(release: AdminReleaseRow, tracks: Rele
     ["Apple Music", links.apple || primary?.appleUrl || ""],
     ["Spotify", links.spotify || primary?.spotifyUrl || ""]
   ].filter(([, url]) => url.trim());
-  if (linkRows.length > 0) {
-    lines.push("", "Карточки артиста:", ...linkRows.map(([name, url]) => `${name}: ${url.trim()}`));
-  }
 
+  return {
+    title: getReleaseDisplayTitle(release),
+    artist: release.artist_name?.trim() ?? "",
+    featuring: featuringNamesFromCollaboratorsJson(release.collaborators),
+    fullName: (release.author_full_name as string | undefined)?.trim() ?? "",
+    tiktok: tiktokSec != null ? `${formatSecondsAsTimecode(tiktokSec)} (${Math.floor(tiktokSec)} сек)` : "",
+    beat: [license, musicAuthor ? `автор бита: ${musicAuthor}` : null].filter(Boolean).join(", "),
+    musicAuthor,
+    genre: genreLabel(release.genre) ?? "",
+    date: formatReleaseDateRu(release.release_date) ?? "",
+    linkLines:
+      linkRows.length > 0
+        ? ["", "Карточки артиста:", ...linkRows.map(([name, url]) => `${name}: ${url.trim()}`)]
+        : []
+  };
+}
+
+const DASH = "—";
+
+/** Сингл: 11 полей одним списком. */
+function buildSingleColleagueForm(release: AdminReleaseRow, tracks: ReleaseTrackRow[]): string {
+  const c = colleagueFormCommon(release);
+  const artist = [c.artist, c.featuring.length > 0 ? `feat. ${c.featuring.join(", ")}` : null]
+    .filter(Boolean)
+    .join(" ");
+  const explicit = Boolean(release.explicit ?? release.is_explicit) || tracks.some((t) => t.explicit);
+  const audioCount = tracks.filter((t) => t.file_path?.trim()).length;
+
+  return [
+    "Форма релиза",
+    "",
+    `1. Название релиза: ${c.title || DASH}`,
+    `2. Исполнитель: ${artist || DASH}`,
+    "3. Обложка (3000 на 3000), JPG: файлом",
+    `4. Трек в формате WAV: файлом${audioCount > 1 ? ` (${audioCount} шт.)` : ""}`,
+    `5. Жанр: ${c.genre || DASH}`,
+    `6. Ненормативная лексика: ${explicit ? "Есть" : "Нет"}`,
+    `7. ФИО артиста(-ов): ${c.fullName || DASH}`,
+    `8. Начало отрывка песни в ТикТок: ${c.tiktok || DASH}`,
+    `9. Дата релиза: ${c.date || DASH}`,
+    `10. Условия использования бита: ${c.beat || DASH}`,
+    "11. Текст релиза: файлом",
+    ...c.linkLines
+  ].join("\n");
+}
+
+/**
+ * EP / альбом: шапка релиза + блок на каждый трек.
+ * Мастер собирает feat., ФИО, бит и отрывок ТикТок один раз на релиз — такие значения
+ * помечены «*», чтобы коллеги не приняли их за данные конкретного трека.
+ */
+function buildAlbumColleagueForm(release: AdminReleaseRow, tracks: ReleaseTrackRow[]): string {
+  const c = colleagueFormCommon(release);
+  const shared = (v: string) => (v ? `${v} *` : DASH);
+  const sorted = [...tracks].sort((a, b) => a.index - b.index);
+  const trackTitle = (t: ReleaseTrackRow, i: number) => t.title.trim() || `Трек ${i + 1}`;
+  const kind = release.release_type === "ep" ? "EP" : "альбом";
+
+  const lines = [
+    `Форма релиза (${kind})`,
+    "",
+    `0. Название релиза: ${c.title || DASH}`,
+    "0.1. Трек-лист:",
+    ...sorted.map((t, i) => `${i + 1}. ${trackTitle(t, i)}`)
+  ];
+  if (c.featuring.length > 0) lines.push(`feat.: ${shared(c.featuring.join(", "))}`);
+  if (c.musicAuthor) lines.push(`prod.: ${shared(c.musicAuthor)}`);
+  lines.push(`0.2. Желаемая дата релиза: ${c.date || DASH}`, `0.3. Жанр релиза: ${c.genre || DASH}`);
+
+  const artist = [c.artist, c.featuring.length > 0 ? `feat. ${c.featuring.join(", ")} *` : null]
+    .filter(Boolean)
+    .join(" ");
+  sorted.forEach((t, i) => {
+    lines.push(
+      "",
+      `Трек ${i + 1}`,
+      `1. Название трека: ${trackTitle(t, i)}`,
+      `2. Исполнитель(-и): ${artist || DASH}`,
+      `3. Ненормативная лексика: ${t.explicit ? "Есть" : "Нет"}`,
+      `4. ФИО артиста(-ов): ${shared(c.fullName)}`,
+      `5. Начало отрывка песни в ТикТок: ${shared(c.tiktok)}`,
+      `6. Текст трека: ${t.lyrics?.trim() ? "файлом" : DASH}`,
+      `7. Условия использования бита: ${shared(c.beat)}`
+    );
+  });
+
+  if (lines.some((l) => l.endsWith(" *"))) {
+    lines.push("", "* указано артистом один раз на весь релиз — проверьте по трекам");
+  }
+  lines.push(...c.linkLines);
   return lines.join("\n");
+}
+
+/**
+ * Текст «Формы релиза» в формате, который принимают коллеги при ручной отгрузке.
+ * Сингл и EP/альбом — разные шаблоны. Обложка, WAV и тексты отправляются отдельными файлами.
+ */
+export function buildColleagueReleaseForm(release: AdminReleaseRow, tracks: ReleaseTrackRow[]): string {
+  const isAlbum = release.release_type === "ep" || release.release_type === "album" || tracks.length > 1;
+  return isAlbum ? buildAlbumColleagueForm(release, tracks) : buildSingleColleagueForm(release, tracks);
 }
 
 export function buildReleaseExportPayload(release: AdminReleaseRow, tracks: ReleaseTrackRow[]) {

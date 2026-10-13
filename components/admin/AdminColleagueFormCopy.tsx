@@ -20,7 +20,7 @@ export function AdminColleagueFormCopy({
     [release, tracks]
   );
   const missing = useMemo(
-    () => text.split("\n").filter((l) => /^\d+\. .+: —$/.test(l)).length,
+    () => new Set(text.split("\n").filter((l) => /^[\d.]+ .+: —$/.test(l))).size,
     [text]
   );
   const [done, setDone] = useState(false);
