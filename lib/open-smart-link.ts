@@ -19,3 +19,22 @@ export function openSmartLink(url: string): void {
 
   window.open(trimmed, "_blank", "noopener,noreferrer");
 }
+
+/** Открывает личку с пользователем: в TMA через `openTelegramLink`, иначе обычной ссылкой t.me. */
+export function openTelegramChat(username: string): void {
+  const handle = username.trim().replace(/^@/, "");
+  if (!handle || typeof window === "undefined") return;
+  const url = `https://t.me/${encodeURIComponent(handle)}`;
+
+  const webApp = getTelegramWebApp();
+  if (webApp?.openTelegramLink) {
+    try {
+      webApp.openTelegramLink(url);
+      return;
+    } catch {
+      /* fallback */
+    }
+  }
+
+  window.open(url, "_blank", "noopener,noreferrer");
+}

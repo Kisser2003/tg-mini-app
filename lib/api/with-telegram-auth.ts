@@ -137,7 +137,17 @@ export function getTelegramAuthContextFromRequest(
         authDate: looseOnFail.authDate
       };
     }
-    console.warn("[withTelegramAuth] initData signature verification failed or auth_date stale");
+    // Диагностика: отличаем протухший auth_date от неверной подписи (без вывода самих данных).
+    const ignoringAge = verifyTelegramInitData(initDataRaw, botToken, { maxAuthAgeSeconds: -1 });
+    const ageSec =
+      looseOnFail?.authDate != null ? Math.floor(Date.now() / 1000) - looseOnFail.authDate : null;
+    const reason = ignoringAge ? "auth_date_stale" : looseOnFail ? "hash_mismatch" : "malformed";
+    const keys = Array.from(new URLSearchParams(initDataRaw).keys()).sort().join(",");
+    console.warn(
+      `[withTelegramAuth] initData rejected: reason=${reason} age_sec=${ageSec ?? "?"} keys=${keys} ua=${(
+        request.headers.get("user-agent") ?? ""
+      ).slice(0, 80)}`
+    );
     return null;
   }
 

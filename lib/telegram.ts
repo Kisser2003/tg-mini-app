@@ -57,6 +57,8 @@ type TelegramWebApp = {
   disableClosingConfirmation?: () => void;
   /** Открыть ссылку во внешнем браузере (TMA). */
   openLink?: (url: string, options?: { try_instant_view?: boolean }) => void;
+  /** Открыть t.me-ссылку внутри Telegram (чат, канал), не закрывая мини-апп. */
+  openTelegramLink?: (url: string) => void;
 };
 
 declare global {

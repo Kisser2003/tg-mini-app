@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { requireAdminSupabaseClient } from "@/lib/admin-release-api-guard";
 import { getTelegramAuthContextFromRequest } from "@/lib/api/with-telegram-auth";
-import type { AdminStatsResponse } from "@/types/admin";
+import type { AdminStatsResponse, AdminStuckRelease } from "@/types/admin";
+
+/** Через сколько минут после создания незавершённый релиз считается застрявшим. */
+const STUCK_AFTER_MIN = 30;
 
 function startOfUtcDayIso(): string {
   const d = new Date();
@@ -113,6 +116,45 @@ async function handleAdminStats(request: NextRequest): Promise<Response> {
     console.error("[admin/stats] funnel:", e instanceof Error ? e.message : e);
   }
 
+  // Застряли до отправки: релиз начат, но финальный submit не нажат — в очередь модерации не попадает.
+  const stuck: AdminStuckRelease[] = [];
+  try {
+    const stuckBefore = new Date(Date.now() - STUCK_AFTER_MIN * 60 * 1000).toISOString();
+    const { data: stuckRows } = await supabase
+      .from("releases")
+      .select("id, title, track_name, artist_name, status, artwork_url, telegram_username, created_at, tracks(count)")
+      .in("status", ["draft", "pending"])
+      .lte("created_at", stuckBefore)
+      .gte("created_at", since30)
+      .order("created_at", { ascending: false })
+      .limit(20);
+    for (const r of stuckRows ?? []) {
+      const row = r as {
+        id: string;
+        title: string | null;
+        track_name: string | null;
+        artist_name: string | null;
+        status: "draft" | "pending";
+        artwork_url: string | null;
+        telegram_username: string | null;
+        created_at: string;
+        tracks: { count: number }[] | null;
+      };
+      stuck.push({
+        id: row.id,
+        title: row.title?.trim() || row.track_name?.trim() || "Без названия",
+        artist_name: row.artist_name?.trim() || "—",
+        status: row.status,
+        artwork_url: row.artwork_url,
+        telegram_username: row.telegram_username,
+        created_at: row.created_at,
+        tracks_count: row.tracks?.[0]?.count ?? 0
+      });
+    }
+  } catch (e) {
+    console.error("[admin/stats] stuck:", e instanceof Error ? e.message : e);
+  }
+
   const body: AdminStatsResponse = {
     ok: true,
     pending_queue: pendingQueue ?? 0,
@@ -124,7 +166,8 @@ async function handleAdminStats(request: NextRequest): Promise<Response> {
     top_reject_reasons: Array.from(reasonCounts.entries())
       .sort((a, b) => b[1] - a[1])
       .slice(0, 3)
-      .map(([key, count]) => ({ key, count }))
+      .map(([key, count]) => ({ key, count })),
+    stuck
   };
 
   return NextResponse.json(body);

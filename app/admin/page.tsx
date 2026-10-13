@@ -3,13 +3,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { History, RefreshCcw } from "lucide-react";
+import { History, RefreshCcw, Send } from "lucide-react";
 import useSWR from "swr";
 import { toast } from "sonner";
 import { AdminApproveSmartLinkModal } from "@/components/AdminApproveSmartLinkModal";
 import { AdminRejectModal } from "@/components/AdminRejectModal";
 import { ADMIN_REJECT_PRESETS } from "@/components/AdminRejectModal";
 import { AdminReleaseCard } from "@/components/AdminReleaseCard";
+import { ReleaseSleeve } from "@/components/ReleaseSleeve";
 import { PullRefreshBrand } from "@/components/PullRefreshBrand";
 import { AdminModerationQueueSkeleton } from "@/components/ui/LibrarySkeleton";
 import { publishReleaseWithSmartLink, rejectRelease } from "@/features/admin/actions";
@@ -19,6 +20,7 @@ import { debugInit } from "@/lib/debug";
 import { fetchAdminStats } from "@/lib/fetch-admin-stats";
 import type { ReleaseRecord, ReleaseTrackRow } from "@/repositories/releases.repo";
 import { hapticMap } from "@/lib/haptic-map";
+import { openTelegramChat } from "@/lib/open-smart-link";
 import { getTelegramUserId, initTelegramWebApp, triggerHaptic } from "@/lib/telegram";
 import { errorToUserString, USER_REQUEST_TIMEOUT_MESSAGE } from "@/lib/errors";
 import { SWR_LIST_OPTIONS } from "@/lib/swr-config";
@@ -32,6 +34,14 @@ type ModerationQueueRow = {
 type QueueFilterKey = "all" | "needs_smart_link" | "with_errors";
 
 const ADMIN_QUEUE_TIMEOUT_MS = 15000;
+
+function formatAgo(iso: string): string {
+  const min = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (min < 60) return `${min} мин назад`;
+  const h = Math.round(min / 60);
+  if (h < 24) return `${h} ч назад`;
+  return `${Math.round(h / 24)} дн назад`;
+}
 
 export default function AdminPage() {
   const router = useRouter();
@@ -384,6 +394,55 @@ export default function AdminPage() {
               );
             })}
           </ol>
+        </section>
+      ) : null}
+
+      {stats && stats.stuck.length > 0 ? (
+        <section className="mb-6" aria-labelledby="admin-stuck">
+          <h2 id="admin-stuck" className="text-[13px] text-omf-graphite">
+            Застряли до отправки: {stats.stuck.length}
+          </h2>
+          <p className="mt-0.5 text-[13px] text-omf-faint">
+            Начали релиз, но не нажали «Отправить». В очередь они не попадут, пока артист не закончит.
+          </p>
+          <ul className="mt-1">
+            {stats.stuck.map((s) => (
+              <li key={s.id} className="flex items-center gap-3 border-b border-omf-line py-3">
+                <Link
+                  href={`/admin/release/${s.id}`}
+                  className="omf-focus flex min-w-0 flex-1 items-center gap-3 rounded-[10px]"
+                >
+                  <div className="w-12 shrink-0">
+                    <ReleaseSleeve seed={s.id} title={s.title} artist={s.artist_name} coverUrl={s.artwork_url} size="thumb" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-[15px] font-bold leading-tight tracking-[-0.01em]">{s.title}</p>
+                    <p className="mt-0.5 truncate text-[13px] text-omf-graphite">
+                      {s.artist_name}
+                      {s.telegram_username ? ` · @${s.telegram_username}` : ""}
+                    </p>
+                    <p className="mt-0.5 text-[12px] text-omf-faint">
+                      {s.status === "pending" ? "Файлы загружены" : "Черновик"} · треков: {s.tracks_count} ·{" "}
+                      {formatAgo(s.created_at)}
+                    </p>
+                  </div>
+                </Link>
+                {s.telegram_username ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      hapticMap.impactLight();
+                      openTelegramChat(s.telegram_username!);
+                    }}
+                    aria-label={`Написать @${s.telegram_username}`}
+                    className="omf-focus flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-omf-ultra-text transition-colors hover:bg-omf-surface hover:text-omf-ink"
+                  >
+                    <Send className="h-[18px] w-[18px]" aria-hidden />
+                  </button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
         </section>
       ) : null}
 

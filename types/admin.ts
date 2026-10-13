@@ -21,4 +21,17 @@ export type AdminStatsResponse = {
   top_reject_reasons: { key: string; count: number }[];
   /** Уникальные пользователи по шагам мастера за 30 дней + отправки. */
   funnel_30d: { step: string; users: number }[];
+  /** Начатые, но не отправленные релизы (draft / pending), старше STUCK_AFTER_MIN минут. */
+  stuck: AdminStuckRelease[];
+};
+
+export type AdminStuckRelease = {
+  id: string;
+  title: string;
+  artist_name: string;
+  status: "draft" | "pending";
+  artwork_url: string | null;
+  telegram_username: string | null;
+  created_at: string;
+  tracks_count: number;
 };

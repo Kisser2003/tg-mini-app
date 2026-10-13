@@ -4,6 +4,7 @@ import { z } from "zod";
 import { createHash } from "crypto";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
 import { resolveReleaseActor } from "@/lib/api/resolve-submit-actor";
+import { getAdminTelegramIdForUi, telegramIdsEqual } from "@/lib/admin";
 
 export const runtime = "nodejs";
 
@@ -34,6 +35,18 @@ export async function POST(req: NextRequest) {
     if (!parsed.success) return new NextResponse(null, { status: 204 });
     const admin = createSupabaseAdmin();
     if (!admin) return new NextResponse(null, { status: 204 });
+    // Тесты админа не должны попадать в воронку.
+    if (actor.kind === "telegram") {
+      const adminTgId = getAdminTelegramIdForUi();
+      if (adminTgId != null && telegramIdsEqual(actor.telegramUserId, adminTgId)) {
+        return new NextResponse(null, { status: 204 });
+      }
+    } else {
+      const { data: profile } = await admin.from("users").select("role").eq("id", actor.authUserId).maybeSingle();
+      if (String((profile as { role?: string | null } | null)?.role ?? "").toLowerCase() === "admin") {
+        return new NextResponse(null, { status: 204 });
+      }
+    }
     const { event, step, releaseId, props } = parsed.data;
     const propsJson = JSON.stringify(props ?? {});
     await admin.from("funnel_events").insert({
