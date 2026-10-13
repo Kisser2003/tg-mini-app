@@ -3,29 +3,28 @@ import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { requireAdminSupabaseClient } from "@/lib/admin-release-api-guard";
 import { getTelegramAuthContextFromRequest } from "@/lib/api/with-telegram-auth";
-import { assertHttpsUrl, mapAdminPublishStatusToDb } from "@/lib/admin-release-publish";
+import { assertHttpsUrl, mapAdminPublishStatusToDb, normalizeUpc } from "@/lib/admin-release-publish";
 import { getReleaseDisplayTitle, type ReleaseRecord } from "@/repositories/releases.repo";
-import { escapeHtml } from "@/lib/telegram-bot.server";
 import { notifyArtist } from "@/lib/server/artist-notify";
 import { invalidateMyReleasesCache } from "@/lib/server/release-list-cache";
+import { linkReadyMessage } from "@/lib/server/release-notify-texts";
+import { logAccepted } from "@/lib/server/release-accepted-at";
+import { deleteApprovedReleaseAudio } from "@/lib/release-audio-cleanup.server";
 
 const bodySchema = z.object({
   releaseId: z.string().uuid(),
   newStatus: z.string().min(1),
-  smartLink: z.string().min(1).max(2048)
+  smartLink: z.string().min(1).max(2048),
+  /** UPC от дистрибьютора (необязательно), пишется в `releases.upc`. */
+  upc: z.string().max(32).optional()
 });
 
-async function notifyArtistSmartLink(record: ReleaseRecord, smartLink: string): Promise<void> {
-  const titleRaw = getReleaseDisplayTitle(record);
-  const title = escapeHtml(titleRaw.length > 0 ? titleRaw : "релиз");
-  const linkEsc = escapeHtml(smartLink);
-
-  await notifyArtist(
-    record,
-    `✅ <b>Релиз «${title}» одобрен модерацией.</b>\n\n🔗 Вот ваша Smart Link: <a href="${linkEsc}">открыть</a>`
-  );
-}
-
+/**
+ * Ссылка на пресейв (BandLink и т.п.):
+ * - релиз на проверке → принять сразу со ссылкой;
+ * - уже принятый (`ready`) → добавить или поправить ссылку после модерации площадок.
+ * Когда ссылка есть, релиз вышел — WAV из хранилища удаляем.
+ */
 async function handlePublishReleaseSmartLink(request: NextRequest): Promise<Response> {
   const guard = await requireAdminSupabaseClient(
     request,
@@ -48,9 +47,11 @@ async function handlePublishReleaseSmartLink(request: NextRequest): Promise<Resp
 
   let dbStatus: ReturnType<typeof mapAdminPublishStatusToDb>;
   let normalizedUrl: string;
+  let upc: string | null;
   try {
     dbStatus = mapAdminPublishStatusToDb(parsed.data.newStatus);
     normalizedUrl = assertHttpsUrl(parsed.data.smartLink);
+    upc = normalizeUpc(parsed.data.upc);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "Некорректные данные.";
     return NextResponse.json({ ok: false, error: msg }, { status: 400 });
@@ -81,23 +82,25 @@ async function handlePublishReleaseSmartLink(request: NextRequest): Promise<Resp
   }
 
   const status = String(row.status ?? "").toLowerCase();
-  if (status !== "processing" && status !== "review") {
+  const acceptingNow = status === "processing" || status === "review";
+  if (!acceptingNow && status !== "ready") {
     return NextResponse.json(
       {
         ok: false,
-        error: "Релиз не в очереди модерации (нужен статус «на проверке»: processing или review)."
+        error: "Ссылку можно добавить релизу на проверке или уже принятому."
       },
       { status: 409 }
     );
   }
+  const hadLink = typeof row.smart_link === "string" && row.smart_link.trim().length > 0;
 
   const { data: updated, error: updErr } = await supabase
     .from("releases")
     .update({
       status: "ready",
       smart_link: normalizedUrl,
-      error_message: null,
-      admin_notes: null
+      ...(upc ? { upc } : {}),
+      ...(acceptingNow ? { error_message: null, admin_notes: null } : {})
     })
     .eq("id", releaseId)
     .select("*")
@@ -111,7 +114,7 @@ async function handlePublishReleaseSmartLink(request: NextRequest): Promise<Resp
     return NextResponse.json(
       {
         ok: false,
-        error: "Не удалось сохранить выпуск.",
+        error: "Не удалось сохранить ссылку.",
         detail: detail || undefined
       },
       { status: 500 }
@@ -124,7 +127,12 @@ async function handlePublishReleaseSmartLink(request: NextRequest): Promise<Resp
 
   const rec = updated as ReleaseRecord;
   await invalidateMyReleasesCache(rec as Record<string, unknown>);
-  await notifyArtistSmartLink(rec, normalizedUrl);
+  if (acceptingNow) await logAccepted(supabase, releaseId);
+  // Поправили уже выданную ссылку — артиста второй раз не дёргаем.
+  if (!hadLink) {
+    await notifyArtist(rec, linkReadyMessage(getReleaseDisplayTitle(rec), normalizedUrl, { acceptedNow: acceptingNow }));
+  }
+  await deleteApprovedReleaseAudio(supabase, releaseId);
   return NextResponse.json({ ok: true, record: rec });
 }
 

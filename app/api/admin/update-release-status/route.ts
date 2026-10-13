@@ -4,7 +4,8 @@ import { z } from "zod";
 import { requireAdminSupabaseClient } from "@/lib/admin-release-api-guard";
 import { getTelegramAuthContextFromRequest } from "@/lib/api/with-telegram-auth";
 import { getReleaseDisplayTitle, type ReleaseRecord } from "@/repositories/releases.repo";
-import { deleteApprovedReleaseAudio } from "@/lib/release-audio-cleanup.server";
+import { acceptedMessage } from "@/lib/server/release-notify-texts";
+import { logAccepted } from "@/lib/server/release-accepted-at";
 import { escapeHtml } from "@/lib/telegram-bot.server";
 import { notifyArtist } from "@/lib/server/artist-notify";
 import { isMissingReleasesColumnError } from "@/lib/errors";
@@ -26,10 +27,7 @@ async function notifyArtistOnModerationResult(
   const title = escapeHtml(titleRaw.length > 0 ? titleRaw : "релиз");
 
   if (action === "approve") {
-    await notifyArtist(
-      record,
-      `✅ <b>Релиз «${title}» одобрен модерацией!</b>\n\nОн принят в дистрибуцию.`
-    );
+    await notifyArtist(record, acceptedMessage(titleRaw));
     return;
   }
 
@@ -87,7 +85,9 @@ async function handleUpdateReleaseStatus(
     );
   }
 
-  // Одобрение: только смена статуса релиза. Кошелёк/транзакции (ledger) намеренно не трогаем — фича заморожена.
+  // «Принять»: статус ready без ссылки — релиз ушёл дистрибьюторам, ссылку модератор добавит позже
+  // (publish-release-smart-link). WAV не удаляем: они ещё могут понадобиться дистрибьютору.
+  // Кошелёк/транзакции (ledger) намеренно не трогаем — фича заморожена.
   if (action === "approve") {
     const { data: updated, error: updErr } = await supabase
       .from("releases")
@@ -108,8 +108,8 @@ async function handleUpdateReleaseStatus(
       return NextResponse.json({ ok: false, error: "Не удалось обновить релиз." }, { status: 500 });
     }
     await invalidateMyReleasesCache(updated as Record<string, unknown>);
+    await logAccepted(supabase, releaseId);
     await notifyArtistOnModerationResult(updated as ReleaseRecord, "approve");
-    await deleteApprovedReleaseAudio(supabase, releaseId);
     return NextResponse.json({ ok: true, record: updated as ReleaseRecord });
   }
 

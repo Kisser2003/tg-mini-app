@@ -35,7 +35,7 @@ export function AdminStatsPanel({ stats }: { stats: AdminStatsResponse }) {
         <span className="min-w-0">
           <span className="block text-[15px] font-bold tracking-tight">Статистика</span>
           <span className="mt-0.5 block truncate text-[13px] text-omf-graphite">
-            Сегодня одобрено {stats.ready_today} · отказы {rejectShare}
+            Сегодня принято {stats.ready_today} · отказы {rejectShare}
           </span>
         </span>
         <ChevronDown
@@ -62,7 +62,7 @@ export function AdminStatsPanel({ stats }: { stats: AdminStatsResponse }) {
               </dd>
             </div>
             <div>
-              <dt className="text-[12px] text-omf-graphite">Одобрено за сегодня</dt>
+              <dt className="text-[12px] text-omf-graphite">Принято за сегодня</dt>
               <dd className="mt-1 text-[22px] font-extrabold tabular-nums">{stats.ready_today}</dd>
             </div>
             <div>

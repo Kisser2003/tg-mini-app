@@ -124,3 +124,19 @@ describe("collectLibraryActions", () => {
     expect(collectLibraryActions([{ id: "f", status: "failed" }])[0].text).toBe("Релиз вернули");
   });
 });
+
+describe("принят без ссылки и со ссылкой", () => {
+  it("без ссылки: срок площадок, Telegram только если придёт сообщение", () => {
+    const tg = getReleaseNextStep({ status: "ready", notifiesInTelegram: true }, NOW);
+    expect(tg).toMatchObject({ kind: "approved_no_link", title: "Принят", cardLine: "Ссылка через 3–5 дн" });
+    expect(tg.body).toContain("3–5 дней");
+    expect(tg.body).toContain("Telegram");
+    expect(getReleaseNextStep({ status: "ready" }, NOW).body).not.toContain("Telegram");
+  });
+  it("со ссылкой: «Ссылка готова»", () => {
+    expect(getReleaseNextStep({ status: "ready", smartLink: "https://band.link/x" }, NOW)).toMatchObject({
+      kind: "approved_link",
+      title: "Ссылка готова"
+    });
+  });
+});

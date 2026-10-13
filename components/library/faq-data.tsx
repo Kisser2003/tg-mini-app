@@ -166,7 +166,7 @@ export const FAQ_ITEMS: FaqItem[] = [
     title: "Модерация и статусы",
     icon: ShieldCheck,
     iconClassName: "text-omf-graphite",
-    searchText: "черновик ожидает на проверке готов отклонен статус",
+    searchText: "черновик ожидает на проверке принят готов ссылка пресейв отклонен статус",
     tooltipText: "Проверьте статусы: черновик, проверка, готово или отклонено.",
     content: (
       <ul className="space-y-2.5 text-[15px] leading-relaxed text-omf-graphite">
@@ -187,8 +187,9 @@ export const FAQ_ITEMS: FaqItem[] = [
         <li className="flex gap-2">
           <CircleDot className="mt-0.5 h-3.5 w-3.5 shrink-0 text-omf-green" />
           <span>
-            <span className="font-medium text-omf-ink">Готов</span> — одобрен; smart link и дальнейшие
-            шаги появятся в карточке релиза, когда их добавит команда.
+            <span className="font-medium text-omf-ink">Принят</span> — мы отправили релиз на площадки; их
+            модерация обычно занимает 3–5 дней. Потом пришлём ссылку на пресейв — она появится в карточке
+            релиза и во вкладке «Ссылки».
           </span>
         </li>
         <li className="flex gap-2">

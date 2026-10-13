@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, X } from "lucide-react";
 import { hapticMap } from "@/lib/haptic-map";
@@ -33,6 +34,8 @@ type Props = {
 export function AdminRejectModal({ open, busy, count = 1, onClose, onSubmit }: Props) {
   const [selected, setSelected] = useState<string[]>([]);
   const [custom, setCustom] = useState("");
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
     if (open) {
@@ -50,7 +53,9 @@ export function AdminRejectModal({ open, busy, count = 1, onClose, onSubmit }: P
 
   const title = count > 1 ? `Вернуть релизы: ${count}` : "Почему возвращаешь релиз";
 
-  return (
+  // Портал: у обёртки страницы есть transform, и `fixed` внутри неё оказывается под нижней навигацией.
+  if (!mounted) return null;
+  return createPortal(
     <AnimatePresence>
       {open && (
         <motion.div
@@ -181,6 +186,7 @@ export function AdminRejectModal({ open, busy, count = 1, onClose, onSubmit }: P
           </motion.div>
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 }

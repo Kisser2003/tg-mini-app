@@ -677,7 +677,7 @@ export default function CreateTracksPage() {
                           htmlFor={`track-${field.id}-lyrics`}
                           className="mb-0 block cursor-pointer text-[15px] text-omf-ink"
                         >
-                          Текст песни (лирика)
+                          Текст песни
                         </label>
                         {showLyrics ? (
                           <ChevronUp className="h-4 w-4 text-omf-graphite" />
@@ -704,7 +704,7 @@ export default function CreateTracksPage() {
                         htmlFor={`track-${field.id}-lyrics`}
                         className={`mb-2.5 block ${WIZARD_FIELD_LABEL_CLASS}`}
                       >
-                        Текст песни (лирика)
+                        Текст песни
                       </label>
                       <textarea
                         id={`track-${field.id}-lyrics`}

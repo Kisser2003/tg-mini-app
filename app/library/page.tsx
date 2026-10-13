@@ -35,7 +35,7 @@ type LibraryView = "all" | "drafts" | "moderation";
 const STATUS_FILTER_CHIPS: { id: LibraryStatusFilter; label: string }[] = [
   { id: "all", label: "Все" },
   { id: "processing", label: "На проверке" },
-  { id: "ready", label: "Одобрены" },
+  { id: "ready", label: "Приняты" },
   { id: "failed", label: "Отклонены" }
 ];
 

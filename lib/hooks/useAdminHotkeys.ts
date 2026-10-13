@@ -37,7 +37,7 @@ export function resolveAdminHotkey(e: HotkeyEventLike): AdminHotkeyAction | null
 }
 
 /**
- * Горячие клавиши экрана модерации (веб): A — одобрить, R — вернуть, J/→ — следующий, K/← — предыдущий.
+ * Горячие клавиши экрана модерации (веб): A — принять, R — вернуть, J/→ — следующий, K/← — предыдущий.
  * `enabled = false`, пока открыто модальное окно или идёт запрос.
  */
 export function useAdminHotkeys(

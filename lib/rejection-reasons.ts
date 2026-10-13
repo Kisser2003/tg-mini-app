@@ -175,7 +175,7 @@ export function describeHistoryDecision(release: {
 }): string | null {
   if (release.status === "ready") {
     const link = release.smart_link?.trim();
-    return link ? `Ссылка: ${link.replace(/^https?:\/\//, "")}` : null;
+    return link ? `Ссылка: ${link.replace(/^https?:\/\//, "")}` : "Принят, ждёт ссылку";
   }
   if (release.status === "failed") {
     const labels = (release.rejection_reasons ?? [])

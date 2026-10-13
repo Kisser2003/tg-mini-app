@@ -25,7 +25,7 @@ const STICKERS: Record<CanonicalReleaseStatus, StickerStyle | null> = {
     background: "var(--omf-yellow)",
     color: "var(--omf-yellow-ink)"
   },
-  ready: { label: "одобрен", background: "var(--omf-green)", color: "#fff" },
+  ready: { label: "принят", background: "var(--omf-green)", color: "#fff" },
   failed: { label: "отклонён", background: "var(--omf-red)", color: "#fff" },
   unknown: null
 };

@@ -37,3 +37,15 @@ export type AdminStuckRelease = {
   created_at: string;
   tracks_count: number;
 };
+
+/** Принятый релиз, которому ещё не добавили ссылку на пресейв. */
+export type AdminAwaitingLinkRelease = {
+  id: string;
+  title: string;
+  artist_name: string;
+  artwork_url: string | null;
+  telegram_username: string | null;
+  upc: string | null;
+  /** Когда приняли (лог), для старых релизов — дата создания. */
+  accepted_at: string;
+};

@@ -104,7 +104,7 @@ describe("describePreviousRejection", () => {
 describe("describeHistoryDecision", () => {
   it("одобренный — ссылка без протокола", () => {
     expect(describeHistoryDecision({ status: "ready", smart_link: "https://ffm.to/x" })).toBe("Ссылка: ffm.to/x");
-    expect(describeHistoryDecision({ status: "ready" })).toBeNull();
+    expect(describeHistoryDecision({ status: "ready" })).toBe("Принят, ждёт ссылку");
   });
   it("возвращённый — пресеты, иначе текст", () => {
     expect(describeHistoryDecision({ status: "failed", rejection_reasons: ["quality"] })).toBe("Вернули: Качество аудио");

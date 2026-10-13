@@ -21,7 +21,7 @@ const STATUS_LABEL: Record<CanonicalReleaseStatus, string> = {
   draft: "черновик",
   pending: "не отправлен",
   processing: "на проверке",
-  ready: "одобрен",
+  ready: "принят",
   failed: "отклонён",
   unknown: "статус не определён"
 };
@@ -76,7 +76,7 @@ type AdminReleaseCardProps = {
   detailHref?: string;
   /** LCP / приоритет загрузки для первых карточек в списке */
   artworkPriority?: boolean;
-  /** Показать кнопки «Одобрить» / «Отклонить» (очередь). В истории — false. */
+  /** Показать кнопки «Принять» / «Вернуть» (очередь). В истории — false. */
   showModerationActions?: boolean;
   /** Показать встроенный блок прослушивания на карточке списка. */
   showAudioPreview?: boolean;
@@ -116,7 +116,6 @@ function AdminReleaseCardInner({
   const previousRejection = showModerationActions ? describePreviousRejection(release) : null;
   /** В истории: почему вернули / какая ссылка ушла артисту. */
   const decisionLine = showModerationActions ? null : describeHistoryDecision(release);
-  const noSmartLink = showModerationActions && (release.smart_link ?? "").trim().length === 0;
   const metaLine = [
     releaseTypeLabel(release.release_type),
     release.genre?.trim() || null,
@@ -176,7 +175,6 @@ function AdminReleaseCardInner({
         ) : null}
         <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">
           <span className={statusTextClass(canonical)}>{STATUS_LABEL[canonical]}</span>
-          {noSmartLink ? <span className="text-omf-yellow">нет ссылки на релиз</span> : null}
           {hasError ? <span className="text-omf-red">есть ошибка</span> : null}
         </p>
       </div>
@@ -230,7 +228,7 @@ function AdminReleaseCardInner({
             }}
             className="omf-btn-ink w-full disabled:opacity-50"
           >
-            Одобрить
+            Принять
           </button>
         </div>
       ) : null}

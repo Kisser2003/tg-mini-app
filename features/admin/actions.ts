@@ -68,7 +68,7 @@ async function postModeration(
 }
 
 /**
- * Одобрить релиз: статус `ready`, `error_message` очищается.
+ * Принять релиз: статус `ready` без ссылки, `error_message` очищается. Ссылку добавляют позже.
  * Обновление через API с service role (обходит RLS Mini App клиента).
  */
 export async function approveRelease(releaseId: string): Promise<ReleaseRecord> {
@@ -97,6 +97,7 @@ async function postPublishSmartLink(body: {
   releaseId: string;
   newStatus: string;
   smartLink: string;
+  upc?: string;
 }): Promise<ReleaseRecord> {
   const authHeaders = await getAdminApiAuthHeaders();
   const res = await fetch("/api/admin/publish-release-smart-link", {
@@ -143,10 +144,11 @@ async function postPublishSmartLink(body: {
 export async function publishReleaseWithSmartLink(
   releaseId: string,
   newStatus: string,
-  smartLink: string
+  smartLink: string,
+  upc?: string
 ): Promise<ReleaseRecord> {
   await assertAdminAsync();
-  return postPublishSmartLink({ releaseId, newStatus, smartLink });
+  return postPublishSmartLink({ releaseId, newStatus, smartLink, ...(upc?.trim() ? { upc: upc.trim() } : {}) });
 }
 
 /** Напомнить артисту через бота, что релиз не отправлен. Бросает ошибку с понятным текстом. */
