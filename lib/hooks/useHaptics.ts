@@ -7,7 +7,9 @@ import { hapticMap } from "@/lib/haptic-map";
 export function useHaptics() {
   return useMemo(
     () => ({
+      selection: () => hapticMap.selection(),
       impactLight: () => hapticMap.impactLight(),
+      impactMedium: () => hapticMap.impactMedium(),
       impactHeavy: () => hapticMap.impactHeavy(),
       notificationSuccess: () => hapticMap.notificationSuccess(),
       notificationError: () => hapticMap.notificationError(),

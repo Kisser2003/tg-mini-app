@@ -238,7 +238,7 @@ export function FileUploader({
   const isWavUploading = type === "wav" && clampedProgress != null;
   const hasError = invalid || Boolean(error);
 
-  const frame = `omf-focus relative flex cursor-pointer overflow-hidden transition-colors duration-150 focus-within:border-omf-ultra ${
+  const frame = `omf-focus omf-press relative flex cursor-pointer overflow-hidden focus-within:border-omf-ultra ${
     hasError ? "border-omf-red" : "border-omf-line-strong hover:border-omf-graphite"
   }`;
 
@@ -256,7 +256,12 @@ export function FileUploader({
           {hasCover && previewUrl ? (
             <>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={previewUrl} alt="Предпросмотр обложки" className="absolute inset-0 h-full w-full object-cover" />
+              <img
+                key={previewUrl}
+                src={previewUrl}
+                alt="Предпросмотр обложки"
+                className="omf-fade-enter absolute inset-0 h-full w-full object-cover"
+              />
               <span className="absolute inset-x-0 bottom-0 bg-omf-bg/85 px-3 py-2.5 text-center text-[14px] text-omf-ink">
                 {isUploading ? "Обложка выбрана" : "Нажми, чтобы заменить"}
               </span>
@@ -299,7 +304,7 @@ export function FileUploader({
             </div>
           ) : file ? (
             <div className="flex items-center gap-3">
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-omf-green text-white">
+              <span className="omf-pop-in flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-omf-green text-white">
                 <Check className="h-4 w-4" strokeWidth={3} aria-hidden />
               </span>
               <div className="min-w-0">

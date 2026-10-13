@@ -1,6 +1,8 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
+import { AnimatePresence, motion } from "framer-motion";
 import { ChevronRight, Plus, RefreshCw, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PullRefreshBrand } from "@/components/PullRefreshBrand";
@@ -27,6 +29,7 @@ import {
 } from "@/lib/release-next-step";
 import { describeRejection, type RejectionSummary } from "@/lib/rejection-reasons";
 import { getTelegramInitDataForApiHeader, getTelegramUserIdForSupabaseRequests } from "@/lib/telegram";
+import { SPRING_UI } from "@/lib/motion-spring";
 
 
 type LibraryStatusFilter = "all" | "processing" | "ready" | "failed";
@@ -54,6 +57,12 @@ function formatShortDate(iso: string | null | undefined): string | null {
   if (Number.isNaN(d.getTime())) return null;
   return d.toLocaleDateString("ru-RU", { day: "numeric", month: "short" }).replace(".", "");
 }
+
+/**
+ * Каскад карточек играет один раз за сессию — когда список впервые пришёл вместо скелетона.
+ * При возврате на вкладку сетка уже знакома, её просто проявляет переход экрана.
+ */
+let libraryGridRevealedOnce = false;
 
 function parseLibraryView(value: string | null): LibraryView {
   if (value === "drafts" || value === "moderation") return value;
@@ -99,6 +108,9 @@ function LibraryPageInner() {
     summary: RejectionSummary;
   } | null>(null);
   const selectedView = parseLibraryView(searchParams.get("view"));
+  const [staggerGrid] = useState(() => !libraryGridRevealedOnce);
+  const [portalReady, setPortalReady] = useState(false);
+  useEffect(() => setPortalReady(true), []);
 
   useEffect(() => {
     if (searchParams.get("fromCreate") !== "1") return;
@@ -288,6 +300,9 @@ function LibraryPageInner() {
   );
 
   const hasReleases = releases.length > 0;
+  useEffect(() => {
+    if (hasReleases) libraryGridRevealedOnce = true;
+  }, [hasReleases]);
   const hasReleasesInView = viewFilteredReleases.length > 0;
   const telegramIdentityReady =
     !isTelegram ||
@@ -354,7 +369,7 @@ function LibraryPageInner() {
       return;
     }
     if (normalized === "failed") {
-      hapticMap.notificationError();
+      hapticMap.impactLight();
       setAdminNotesModal({
         id: release.id,
         title: getReleaseDisplayTitle(release),
@@ -417,17 +432,22 @@ function LibraryPageInner() {
         priority={listIndex < 4}
         busy={isResumingDraft}
         isNew={isNew}
+        revealIndex={staggerGrid ? listIndex : null}
         nextStep={{ text: nextStep.cardLine, className: NEXT_STEP_TONE_CLASS[nextStep.tone] }}
         onClick={() => openRelease(release)}
       />
     );
   };
 
-  const newReleaseTile = (
+  const renderNewReleaseTile = (revealIndex: number | null) => (
     <button
       type="button"
       onClick={handleCreate}
-      className="omf-focus block w-full min-w-0 text-left transition-transform duration-150 active:scale-[0.98]"
+      style={revealIndex != null ? ({ "--omf-i": Math.min(revealIndex, 7) } as CSSProperties) : undefined}
+      className={cn(
+        "omf-focus omf-press block w-full min-w-0 text-left",
+        revealIndex != null && "omf-stagger-in"
+      )}
     >
       <span className="flex aspect-square w-full flex-col items-center justify-center gap-2 rounded-sleeve border-[1.5px] border-dashed border-omf-line-strong text-omf-graphite transition-colors hover:border-omf-graphite hover:text-omf-ink">
         <Plus className="h-7 w-7" strokeWidth={1.75} aria-hidden />
@@ -442,7 +462,7 @@ function LibraryPageInner() {
 
   return (
     <div className="min-h-app text-omf-ink">
-      <PullRefreshBrand />
+      <PullRefreshBrand onRefresh={() => mutate(undefined, { revalidate: true })} />
 
       <div className={cn("mx-auto w-full px-1 pb-40 pt-6", isWeb ? "max-w-[1100px]" : "max-w-lg")}>
         <header className="mb-8 flex items-start justify-between gap-4">
@@ -460,7 +480,7 @@ function LibraryPageInner() {
             }}
             disabled={isValidating || showAuthWait}
             aria-label="Обновить список"
-            className="omf-focus mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-omf-graphite transition-colors hover:bg-omf-surface hover:text-omf-ink disabled:opacity-40"
+            className="omf-focus omf-press omf-press-strong mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-omf-graphite hover:bg-omf-surface hover:text-omf-ink disabled:opacity-40"
           >
             <RefreshCw className={cn("h-[18px] w-[18px]", isValidating && "animate-spin")} aria-hidden />
           </button>
@@ -478,7 +498,7 @@ function LibraryPageInner() {
             <LibraryReleaseSkeletonGrid count={4} />
           </div>
         ) : !showListSkeleton && error != null ? (
-          <div className="border-t border-omf-line pt-6">
+          <div className="omf-fade-enter border-t border-omf-line pt-6">
             <p className="text-[18px] font-bold tracking-tight">Не удалось загрузить релизы</p>
             <p className="mt-1.5 text-[14px] text-omf-graphite">
               Проверь интернет и попробуй ещё раз. Если не поможет, перезапусти приложение.
@@ -492,8 +512,8 @@ function LibraryPageInner() {
             </button>
           </div>
         ) : showEmptyState && isEmpty ? (
-          <div className="grid grid-cols-2 gap-x-4 gap-y-6">
-            {newReleaseTile}
+          <div className="omf-fade-enter grid grid-cols-2 gap-x-4 gap-y-6">
+            {renderNewReleaseTile(null)}
             <div className="col-span-2 -mt-1">
               <p className="text-[18px] font-bold tracking-tight">Выпусти первый релиз</p>
               <p className="mt-1.5 max-w-[34ch] text-[14px] leading-relaxed text-omf-graphite">
@@ -515,7 +535,7 @@ function LibraryPageInner() {
                     onClick={() => onLibraryAction(action)}
                     disabled={resumingId != null}
                     className={cn(
-                      "omf-focus flex w-full items-center gap-3 py-3.5 text-left transition-colors hover:bg-omf-surface disabled:opacity-60",
+                      "omf-focus omf-press flex w-full items-center gap-3 py-3.5 text-left hover:bg-omf-surface disabled:opacity-60",
                       i > 0 && "border-t border-omf-line"
                     )}
                   >
@@ -551,17 +571,28 @@ function LibraryPageInner() {
                       role="tab"
                       aria-selected={active}
                       onClick={() => {
-                        hapticMap.impactLight();
+                        if (active) return;
+                        hapticMap.selection();
                         setStatusFilter(chip.id);
                       }}
-                      className={cn(
-                        "omf-focus shrink-0 rounded-full px-3.5 py-1.5 text-[13px] transition-colors",
-                        active
-                          ? "bg-omf-ink font-medium text-omf-bg"
-                          : "text-omf-graphite hover:text-omf-ink"
-                      )}
+                      className="omf-focus omf-press relative shrink-0 rounded-full px-3.5 py-1.5 text-[13px]"
                     >
-                      {chip.label}
+                      {active ? (
+                        <motion.span
+                          layoutId="library-status-pill"
+                          className="absolute inset-0 rounded-full bg-omf-ink"
+                          transition={{ type: "spring", stiffness: 520, damping: 40 }}
+                          aria-hidden
+                        />
+                      ) : null}
+                      <span
+                        className={cn(
+                          "relative transition-colors duration-200",
+                          active ? "font-medium text-omf-bg" : "text-omf-graphite hover:text-omf-ink"
+                        )}
+                      >
+                        {chip.label}
+                      </span>
                     </button>
                   );
                 })}
@@ -583,58 +614,84 @@ function LibraryPageInner() {
               )}
             >
               {filteredReleases.map((release, i) => renderReleaseBlock(release, i))}
-              {selectedView !== "moderation" ? newReleaseTile : null}
+              {selectedView !== "moderation"
+                ? renderNewReleaseTile(staggerGrid ? filteredReleases.length : null)
+                : null}
             </div>
           </>
         )}
       </div>
 
-      {adminNotesModal && (
-        <div
-          key="admin-notes-modal"
-          className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 p-4 sm:items-center"
-          onClick={() => setAdminNotesModal(null)}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="admin-notes-title"
-            className="w-full max-w-[420px] rounded-[20px] border border-omf-line bg-omf-surface p-5"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="truncate text-[13px] text-omf-graphite">{adminNotesModal.title}</p>
-                <h2 id="admin-notes-title" className="mt-0.5 text-[18px] font-bold tracking-tight text-omf-ink">
-                  Почему релиз отклонён
-                </h2>
-              </div>
-              <button
-                type="button"
-                className="omf-focus -mr-1 rounded-full p-1.5 text-omf-graphite hover:bg-omf-surface-2 hover:text-omf-ink"
-                aria-label="Закрыть"
-                onClick={() => setAdminNotesModal(null)}
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <RejectionNotice
-              className="mt-4 max-h-[60vh] overflow-y-auto border-0 p-0"
-              showTitle={false}
-              summary={adminNotesModal.summary}
-              fixing={resumingId === adminNotesModal.id}
-              onFix={() => void handleFixRejected(adminNotesModal.id)}
-            />
-            <button
-              type="button"
-              className="omf-btn-secondary mt-3 w-full"
-              onClick={() => setAdminNotesModal(null)}
-            >
-              Закрыть
-            </button>
-          </div>
-        </div>
-      )}
+      {/*
+       * Шит «Почему отклонён»: портал в body — у обёртки страницы во время перехода есть
+       * transform/opacity, и `fixed` внутри неё оказался бы под нижней навигацией.
+       */}
+      {portalReady
+        ? createPortal(
+            <AnimatePresence>
+              {adminNotesModal ? (
+                <motion.div
+                  key="admin-notes-modal"
+                  className="fixed inset-0 z-[110] flex flex-col justify-end sm:items-center sm:justify-center"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <button
+                    type="button"
+                    aria-label="Закрыть"
+                    className="absolute inset-0 bg-black/60"
+                    onClick={() => setAdminNotesModal(null)}
+                  />
+                  <motion.div
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="admin-notes-title"
+                    initial={{ y: "100%" }}
+                    animate={{ y: 0 }}
+                    exit={{ y: "100%" }}
+                    transition={SPRING_UI}
+                    className="relative z-10 mx-auto w-full max-w-[420px] rounded-t-[24px] border border-b-0 border-omf-line bg-omf-surface px-5 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] pt-3 sm:mb-0 sm:rounded-[24px] sm:border-b sm:pb-5 sm:pt-5"
+                  >
+                    <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-omf-line-strong sm:hidden" aria-hidden />
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-[13px] text-omf-graphite">{adminNotesModal.title}</p>
+                        <h2 id="admin-notes-title" className="mt-0.5 text-[18px] font-bold tracking-tight text-omf-ink">
+                          Почему релиз отклонён
+                        </h2>
+                      </div>
+                      <button
+                        type="button"
+                        className="omf-focus omf-press omf-press-strong -mr-1 rounded-full p-1.5 text-omf-graphite hover:bg-omf-surface-2 hover:text-omf-ink"
+                        aria-label="Закрыть"
+                        onClick={() => setAdminNotesModal(null)}
+                      >
+                        <X className="h-5 w-5" />
+                      </button>
+                    </div>
+                    <RejectionNotice
+                      className="mt-4 max-h-[60vh] overflow-y-auto border-0 p-0"
+                      showTitle={false}
+                      summary={adminNotesModal.summary}
+                      fixing={resumingId === adminNotesModal.id}
+                      onFix={() => void handleFixRejected(adminNotesModal.id)}
+                    />
+                    <button
+                      type="button"
+                      className="omf-btn-secondary mt-3 w-full"
+                      onClick={() => setAdminNotesModal(null)}
+                    >
+                      Закрыть
+                    </button>
+                  </motion.div>
+                </motion.div>
+              ) : null}
+            </AnimatePresence>,
+            document.body
+          )
+        : null}
     </div>
   );
 }

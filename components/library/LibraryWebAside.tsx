@@ -5,6 +5,7 @@ import { FAQ_ITEMS } from "@/components/library/faq-data";
 import type { FaqTopicKey } from "@/lib/faq-topics";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { cn } from "@/lib/utils";
+import { hapticMap } from "@/lib/haptic-map";
 
 /**
  * Контент страницы FAQ (/requirements): фактические правила OMF, а не общие шаблоны.
@@ -46,6 +47,7 @@ export function LibraryWebAside({ openTopic }: { openTopic?: FaqTopicKey | null 
       <Accordion
         type="multiple"
         defaultValue={openTopic ? [openTopic] : undefined}
+        onValueChange={() => hapticMap.selection()}
         className="border-t border-omf-line"
       >
         {filteredItems.map((item) => {

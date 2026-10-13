@@ -1,62 +1,65 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { useLayoutEffect, useMemo } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { useEffect, useState, type CSSProperties } from "react";
 import { getCreateStepIndexFromPath } from "@/lib/create-steps";
+import { getNavigationId, getPreviousPathname } from "@/lib/route-transition-state";
 
-const OFFSET = 44;
+const OFFSET_PX = 28;
 
-/** Сохраняем путь между монтированиями разных страниц `/create/*` (у каждой страницы свой инстанс Shell). */
-let modulePrevCreatePath: string | null = null;
+type StepEnter = "forward" | "back" | "fade" | "none";
 
+/**
+ * Последний экран мастера, который уже анимировался. У каждой страницы `/create/*` свой
+ * инстанс Shell, и одна страница может перемонтировать его (лоадер → контент) —
+ * повторно «въезжать» в таком случае не нужно.
+ */
+let lastEnter: { path: string; navigationId: number } | null = null;
+
+function resolveStepEnter(pathname: string): StepEnter {
+  const navigationId = getNavigationId();
+  if (lastEnter && lastEnter.path === pathname && lastEnter.navigationId === navigationId) {
+    return "fade";
+  }
+  const prev = getPreviousPathname();
+  if (prev === null) return "none";
+  if (!prev.startsWith("/create")) return "forward";
+  const from = getCreateStepIndexFromPath(prev);
+  const to = getCreateStepIndexFromPath(pathname);
+  if (to > from) return "forward";
+  if (to < from) return "back";
+  return "fade";
+}
+
+/**
+ * Слайд шага мастера: вперёд — справа, назад — слева. Только вход (см. `PageTransition`).
+ * Раньше здесь был `AnimatePresence initial={false}` внутри каждой страницы — он монтировался
+ * заново на каждом шаге и поэтому никогда не анимировал.
+ */
 export function CreateStepTransition({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const prefersReducedMotion = useReducedMotion();
+  const [enter] = useState<StepEnter>(() => resolveStepEnter(pathname));
 
-  const direction = useMemo(() => {
-    const prev = modulePrevCreatePath;
-    if (prev === null) {
-      return 1;
-    }
-    const from = getCreateStepIndexFromPath(prev);
-    const to = getCreateStepIndexFromPath(pathname);
-    return to >= from ? 1 : -1;
+  useEffect(() => {
+    lastEnter = { path: pathname, navigationId: getNavigationId() };
   }, [pathname]);
 
-  useLayoutEffect(() => {
-    modulePrevCreatePath = pathname;
-  }, [pathname]);
-
-  const variants = prefersReducedMotion
-    ? {
-        initial: { opacity: 0 },
-        animate: { opacity: 1 },
-        exit: { opacity: 0 }
-      }
-    : {
-        initial: { opacity: 0, x: direction === 1 ? OFFSET : -OFFSET },
-        animate: { opacity: 1, x: 0 },
-        exit: { opacity: 0, x: direction === 1 ? -OFFSET : OFFSET }
-      };
+  const className =
+    enter === "forward" || enter === "back"
+      ? "omf-step-enter"
+      : enter === "fade"
+        ? "omf-fade-enter"
+        : undefined;
+  const style =
+    enter === "back"
+      ? ({ "--omf-step-from": `-${OFFSET_PX}px` } as CSSProperties)
+      : enter === "forward"
+        ? ({ "--omf-step-from": `${OFFSET_PX}px` } as CSSProperties)
+        : undefined;
 
   return (
-    <AnimatePresence mode="wait" initial={false}>
-      <motion.div
-        key={pathname}
-        variants={variants}
-        initial="initial"
-        animate="animate"
-        exit="exit"
-        transition={
-          prefersReducedMotion
-            ? { duration: 0.15 }
-            : { type: "spring", damping: 26, stiffness: 220 }
-        }
-        style={{ willChange: "transform, opacity" }}
-      >
-        {children}
-      </motion.div>
-    </AnimatePresence>
+    <div className={className} style={style}>
+      {children}
+    </div>
   );
 }

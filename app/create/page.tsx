@@ -19,7 +19,7 @@ export default function CreateEntryPage() {
   }, [router]);
 
   return (
-    <div className="bg-background flex min-h-app items-center justify-center">
+    <div className="omf-delayed-in bg-background flex min-h-app items-center justify-center">
       <div
         className="h-9 w-9 animate-spin rounded-full border-2 border-omf-line border-t-omf-ultra"
         aria-label="Загрузка…"

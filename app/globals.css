@@ -36,6 +36,14 @@
     --omf-sleeve-radius: 5px;
     --omf-control-radius: 14px;
 
+    /*
+     * Движение. Одна кривая на всё приложение: быстрый старт, долгое мягкое торможение.
+     * Нажатие «проваливается» быстро (press-in), отпускание возвращает плавнее — так ощущается вес.
+     */
+    --omf-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+    --omf-dur-press-in: 80ms;
+    --omf-dur-press-out: 240ms;
+
     --background: 222 16% 12%;
     --foreground: 210 11% 93%;
 
@@ -543,13 +551,10 @@ button {
     color: #fff;
     font-weight: 700;
     font-size: 15px;
-    transition: background-color 150ms ease, transform 120ms ease;
-  }
-  .omf-btn-primary:hover {
-    background: var(--omf-ultra-hover);
-  }
-  .omf-btn-primary:active {
-    transform: scale(0.98);
+    transition:
+      background-color 180ms ease,
+      color 180ms ease,
+      transform var(--omf-dur-press-out) var(--omf-ease-out);
   }
   .omf-btn-primary:disabled {
     background: var(--omf-surface-2);
@@ -569,13 +574,9 @@ button {
     color: var(--omf-bg);
     font-weight: 700;
     font-size: 15px;
-    transition: opacity 150ms ease, transform 120ms ease;
-  }
-  .omf-btn-ink:hover {
-    opacity: 0.9;
-  }
-  .omf-btn-ink:active {
-    transform: scale(0.98);
+    transition:
+      opacity 180ms ease,
+      transform var(--omf-dur-press-out) var(--omf-ease-out);
   }
   .omf-btn-ink:focus-visible {
     outline: 2px solid var(--omf-ultra-text);
@@ -594,13 +595,50 @@ button {
     color: var(--omf-ink);
     font-weight: 500;
     font-size: 15px;
-    transition: background-color 150ms ease, transform 120ms ease;
+    transition:
+      background-color 180ms ease,
+      transform var(--omf-dur-press-out) var(--omf-ease-out);
   }
-  .omf-btn-secondary:hover {
-    background: var(--omf-surface);
+
+  /**
+   * Hover только у мыши: на тач-экране :hover «залипает» после тапа и кнопка
+   * остаётся подсвеченной, пока не ткнёшь в другое место.
+   */
+  @media (hover: hover) and (pointer: fine) {
+    .omf-btn-primary:hover:not(:disabled) {
+      background: var(--omf-ultra-hover);
+    }
+    .omf-btn-ink:hover:not(:disabled) {
+      opacity: 0.9;
+    }
+    .omf-btn-secondary:hover:not(:disabled) {
+      background: var(--omf-surface);
+    }
   }
-  .omf-btn-secondary:active {
-    transform: scale(0.98);
+
+  /**
+   * Тактильный отклик нажатия. `omf-press` — для всего, что нажимается, но не является
+   * кнопкой-примитивом: плитки, строки, чипы, иконки. Не смешивать с `transition-*` из Tailwind:
+   * утилита перебьёт transition-property и масштаб начнёт прыгать.
+   */
+  .omf-press {
+    -webkit-tap-highlight-color: transparent;
+    transition-property: transform, opacity, color, background-color, border-color;
+    transition-duration: var(--omf-dur-press-out), 180ms, 180ms, 180ms, 180ms;
+    transition-timing-function: var(--omf-ease-out);
+  }
+
+  .omf-btn-primary:active:not(:disabled),
+  .omf-btn-ink:active:not(:disabled),
+  .omf-btn-secondary:active:not(:disabled),
+  .omf-press:active:not(:disabled):not([aria-disabled="true"]) {
+    transform: scale(0.97);
+    transition-duration: var(--omf-dur-press-in);
+  }
+
+  /** Мелкие цели (иконки, чипы): сжатие заметнее, иначе палец его не «чувствует». */
+  .omf-press-strong:active:not(:disabled):not([aria-disabled="true"]) {
+    transform: scale(0.92);
   }
 
   .omf-focus:focus-visible,
@@ -611,11 +649,126 @@ button {
   }
 }
 
+/* ==========================================
+   OMF motion: появления (CSS, без JS)
+   ==========================================
+ * Только `from` + fill-mode `backwards`: после анимации у элемента не остаётся transform.
+ * Это важно — transform на обёртке страницы делает её containing block для `position: fixed`,
+ * и модалки/шиты внутри начинают позиционироваться от страницы, а не от экрана.
+ */
+@keyframes omf-page-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0);
+  }
+}
+
+@keyframes omf-step-in {
+  from {
+    opacity: 0;
+    transform: translate3d(var(--omf-step-from, 28px), 0, 0);
+  }
+}
+
+@keyframes omf-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes omf-rise-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 14px, 0);
+  }
+}
+
+@keyframes omf-pop-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.12);
+  }
+}
+
+@keyframes omf-cover-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 18px, 0) scale(0.92);
+  }
+}
+
+/** Наклейка статуса «прилетает» и прилипает к конверту с лёгким доворотом. */
+@keyframes omf-sticker-slap {
+  0% {
+    opacity: 0;
+    transform: scale(2.1) rotate(calc(var(--omf-sticker-tilt, -8deg) - 22deg));
+  }
+  55% {
+    opacity: 1;
+    transform: scale(0.9) rotate(calc(var(--omf-sticker-tilt, -8deg) + 3deg));
+  }
+  78% {
+    transform: scale(1.04) rotate(var(--omf-sticker-tilt, -8deg));
+  }
+}
+
+.omf-page-enter {
+  animation: omf-page-in 320ms var(--omf-ease-out) backwards;
+}
+
+.omf-step-enter {
+  animation: omf-step-in 380ms var(--omf-ease-out) backwards;
+}
+
+.omf-fade-enter {
+  animation: omf-fade-in 220ms ease-out backwards;
+}
+
+/** Лоадер появляется с задержкой: быстрые загрузки обходятся без мигания спиннера. */
+.omf-delayed-in {
+  animation: omf-fade-in 240ms ease-out 220ms backwards;
+}
+
+/** Каскад списка: задержку задаёт `--omf-i` (номер элемента, ограничивать в коде). */
+.omf-stagger-in {
+  animation: omf-rise-in 460ms var(--omf-ease-out) backwards;
+  animation-delay: calc(var(--omf-i, 0) * 45ms);
+}
+
+.omf-pop-in {
+  animation: omf-pop-in 380ms var(--omf-ease-out) backwards;
+  animation-delay: var(--omf-delay, 0ms);
+}
+
+.omf-cover-in {
+  animation: omf-cover-in 620ms var(--omf-ease-out) backwards;
+}
+
+.omf-reveal {
+  animation: omf-rise-in 520ms var(--omf-ease-out) backwards;
+  animation-delay: var(--omf-delay, 0ms);
+}
+
+.omf-sticker-slap {
+  animation: omf-sticker-slap 560ms var(--omf-ease-out) backwards;
+  animation-delay: var(--omf-delay, 0ms);
+}
+
+/** Обложка проявляется после загрузки, а не «выстреливает» поверх цветной заглушки. */
+.omf-img-fade {
+  transition: opacity 360ms var(--omf-ease-out);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }

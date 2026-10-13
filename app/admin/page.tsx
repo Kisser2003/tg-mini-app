@@ -330,7 +330,7 @@ export default function AdminPage() {
   const showQueueSkeleton = isLoading && data === undefined;
   return (
     <div className="mx-auto min-h-app max-w-lg px-1 pb-40 pt-6 text-omf-ink lg:max-w-3xl">
-      <PullRefreshBrand />
+      <PullRefreshBrand onRefresh={refreshAll} />
 
       <header className="mb-6 flex items-start justify-between gap-4">
         <div>

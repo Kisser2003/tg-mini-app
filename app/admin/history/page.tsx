@@ -18,6 +18,7 @@ import { SWR_LIST_OPTIONS } from "@/lib/swr-config";
 import { withRequestTimeout } from "@/lib/withRequestTimeout";
 import { countHistoryByStatus, filterHistory, type HistoryStatusFilter } from "@/lib/admin-history-filter";
 import { hapticMap } from "@/lib/haptic-map";
+import { useBackNavigation } from "@/lib/hooks/useTelegramBackButton";
 import { cn } from "@/lib/utils";
 
 type HistoryRow = {
@@ -38,6 +39,7 @@ const NEAR_BOTTOM_OFFSET_PX = 900;
 
 export default function AdminModerationHistoryPage() {
   const router = useRouter();
+  useBackNavigation("/admin");
   const [userId, setUserId] = useState<number | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminResolved, setAdminResolved] = useState(false);
@@ -132,12 +134,12 @@ export default function AdminModerationHistoryPage() {
 
   return (
     <div className="mx-auto min-h-app max-w-lg px-1 pb-40 pt-4 text-omf-ink lg:max-w-3xl">
-      <PullRefreshBrand />
+      <PullRefreshBrand onRefresh={() => mutate(undefined, { revalidate: true })} />
 
       <div className="mb-4 flex items-center justify-between gap-3">
         <Link
           href="/admin"
-          className="omf-focus -ml-2 inline-flex items-center gap-1.5 rounded-full px-2 py-1.5 text-[14px] text-omf-graphite transition-colors hover:text-omf-ink"
+          className="omf-focus omf-press -ml-2 inline-flex items-center gap-1.5 rounded-full px-2 py-1.5 text-[14px] text-omf-graphite hover:text-omf-ink"
         >
           <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden />
           Очередь

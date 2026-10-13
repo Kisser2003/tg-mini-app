@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { motion } from "framer-motion";
 import { usePathname, useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import {
@@ -17,6 +18,10 @@ import { useTelegramBackButton } from "@/lib/hooks/useTelegramBackButton";
 import { getTelegramWebApp } from "@/lib/telegram";
 import { cn } from "@/lib/utils";
 import { trackFunnel } from "@/lib/funnel-analytics";
+import { getPreviousPathname } from "@/lib/route-transition-state";
+
+/** Шаг, который был в шапке до текущей страницы (у каждой страницы свой инстанс Shell). */
+let lastShellStepIndex: number | null = null;
 
 export function CreateShell({
   children,
@@ -57,13 +62,30 @@ export function CreateShell({
     };
   }, []);
 
+  const stepCount = CREATE_FLOW_STEPS.length - 1;
+  const isSuccess = activeIndex >= stepCount;
+
+  /**
+   * Нативная «Назад» в шапке Telegram на всех шагах, включая паспорт (→ релизы).
+   * На «Готово» скрыта: возврат к проверке уже отправленного релиза не нужен.
+   */
   useTelegramBackButton(
     () => {
       haptics.impactLight();
       router.push(getCreateBackPath(pathname));
     },
-    activeIndex > 0
+    !isSuccess
   );
+
+  /** С какого шага пришли: прогресс дорисовывается (или стирается) от него к текущему. */
+  const [fromIndex] = useState(() => {
+    const prev = getPreviousPathname();
+    if (!prev || !prev.startsWith("/create")) return activeIndex;
+    return lastShellStepIndex ?? activeIndex;
+  });
+  useEffect(() => {
+    lastShellStepIndex = activeIndex;
+  }, [activeIndex]);
 
   const goBack = () => {
     haptics.impactLight();
@@ -75,8 +97,6 @@ export function CreateShell({
     if (stepKey) trackFunnel("wizard_step_view", { step: stepKey });
   }, [stepKey]);
 
-  const stepCount = CREATE_FLOW_STEPS.length - 1;
-  const isSuccess = activeIndex >= stepCount;
   const stepLabel = CREATE_FLOW_STEPS[activeIndex]?.label ?? "";
 
   return (
@@ -92,7 +112,7 @@ export function CreateShell({
             <button
               type="button"
               onClick={goBack}
-              className="omf-focus -ml-2 mb-4 inline-flex items-center gap-1.5 rounded-full px-2 py-1.5 text-[14px] text-omf-graphite transition-colors hover:text-omf-ink"
+              className="omf-focus omf-press -ml-2 mb-4 inline-flex items-center gap-1.5 rounded-full px-2 py-1.5 text-[14px] text-omf-graphite hover:text-omf-ink"
             >
               <ArrowLeft className="h-4 w-4" aria-hidden />
               {activeIndex === 0 ? "Релизы" : CREATE_FLOW_STEPS[activeIndex - 1]?.label}
@@ -130,13 +150,19 @@ export function CreateShell({
               aria-valuenow={activeIndex + 1}
             >
               {CREATE_FLOW_STEPS.slice(0, stepCount).map((s, i) => (
-                <span
-                  key={s.key}
-                  className={cn(
-                    "h-[3px] flex-1 rounded-full transition-colors duration-300",
-                    i <= activeIndex ? "bg-omf-ultra" : "bg-omf-line"
-                  )}
-                />
+                <span key={s.key} className="relative h-[3px] flex-1 overflow-hidden rounded-full bg-omf-line">
+                  <motion.span
+                    className="absolute inset-0 origin-left rounded-full bg-omf-ultra"
+                    initial={{ scaleX: i <= fromIndex ? 1 : 0 }}
+                    animate={{ scaleX: i <= activeIndex ? 1 : 0 }}
+                    transition={{
+                      duration: 0.55,
+                      ease: [0.22, 1, 0.36, 1],
+                      /** Сегмент заполняется, когда экран шага уже въехал. */
+                      delay: i > fromIndex ? 0.12 : 0
+                    }}
+                  />
+                </span>
               ))}
             </div>
 

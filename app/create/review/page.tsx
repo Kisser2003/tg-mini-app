@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { ReleaseSleeve } from "@/components/ReleaseSleeve";
 import { CreateShell } from "@/features/release/createRelease/components/CreateShell";
 import { hapticMap } from "@/lib/haptic-map";
+import { cn } from "@/lib/utils";
 import { StepGate } from "@/features/release/createRelease/components/StepGate";
 import { useStepGuard } from "@/features/release/createRelease/guards";
 import {
@@ -168,7 +169,8 @@ export default function CreateReviewPage() {
       });
       return;
     }
-    hapticMap.notificationSuccess();
+    /** Весомый «клик» на отправку; успех (notification) сыграет экран «Готово», когда он реально наступит. */
+    hapticMap.impactMedium();
     const files = trackFiles.filter(Boolean) as File[];
     setIsSubmitting(true);
     let ok = false;
@@ -393,7 +395,7 @@ export default function CreateReviewPage() {
                   disabled={isSubmitting}
                   aria-invalid={termsHint && !termsAccepted}
                   onChange={(e) => {
-                    triggerHaptic("light");
+                    hapticMap.selection();
                     setTermsAccepted(e.target.checked);
                     if (e.target.checked) setTermsHint(false);
                   }}
@@ -405,7 +407,7 @@ export default function CreateReviewPage() {
                 </span>
               </label>
               {termsHint && !termsAccepted ? (
-                <p role="alert" className="mt-2 pl-8 text-[14px] text-omf-red">
+                <p role="alert" className="omf-fade-enter mt-2 pl-8 text-[14px] text-omf-red">
                   Отметь галочку, чтобы отправить релиз.
                 </p>
               ) : null}
@@ -423,7 +425,7 @@ export default function CreateReviewPage() {
           ) : null}
 
           {showProgressPanel ? (
-            <div className={progressActive ? "" : "mt-4"}>
+            <div className={cn("omf-fade-enter", !progressActive && "mt-4")}>
               <UploadProgress label={stageLabel} progress={submitProgress} />
             </div>
           ) : null}

@@ -633,27 +633,37 @@ function CreateMetadataPageInner() {
                 {RELEASE_TYPE_SEGMENTS.map(({ value: rt, label }) => {
                   const active = values.releaseType === rt;
                   return (
-                    <motion.button
+                    <button
                       key={rt}
                       type="button"
                       onClick={() => {
-                        hapticMap.impactLight();
+                        if (active) return;
+                        hapticMap.selection();
                         setValue("releaseType", rt, {
                           shouldValidate: true,
                           shouldDirty: true,
                           shouldTouch: true
                         });
                       }}
-                      whileTap={{ scale: 0.96 }}
                       aria-pressed={active}
-                      className={`omf-focus min-h-[48px] flex-1 rounded-control text-[15px] transition-colors duration-150 ${
-                        active
-                          ? "bg-omf-ink font-bold text-omf-bg"
-                          : "border border-omf-line-strong font-medium text-omf-graphite hover:text-omf-ink"
-                      }`}
+                      className="omf-focus omf-press relative min-h-[48px] flex-1 rounded-control border border-omf-line-strong text-[15px]"
                     >
-                      {label}
-                    </motion.button>
+                      {active ? (
+                        <motion.span
+                          layoutId="release-type-pill"
+                          className="absolute -inset-px rounded-control bg-omf-ink"
+                          transition={{ type: "spring", stiffness: 520, damping: 40 }}
+                          aria-hidden
+                        />
+                      ) : null}
+                      <span
+                        className={`relative transition-colors duration-200 ${
+                          active ? "font-bold text-omf-bg" : "font-medium text-omf-graphite hover:text-omf-ink"
+                        }`}
+                      >
+                        {label}
+                      </span>
+                    </button>
                   );
                 })}
               </div>

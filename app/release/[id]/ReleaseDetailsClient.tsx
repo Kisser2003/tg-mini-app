@@ -26,6 +26,7 @@ import { reopenRejectedRelease, resumeDraftFromRelease } from "@/features/releas
 import { getReleaseNextStep } from "@/lib/release-next-step";
 import { useCreateReleaseDraftStore } from "@/features/release/createRelease/store";
 import { hapticMap } from "@/lib/haptic-map";
+import { useBackNavigation } from "@/lib/hooks/useTelegramBackButton";
 import { toast } from "sonner";
 
 type ReleaseDetailsTrackRow = {
@@ -116,6 +117,7 @@ export default function ReleaseDetailsClient() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [fixing, setFixing] = useState(false);
+  const goBack = useBackNavigation("/library");
 
   useEffect(() => {
     debugInit("release/details", "init start");
@@ -223,8 +225,8 @@ export default function ReleaseDetailsClient() {
   const backButton = (
     <button
       type="button"
-      onClick={() => router.back()}
-      className="omf-focus -ml-2 mb-4 inline-flex items-center gap-1.5 rounded-full px-2 py-1.5 text-[14px] text-omf-graphite transition-colors hover:text-omf-ink"
+      onClick={goBack}
+      className="omf-focus omf-press -ml-2 mb-4 inline-flex items-center gap-1.5 rounded-full px-2 py-1.5 text-[14px] text-omf-graphite hover:text-omf-ink"
     >
       <ArrowLeft className="h-4 w-4" aria-hidden />
       Релизы
@@ -352,6 +354,8 @@ export default function ReleaseDetailsClient() {
     <>
       {backButton}
 
+      {/* Скелетон → контент без скачка: кнопка «Назад» остаётся на месте, остальное проявляется. */}
+      <div className="omf-fade-enter">
       <div className="mx-auto w-[72%] max-w-[300px]">
         <ReleaseSleeve
           seed={release.id}
@@ -482,6 +486,7 @@ export default function ReleaseDetailsClient() {
           Скачать аудио
         </a>
       ) : null}
+      </div>
     </>
   );
 }

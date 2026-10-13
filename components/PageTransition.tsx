@@ -1,38 +1,33 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { getNavigationId, notePathname } from "@/lib/route-transition-state";
+import { cn } from "@/lib/utils";
 
 /**
- * Глобальный fade между разделами (библиотека, релиз, админ…).
- * Маршруты `/create/*` без глобального fade — слайд шагов в `CreateShell` / `CreateStepTransition`.
- * `motion.div` с `initial={false}` — не начинать кадр с opacity 0 (Safari мог показывать «пустой» экран).
+ * Появление экрана при переходе между разделами (библиотека, релиз, админ…).
+ *
+ * Только вход, без выхода: в App Router уходящая страница при exit-анимации рендерит уже
+ * новый контент (контекст роутера обновился), и раньше это давало мигание «новый экран →
+ * гаснет → появляется снова» плюс 300 мс задержки на каждый тап по табу.
+ *
+ * CSS-анимация вместо framer: не зависит от JS-кадров (не «зависает» на opacity 0 в Safari)
+ * и после окончания не оставляет transform на обёртке.
+ *
+ * Первый экран после запуска не анимируется — Telegram уже показал свою заставку.
+ * `/create/*` анимирует `CreateStepTransition` (направление шага).
  */
 export function PageTransition({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const prefersReducedMotion = useReducedMotion();
-  const isCreateWizard = pathname.startsWith("/create");
-
-  const transition = prefersReducedMotion
-    ? { duration: 0 }
-    : isCreateWizard
-      ? { duration: 0 }
-      : { duration: 0.3, ease: [0.22, 1, 0.36, 1] as const };
-
-  const instant = prefersReducedMotion || isCreateWizard;
+  notePathname(pathname);
+  const animate = getNavigationId() > 1 && !pathname.startsWith("/create");
 
   return (
-    <AnimatePresence mode="wait" initial={false}>
-      <motion.div
-        key={pathname}
-        className="relative min-h-app w-full min-w-0 overflow-x-hidden will-change-[opacity]"
-        initial={false}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: instant ? 1 : 0 }}
-        transition={transition}
-      >
-        {children}
-      </motion.div>
-    </AnimatePresence>
+    <div
+      key={pathname}
+      className={cn("relative min-h-app w-full min-w-0 overflow-x-hidden", animate && "omf-page-enter")}
+    >
+      {children}
+    </div>
   );
 }
