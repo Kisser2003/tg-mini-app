@@ -1,24 +1,27 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CreateShell } from "@/features/release/createRelease/components/CreateShell";
 import { StepGate } from "@/features/release/createRelease/components/StepGate";
 import { useCreateReleaseDraftStore } from "@/features/release/createRelease/store";
 import { SuccessReleaseModal } from "@/components/SuccessReleaseModal";
-import { triggerHaptic } from "@/lib/telegram";
+import { getTelegramUserId, isTelegramMiniApp, triggerHaptic } from "@/lib/telegram";
 
 type LeavingIntent = "home" | "create" | null;
 
 export default function CreateSuccessPage() {
   const router = useRouter();
-  const leavingRef = useRef<LeavingIntent>(null);
+  /** State, а не ref: экран «Переход…» должен перерисоваться до навигации. */
+  const [leaving, setLeaving] = useState<LeavingIntent>(null);
+  const [notifiesInTelegram, setNotifiesInTelegram] = useState(false);
   const summary = useCreateReleaseDraftStore((s) => s.successSummary);
   const resetDraft = useCreateReleaseDraftStore((s) => s.resetDraft);
   const resetSubmissionUi = useCreateReleaseDraftStore((s) => s.resetSubmissionUi);
 
   useEffect(() => {
     resetSubmissionUi();
+    setNotifiesInTelegram(isTelegramMiniApp() || getTelegramUserId() != null);
   }, [resetSubmissionUi]);
 
   useEffect(() => {
@@ -30,8 +33,6 @@ export default function CreateSuccessPage() {
       }
     }
   }, [summary]);
-
-  const leaving = leavingRef.current;
 
   if (leaving) {
     return (
@@ -61,13 +62,14 @@ export default function CreateSuccessPage() {
       ) : (
         <SuccessReleaseModal
           summary={summary}
+          notifiesInTelegram={notifiesInTelegram}
           onGoHome={() => {
-            leavingRef.current = "home";
+            setLeaving("home");
             resetDraft();
             router.push("/library?fromCreate=1");
           }}
           onUploadAnother={() => {
-            leavingRef.current = "create";
+            setLeaving("create");
             resetDraft();
             router.push("/create/metadata");
           }}

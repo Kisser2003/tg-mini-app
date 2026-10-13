@@ -2,14 +2,17 @@
 
 import type { CreateReleaseSuccessSummary } from "@/features/release/createRelease/types";
 import { ReleaseSleeve } from "@/components/ReleaseSleeve";
+import { MODERATION_SLA_HOURS } from "@/lib/release-next-step";
 
 type Props = {
   summary: CreateReleaseSuccessSummary;
+  /** Решение придёт сообщением от бота (Mini App). На сайте без Telegram — нет. */
+  notifiesInTelegram: boolean;
   onGoHome: () => void;
   onUploadAnother: () => void;
 };
 
-export function SuccessReleaseModal({ summary, onGoHome, onUploadAnother }: Props) {
+export function SuccessReleaseModal({ summary, notifiesInTelegram, onGoHome, onUploadAnother }: Props) {
   const title = (summary.releaseName ?? summary.trackName)?.trim() || "Релиз";
 
   return (
@@ -29,7 +32,10 @@ export function SuccessReleaseModal({ summary, onGoHome, onUploadAnother }: Prop
         Отправлено на проверку
       </h1>
       <p className="mt-3 max-w-[32ch] text-[15px] leading-relaxed text-omf-graphite">
-        Модератор проверит «{title}» — обычно до 24 часов — и напишет в этот бот, когда будет решение. Статус релиза всегда виден в списке релизов.
+        Модератор проверит «{title}», обычно до {MODERATION_SLA_HOURS} часов.{" "}
+        {notifiesInTelegram
+          ? "Когда будет решение, напишем в этот бот. Статус всегда виден в списке релизов."
+          : "Когда будет решение, статус обновится в списке релизов."}
       </p>
 
       <div className="mt-10 flex w-full flex-col gap-3">
