@@ -1,0 +1,14 @@
+# generated per video
+ref/
+screens/
+snap/
+tmp/
+assets/fonts/
+assets/fonts.css
+assets/music.wav
+/index.html
+*.mp4
+/*.png
+!assets/**/*.png
+render.log
+brag-output-*/

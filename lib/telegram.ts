@@ -51,8 +51,14 @@ type TelegramWebApp = {
   HapticFeedback?: HapticFeedback;
   expand?: () => void;
   ready?: () => void;
-  setHeaderColor?: (colorKey: "bg_color" | "secondary_bg_color") => void;
+  /** Bot API 6.9+: принимает и hex-цвет. */
+  setHeaderColor?: (color: "bg_color" | "secondary_bg_color" | `#${string}`) => void;
   setBackgroundColor?: (color: string) => void;
+  /** Bot API 7.10+. */
+  setBottomBarColor?: (color: string) => void;
+  /** Bot API 7.7+: свайп вниз по контенту больше не сворачивает мини-апп. */
+  disableVerticalSwipes?: () => void;
+  isVersionAtLeast?: (version: string) => boolean;
   enableClosingConfirmation?: () => void;
   disableClosingConfirmation?: () => void;
   /** Открыть ссылку во внешнем браузере (TMA). */
@@ -214,6 +220,59 @@ export function setTelegramClosingConfirmation(enabled: boolean): void {
   else releaseTelegramClosingConfirmation();
 }
 
+/** Фон приложения (`--omf-bg`): шапка, подложка и нижняя полоса Telegram в тон интерфейсу. */
+const OMF_CHROME_COLOR = "#1a1d24";
+
+let chromeAppliedFor: TelegramWebApp | null = null;
+
+/**
+ * «Хром» Telegram вокруг мини-аппа — один раз на объект WebApp.
+ * Каждый вызов в своём try: на старых клиентах метод с неподдерживаемым аргументом бросает,
+ * и это не должно ломать остальное (в т.ч. запись cookie с initData ниже).
+ */
+function applyTelegramChrome(webApp: TelegramWebApp): void {
+  if (chromeAppliedFor === webApp) return;
+  chromeAppliedFor = webApp;
+
+  const atLeast = (version: string): boolean => {
+    try {
+      return Boolean(webApp.isVersionAtLeast?.(version));
+    } catch {
+      return false;
+    }
+  };
+
+  /**
+   * Раньше шапка была `bg_color` — цвет темы Telegram, а не приложения: в светлой теме
+   * сверху белая полоса над графитовым экраном. Hex — с 6.9.
+   */
+  try {
+    webApp.setHeaderColor?.(atLeast("6.9") ? OMF_CHROME_COLOR : "bg_color");
+  } catch {
+    /* ignore */
+  }
+  /** Подложка WebView: без вспышки цвета темы Telegram до первой отрисовки и при оверскролле. */
+  try {
+    if (atLeast("6.1")) webApp.setBackgroundColor?.(OMF_CHROME_COLOR);
+  } catch {
+    /* ignore */
+  }
+  try {
+    if (atLeast("7.10")) webApp.setBottomBarColor?.(OMF_CHROME_COLOR);
+  } catch {
+    /* ignore */
+  }
+  /**
+   * Список релизов длинный: свайп вниз у верха страницы сворачивал мини-апп (а с включённым
+   * подтверждением закрытия — ещё и показывал диалог). Закрыть по-прежнему можно из шапки.
+   */
+  try {
+    if (atLeast("7.7")) webApp.disableVerticalSwipes?.();
+  } catch {
+    /* ignore */
+  }
+}
+
 export function initTelegramWebApp() {
   const webApp = getTelegramWebApp();
   if (!webApp) return null;
@@ -222,7 +281,13 @@ export function initTelegramWebApp() {
     webApp.ready?.();
     /** Развернуть WebApp на весь экран (меньше «дёрганий» от системной шапки Telegram). */
     webApp.expand?.();
-    webApp.setHeaderColor?.("bg_color");
+  } catch {
+    // ignore API errors in regular browser
+  }
+
+  applyTelegramChrome(webApp);
+
+  try {
     if (webApp.initData) {
       const encoded = encodeURIComponent(webApp.initData);
       const secure = window.location.protocol === "https:" ? "; Secure" : "";

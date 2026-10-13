@@ -6,6 +6,8 @@ import { getTelegramApiAuthHeaders } from "@/lib/telegram";
 import { toast } from "sonner";
 import { useIsTelegramMiniApp } from "@/lib/hooks/useIsTelegramMiniApp";
 import { useLogout, useWebAuth } from "@/lib/hooks/useWebAuth";
+import { useBackNavigation } from "@/lib/hooks/useTelegramBackButton";
+import { hapticMap } from "@/lib/haptic-map";
 import type { UserPreferences } from "@/app/api/settings/preferences/route";
 
 // ─── Fetcher ──────────────────────────────────────────────────────────────────
@@ -66,13 +68,16 @@ function ToggleRow({
         aria-checked={checked}
         aria-label={label}
         disabled={disabled}
-        onClick={() => onChange(!checked)}
-        className={`omf-focus relative inline-flex h-8 w-[52px] shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
+        onClick={() => {
+          hapticMap.selection();
+          onChange(!checked);
+        }}
+        className={`omf-focus omf-press relative inline-flex h-8 w-[52px] shrink-0 items-center rounded-full disabled:cursor-wait ${
           checked ? "bg-omf-ultra" : "bg-omf-line-strong"
         }`}
       >
         <span
-          className={`inline-block h-6 w-6 rounded-full bg-white transition-transform ${
+          className={`inline-block h-6 w-6 rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.35)] transition-transform duration-300 ease-[cubic-bezier(0.34,1.4,0.64,1)] ${
             checked ? "translate-x-[25px]" : "translate-x-[3px]"
           }`}
         />
@@ -84,6 +89,7 @@ function ToggleRow({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
+  useBackNavigation("/requirements");
   const isTelegramContext = useIsTelegramMiniApp();
   const {
     data: prefs,
@@ -97,20 +103,30 @@ export default function SettingsPage() {
 
   // ─── Handlers ──────────────────────────────────────────────────────────────
 
+  /**
+   * Переключатель двигается сразу (оптимистично), сервер догоняет. Раньше бегунок стоял
+   * на месте до ответа API — тап ощущался как «не сработал». При ошибке откатываем.
+   */
   const handleTogglePush = useCallback(
     async (value: boolean) => {
+      const previous = prefs;
       setIsSavingPush(true);
+      if (previous) {
+        void mutate({ ...previous, push_notifications: value }, { revalidate: false });
+      }
       try {
         const updated = await savePreferences({ push_notifications: value });
         await mutate(updated, { revalidate: false });
         toast.success(value ? "Уведомления включены" : "Уведомления выключены");
       } catch (e) {
+        hapticMap.notificationError();
+        if (previous) void mutate(previous, { revalidate: false });
         toast.error(e instanceof Error ? e.message : "Не удалось сохранить. Попробуй ещё раз.");
       } finally {
         setIsSavingPush(false);
       }
     },
-    [mutate]
+    [mutate, prefs]
   );
 
   // ─── Render ─────────────────────────────────────────────────────────────────

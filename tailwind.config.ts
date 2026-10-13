@@ -2,6 +2,13 @@ import type { Config } from "tailwindcss";
 
 export default {
   darkMode: ["class"],
+  /**
+   * `hover:` только для мыши/трекпада. В Telegram на телефоне hover-стили «залипали»
+   * после тапа (строка/кнопка оставалась подсвеченной), что выглядит как баг.
+   */
+  future: {
+    hoverOnlyWhenSupported: true
+  },
   content: [
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
     "./pages/**/*.{js,ts,jsx,tsx,mdx}",
@@ -122,8 +129,8 @@ export default {
         }
       },
       animation: {
-        "accordion-down": "accordion-down 0.2s ease-out",
-        "accordion-up": "accordion-up 0.2s ease-out",
+        "accordion-down": "accordion-down 0.32s cubic-bezier(0.22, 1, 0.36, 1)",
+        "accordion-up": "accordion-up 0.24s cubic-bezier(0.22, 1, 0.36, 1)",
         "empty-wave-breathe": "empty-wave-breathe 3.2s ease-in-out infinite",
         "empty-wave-glow": "empty-wave-glow 2.4s ease-in-out infinite",
         "hero-wave-bar": "hero-wave-bar var(--bar-dur, 1.6s) ease-in-out infinite"

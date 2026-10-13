@@ -86,7 +86,7 @@ export function MultiLinkReleaseRow({
       <Link
         href={`/release/${releaseId}`}
         onClick={() => hapticMap.impactLight()}
-        className="omf-focus mt-3 inline-block rounded-full text-[14px] text-omf-graphite transition-colors hover:text-omf-ink"
+        className="omf-focus omf-press mt-3 inline-block rounded-full text-[14px] text-omf-graphite hover:text-omf-ink"
       >
         Страница релиза
       </Link>

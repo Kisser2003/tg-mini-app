@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import type { CSSProperties } from "react";
+import { useCallback, useState, type CSSProperties } from "react";
 import type { CanonicalReleaseStatus } from "@/lib/release-status";
 import { cn } from "@/lib/utils";
 
@@ -63,6 +63,11 @@ export type ReleaseSleeveProps = {
   size?: "tile" | "thumb" | "hero";
   priority?: boolean;
   className?: string;
+  /**
+   * Наклейка «прилетает» и прилипает к конверту (новое решение модератора, экран «Готово»).
+   * Значение — задержка в мс.
+   */
+  stickerSlapDelayMs?: number;
 };
 
 export function ReleaseSleeve({
@@ -73,8 +78,20 @@ export function ReleaseSleeve({
   seed,
   size = "tile",
   priority = false,
-  className
+  className,
+  stickerSlapDelayMs
 }: ReleaseSleeveProps) {
+  /** Для какого URL картинка уже загружена: при смене обложки новая тоже проявляется плавно. */
+  const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
+  const imageReady = coverUrl != null && loadedSrc === coverUrl;
+  /** Картинка из кэша могла загрузиться раньше, чем React повесил onLoad. */
+  const imageRef = useCallback(
+    (img: HTMLImageElement | null) => {
+      if (coverUrl && img?.complete && img.naturalWidth > 0) setLoadedSrc(coverUrl);
+    },
+    [coverUrl]
+  );
+
   const h = hashSeed(seed);
   const blank = BLANK_SLEEVES[h % BLANK_SLEEVES.length];
   const sticker = status ? STICKERS[status] : null;
@@ -90,13 +107,16 @@ export function ReleaseSleeve({
     >
       {coverUrl ? (
         <Image
+          ref={imageRef}
           src={coverUrl}
           alt=""
           fill
           sizes={sizes}
           priority={priority}
           unoptimized={coverUrl.startsWith("blob:") || coverUrl.startsWith("data:")}
-          className="rounded-sleeve object-cover"
+          onLoad={() => setLoadedSrc(coverUrl)}
+          onError={() => setLoadedSrc(coverUrl)}
+          className={cn("omf-img-fade rounded-sleeve object-cover", imageReady ? "opacity-100" : "opacity-0")}
         />
       ) : (
         <div
@@ -138,9 +158,10 @@ export function ReleaseSleeve({
 
       {showSticker && sticker ? (
         <span
-          className="omf-sticker"
+          className={cn("omf-sticker", stickerSlapDelayMs != null && "omf-sticker-slap")}
           style={
             {
+              ...(stickerSlapDelayMs != null ? { "--omf-delay": `${stickerSlapDelayMs}ms` } : null),
               background: sticker.background,
               color: sticker.color,
               border: sticker.border,

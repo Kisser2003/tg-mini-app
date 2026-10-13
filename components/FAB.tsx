@@ -76,7 +76,7 @@ export function FAB() {
             bottom: "calc(var(--bottom-nav-height, 4.5rem) + 0.75rem + env(safe-area-inset-bottom, 0px))",
             right: isTelegram ? "1.25rem" : "2rem"
           }}
-          whileTap={{ scale: 0.85 }}
+          whileTap={{ scale: 0.9 }}
         >
           <Plus size={26} strokeWidth={2.5} />
         </motion.button>

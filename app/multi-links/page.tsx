@@ -2,6 +2,7 @@
 
 import { Suspense, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
 import { AuthGuard } from "@/components/AuthGuard";
 import { MultiLinkReleaseRow } from "@/components/MultiLinkReleaseRow";
 import { PullRefreshBrand } from "@/components/PullRefreshBrand";
@@ -26,7 +27,8 @@ function MultiLinksPageInner() {
     releases,
     isBootstrapping,
     error,
-    isValidating
+    isValidating,
+    mutate
   } = useReleases();
 
   const [query, setQuery] = useState("");
@@ -65,7 +67,7 @@ function MultiLinksPageInner() {
 
   return (
     <div className="mx-auto min-h-app w-full max-w-lg px-1 pb-40 pt-6 text-omf-ink">
-      <PullRefreshBrand />
+      <PullRefreshBrand onRefresh={() => mutate(undefined, { revalidate: true })} />
       <header className="mb-6">
         <p className="text-[13px] text-omf-graphite">Ссылки на выпущенные релизы</p>
         <h1 className="mt-1 text-[40px] font-extrabold leading-[0.92] tracking-[-0.045em]">Ссылки</h1>
@@ -104,15 +106,28 @@ function MultiLinksPageInner() {
             role="tab"
             aria-selected={sort === opt.id}
             onClick={() => {
-              hapticMap.impactLight();
+              if (sort === opt.id) return;
+              hapticMap.selection();
               setSort(opt.id);
             }}
-            className={cn(
-              "omf-focus shrink-0 rounded-full px-3.5 py-1.5 text-[13px] transition-colors",
-              sort === opt.id ? "bg-omf-ink font-medium text-omf-bg" : "text-omf-graphite hover:text-omf-ink"
-            )}
+            className="omf-focus omf-press relative shrink-0 rounded-full px-3.5 py-1.5 text-[13px]"
           >
-            {opt.label}
+            {sort === opt.id ? (
+              <motion.span
+                layoutId="multi-links-sort-pill"
+                className="absolute inset-0 rounded-full bg-omf-ink"
+                transition={{ type: "spring", stiffness: 520, damping: 40 }}
+                aria-hidden
+              />
+            ) : null}
+            <span
+              className={cn(
+                "relative transition-colors duration-200",
+                sort === opt.id ? "font-medium text-omf-bg" : "text-omf-graphite hover:text-omf-ink"
+              )}
+            >
+              {opt.label}
+            </span>
           </button>
         ))}
       </div>
@@ -126,7 +141,7 @@ function MultiLinksPageInner() {
       {showSkeleton ? (
         <LibraryReleaseSkeletonGrid count={4} variant="rows" />
       ) : filtered.length === 0 ? (
-        <div className="border-t border-omf-line pt-6">
+        <div className="omf-fade-enter border-t border-omf-line pt-6">
           <p className="text-[18px] font-bold tracking-tight">
             {withLinks.length === 0 ? "Ссылок пока нет" : "Ничего не нашлось"}
           </p>
@@ -136,13 +151,20 @@ function MultiLinksPageInner() {
               : "Попробуй другое название или имя артиста."}
           </p>
           {withLinks.length === 0 && (
-            <button onClick={() => router.push("/create/metadata")} className="omf-btn-primary mt-5 w-full">
+            <button
+              type="button"
+              onClick={() => {
+                hapticMap.impactLight();
+                router.push("/create/metadata");
+              }}
+              className="omf-btn-primary mt-5 w-full"
+            >
               Создать релиз
             </button>
           )}
         </div>
       ) : (
-        <div className="flex flex-col">
+        <div className="omf-fade-enter flex flex-col">
           {filtered.map((r, i) => (
             <MultiLinkReleaseRow
               key={r.id}

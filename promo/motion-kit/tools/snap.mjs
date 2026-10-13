@@ -1,0 +1,20 @@
+import { chromium } from '../../../node_modules/playwright/index.mjs';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path'; import fs from 'node:fs'; import { execFileSync } from 'node:child_process';
+const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+let times = process.argv.slice(2).map(Number).filter(n => !isNaN(n));
+if (process.argv[2] === 'sheet') times = Array.from({ length: 30 }, (_, i) => i + 0.5);
+const dir = path.join(root, 'snap'); fs.rmSync(dir, { recursive: true, force: true }); fs.mkdirSync(dir, { recursive: true });
+const launchOpts = process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : { channel: 'chrome' };
+const browser = await chromium.launch({ ...launchOpts, headless: true, args: ['--allow-file-access-from-files'] });
+const page = await browser.newPage({ viewport: { width: 1080, height: 1920 } });
+page.on('pageerror', e => console.log('[pageerror]', e.message));
+page.on('console', m => m.type() === 'error' && console.log('[console]', m.text()));
+await page.goto('file://' + path.join(root, 'index.html') + '?render=1');
+await page.evaluate(() => window.ready);
+let i = 0;
+for (const t of times) { await page.evaluate(t => window.seek(t), t); await page.screenshot({ path: path.join(dir, `s${String(i++).padStart(3, '0')}.png`) }); }
+await browser.close();
+const cols = Math.min(times.length, 6), rows = Math.ceil(times.length / cols);
+execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-pattern_type', 'glob', '-i', path.join(dir, 's*.png'), '-vf', `scale=360:-1,tile=${cols}x${rows}:padding=4`, '-frames:v', '1', path.join(root, 'sheet.png')]);
+console.log('ok', times.join(' '));

@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation";
 import { CreateShell } from "@/features/release/createRelease/components/CreateShell";
 import { StepGate } from "@/features/release/createRelease/components/StepGate";
 import { useCreateReleaseDraftStore } from "@/features/release/createRelease/store";
-import { SuccessReleaseModal } from "@/components/SuccessReleaseModal";
-import { getTelegramUserId, isTelegramMiniApp, triggerHaptic } from "@/lib/telegram";
+import { SUCCESS_STICKER_IMPACT_MS, SuccessReleaseModal } from "@/components/SuccessReleaseModal";
+import { hapticMap } from "@/lib/haptic-map";
+import { getTelegramUserId, isTelegramMiniApp } from "@/lib/telegram";
 
 type LeavingIntent = "home" | "create" | null;
 
@@ -24,20 +25,17 @@ export default function CreateSuccessPage() {
     setNotifiesInTelegram(isTelegramMiniApp() || getTelegramUserId() != null);
   }, [resetSubmissionUi]);
 
+  /** «Успех» в руку — в момент, когда наклейка шлёпается на обложку, а не раньше картинки. */
   useEffect(() => {
-    if (summary) {
-      try {
-        triggerHaptic("success");
-      } catch {
-        /* ignore */
-      }
-    }
+    if (!summary) return;
+    const t = window.setTimeout(() => hapticMap.notificationSuccess(), SUCCESS_STICKER_IMPACT_MS);
+    return () => window.clearTimeout(t);
   }, [summary]);
 
   if (leaving) {
     return (
       <CreateShell>
-        <div className="flex min-h-[40vh] flex-col items-center justify-center gap-4 px-4">
+        <div className="omf-delayed-in flex min-h-[40vh] flex-col items-center justify-center gap-4 px-4">
           <div
             className="h-9 w-9 animate-spin rounded-full border-2 border-omf-line border-t-omf-ultra"
             aria-hidden="true"
@@ -64,11 +62,13 @@ export default function CreateSuccessPage() {
           summary={summary}
           notifiesInTelegram={notifiesInTelegram}
           onGoHome={() => {
+            hapticMap.impactLight();
             setLeaving("home");
             resetDraft();
             router.push("/library?fromCreate=1");
           }}
           onUploadAnother={() => {
+            hapticMap.impactLight();
             setLeaving("create");
             resetDraft();
             router.push("/create/metadata");

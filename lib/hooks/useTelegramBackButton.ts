@@ -1,6 +1,9 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
+import { hapticMap } from "@/lib/haptic-map";
+import { hasNavigatedInApp } from "@/lib/route-transition-state";
 import { getTelegramWebApp } from "@/lib/telegram";
 
 /**
@@ -32,4 +35,27 @@ export function useTelegramBackButton(onBack: () => void, enabled = true): void 
       btn.hide();
     };
   }, [enabled]);
+}
+
+/**
+ * «Назад» для вложенного экрана: показывает нативную кнопку в шапке Telegram и возвращает
+ * колбэк для такой же кнопки в интерфейсе.
+ *
+ * Если экран открыт первым (прямая ссылка из бота), истории внутри приложения нет и
+ * `router.back()` никуда не ведёт — тогда уходим на `fallbackHref`.
+ */
+export function useBackNavigation(fallbackHref: string): () => void {
+  const router = useRouter();
+
+  const goBack = useCallback(() => {
+    hapticMap.impactLight();
+    if (hasNavigatedInApp() && window.history.length > 1) {
+      router.back();
+      return;
+    }
+    router.replace(fallbackHref);
+  }, [router, fallbackHref]);
+
+  useTelegramBackButton(goBack);
+  return goBack;
 }

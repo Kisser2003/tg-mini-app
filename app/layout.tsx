@@ -82,7 +82,24 @@ export default function RootLayout({
         <TelegramBootstrap />
         <InputFocusScroll />
         <VisualViewportKeyboardBridge />
-        <Toaster richColors expand position="top-center" />
+        {/**
+         * Тёмная тема: по умолчанию sonner светлый — белые тосты поверх графитового экрана.
+         * Отступ сверху учитывает вырез/Dynamic Island (на телефоне sonner берёт mobileOffset).
+         */}
+        <Toaster
+          richColors
+          expand
+          theme="dark"
+          position="top-center"
+          offset={{ top: "calc(env(safe-area-inset-top, 0px) + 12px)" }}
+          mobileOffset={{ top: "calc(env(safe-area-inset-top, 0px) + 10px)", left: "12px", right: "12px" }}
+          toastOptions={{
+            style: {
+              borderRadius: "var(--omf-control-radius)",
+              fontFamily: "var(--font-geologica), -apple-system, sans-serif"
+            }
+          }}
+        />
         <div className="app-safe-shell">
           <AppProviders>
             <AppErrorBoundary>

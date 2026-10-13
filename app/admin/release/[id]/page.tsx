@@ -26,6 +26,7 @@ import {
 } from "@/lib/admin-release-metadata";
 import { useAdminHotkeys } from "@/lib/hooks/useAdminHotkeys";
 import { useIsTelegramMiniApp } from "@/lib/hooks/useIsTelegramMiniApp";
+import { useBackNavigation } from "@/lib/hooks/useTelegramBackButton";
 import { SWR_LIST_OPTIONS } from "@/lib/swr-config";
 import { cn } from "@/lib/utils";
 import { hapticMap } from "@/lib/haptic-map";
@@ -65,6 +66,8 @@ function buildAudioItems(release: ReleaseRecord, tracks: ReleaseTrackRow[]) {
 export default function AdminReleaseDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  /** Нативная «Назад» в шапке Telegram: обратно в очередь (или откуда пришли — история). */
+  useBackNavigation("/admin");
   const releaseId = params.id;
 
   const [userId, setUserId] = useState<number | null>(null);
@@ -299,7 +302,7 @@ export default function AdminReleaseDetailPage() {
       <div className="mb-4 flex items-center justify-between gap-3">
         <Link
           href="/admin"
-          className="omf-focus -ml-2 inline-flex items-center gap-1.5 rounded-full px-2 py-1.5 text-[14px] text-omf-graphite transition-colors hover:text-omf-ink"
+          className="omf-focus omf-press -ml-2 inline-flex items-center gap-1.5 rounded-full px-2 py-1.5 text-[14px] text-omf-graphite hover:text-omf-ink"
         >
           <ArrowLeft className="h-4 w-4" aria-hidden />
           Очередь

@@ -6,7 +6,9 @@ import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useFieldArray, useForm } from "react-hook-form";
 import { motion } from "framer-motion";
-import { CheckCircle2, ChevronDown, ChevronUp, UserPlus, X } from "lucide-react";
+import { CheckCircle2, UserPlus, X } from "lucide-react";
+import { Collapse, CollapseChevron } from "@/components/Collapse";
+import { hapticMap } from "@/lib/haptic-map";
 import { CreateShell } from "@/features/release/createRelease/components/CreateShell";
 import { StepGate } from "@/features/release/createRelease/components/StepGate";
 import { useStepGuard } from "@/features/release/createRelease/guards";
@@ -366,15 +368,17 @@ export default function CreateTracksPage() {
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() =>
+                    aria-expanded={Boolean(expandedTracks[index])}
+                    onClick={() => {
+                      hapticMap.selection();
                       setExpandedTracks((prev) => {
                         const next = [...prev];
                         while (next.length < fields.length) next.push(false);
                         next[index] = !next[index];
                         return next;
-                      })
-                    }
-                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                      });
+                    }}
+                    className="omf-press flex min-w-0 flex-1 items-center gap-2 text-left"
                   >
                     <span className="shrink-0 text-[16px] font-bold tracking-tight text-omf-ink">
                       Трек {index + 1}
@@ -382,11 +386,7 @@ export default function CreateTracksPage() {
                     <span className="min-w-0 flex-1 truncate text-[14px] text-omf-graphite">
                       {(values.tracks[index]?.title ?? "").trim() || "Без названия"}
                     </span>
-                    {expandedTracks[index] ? (
-                      <ChevronUp className="h-4 w-4 text-omf-graphite" />
-                    ) : (
-                      <ChevronDown className="h-4 w-4 text-omf-graphite" />
-                    )}
+                    <CollapseChevron open={Boolean(expandedTracks[index])} />
                   </button>
                   {canAddTrack && fields.length > 1 && (
                     <button
@@ -401,7 +401,7 @@ export default function CreateTracksPage() {
                           return next;
                         });
                       }}
-                      className="omf-focus shrink-0 rounded-control px-2 py-1.5 text-[13px] text-omf-graphite transition-colors hover:text-omf-red"
+                      className="omf-focus omf-press shrink-0 rounded-control px-2 py-1.5 text-[13px] text-omf-graphite hover:text-omf-red"
                       aria-label={`Удалить трек ${index + 1}`}
                     >
                       Удалить
@@ -482,6 +482,7 @@ export default function CreateTracksPage() {
                             }
                           });
                           if (ok) {
+                            hapticMap.notificationSuccess();
                             setTrackUploadProgress((prev) => ({ ...prev, [index]: 100 }));
                             window.setTimeout(() => {
                               setTrackUploadProgress((prev) => {
@@ -523,115 +524,72 @@ export default function CreateTracksPage() {
                 )}
               </div>
 
-              {(isSingle || expandedTracks[index]) && (
-                <>
-                  {isSingle && index === 0 ? (
-                    <div className="space-y-1.5">
-                      <label className={`mb-2.5 block ${WIZARD_FIELD_LABEL_CLASS}`}>Название трека</label>
-                      <p className="mb-1 text-[13px] leading-relaxed text-omf-graphite">
-                        Обычно совпадает с названием релиза.
-                      </p>
-                      <input
-                        {...register(`tracks.${index}.title` as const, {
-                          onChange: (e) => {
-                            const v = e.target.value;
-                            singleTrackTitleTouchedRef.current = v.trim().length > 0;
-                          }
-                        })}
-                        placeholder={releaseTitle.trim() || "Название трека"}
-                        className={`${WIZARD_INPUT_CLASS} ${
-                          errors.tracks?.[index]?.title && dirtyFields.tracks?.[index]?.title
-                            ? GLASS_FIELD_ERROR_STRONG
-                            : ""
-                        }`}
-                      />
-                      <FormFieldError message={errors.tracks?.[index]?.title?.message} />
-                    </div>
-                  ) : (
-                    <div className="space-y-1.5">
-                      <label className={`mb-2.5 block ${WIZARD_FIELD_LABEL_CLASS}`}>
-                        Название трека
-                      </label>
-                      <input
-                        {...register(`tracks.${index}.title` as const)}
-                        placeholder="Название трека"
-                        className={`${WIZARD_INPUT_CLASS} ${
-                          errors.tracks?.[index]?.title && dirtyFields.tracks?.[index]?.title
-                            ? GLASS_FIELD_ERROR_STRONG
-                            : ""
-                        }`}
-                      />
-                      <FormFieldError message={errors.tracks?.[index]?.title?.message} />
-                    </div>
-                  )}
+              <Collapse
+                open={isSingle || Boolean(expandedTracks[index])}
+                className="!mt-0"
+                innerClassName="space-y-5 pt-5"
+              >
+                {isSingle && index === 0 ? (
+                  <div className="space-y-1.5">
+                    <label className={`mb-2.5 block ${WIZARD_FIELD_LABEL_CLASS}`}>Название трека</label>
+                    <p className="mb-1 text-[13px] leading-relaxed text-omf-graphite">
+                      Обычно совпадает с названием релиза.
+                    </p>
+                    <input
+                      {...register(`tracks.${index}.title` as const, {
+                        onChange: (e) => {
+                          const v = e.target.value;
+                          singleTrackTitleTouchedRef.current = v.trim().length > 0;
+                        }
+                      })}
+                      placeholder={releaseTitle.trim() || "Название трека"}
+                      className={`${WIZARD_INPUT_CLASS} ${
+                        errors.tracks?.[index]?.title && dirtyFields.tracks?.[index]?.title
+                          ? GLASS_FIELD_ERROR_STRONG
+                          : ""
+                      }`}
+                    />
+                    <FormFieldError message={errors.tracks?.[index]?.title?.message} />
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    <label className={`mb-2.5 block ${WIZARD_FIELD_LABEL_CLASS}`}>
+                      Название трека
+                    </label>
+                    <input
+                      {...register(`tracks.${index}.title` as const)}
+                      placeholder="Название трека"
+                      className={`${WIZARD_INPUT_CLASS} ${
+                        errors.tracks?.[index]?.title && dirtyFields.tracks?.[index]?.title
+                          ? GLASS_FIELD_ERROR_STRONG
+                          : ""
+                      }`}
+                    />
+                    <FormFieldError message={errors.tracks?.[index]?.title?.message} />
+                  </div>
+                )}
 
-                  {isSingle ? (
-                    <div className="space-y-3 border-t border-omf-line pt-4">
-                      <button
-                        type="button"
-                        onClick={() => setShowFeat((v) => !v)}
-                        className="flex w-full items-center justify-between text-left"
-                      >
-                        <label className="mb-0 block cursor-pointer text-[15px] text-omf-ink">
-                          Дополнительные артисты
-                        </label>
-                        {showFeat ? (
-                          <ChevronUp className="h-4 w-4 text-omf-graphite" />
-                        ) : (
-                          <ChevronDown className="h-4 w-4 text-omf-graphite" />
-                        )}
-                      </button>
-                      {showFeat && (
-                        <>
-                          <p className="text-[13px] leading-relaxed text-omf-graphite">
-                            Если на треке есть фит или другой участник, кроме основного артиста, добавь
-                            его имя. Имена со всех треков попадут в данные релиза.
-                          </p>
-                          <ul className="space-y-2">
-                            {(values.tracks[index]?.featuringArtistNames ?? []).map((name, featIdx) => (
-                              <li key={`${field.id}-feat-${featIdx}`} className="flex items-center gap-2">
-                                <input
-                                  value={name}
-                                  onChange={(e) => setFeaturingAt(index, featIdx, e.target.value)}
-                                  placeholder="Имя артиста"
-                                  autoComplete="off"
-                                  className={`${WIZARD_INPUT_CLASS} min-w-0 flex-1`}
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => removeFeaturingAt(index, featIdx)}
-                                  className="omf-focus shrink-0 rounded-control px-3 py-3 text-[13px] text-omf-graphite transition-colors hover:text-omf-ink"
-                                >
-                                  Убрать
-                                </button>
-                              </li>
-                            ))}
-                          </ul>
-                          {(values.tracks[index]?.featuringArtistNames ?? []).length <
-                          MAX_FEATURING_ARTISTS ? (
-                            <button
-                              type="button"
-                              onClick={() => addFeaturingSlot(index)}
-                              className="omf-btn-secondary min-h-[44px] w-full text-[14px]"
-                            >
-                              <UserPlus className="h-4 w-4 shrink-0 opacity-90" />
-                              Добавить артиста
-                            </button>
-                          ) : null}
-                        </>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="space-y-3 border-t border-omf-line pt-4">
-                      <div>
-                        <label className="mb-2 block text-[15px] text-omf-ink">
-                          Дополнительные артисты
-                        </label>
-                        <p className="text-[13px] leading-relaxed text-omf-graphite">
-                          Если на треке есть фит или другой участник, кроме основного артиста, добавь
-                          его имя. Имена со всех треков попадут в данные релиза.
-                        </p>
-                      </div>
+                {isSingle ? (
+                  <div className="space-y-3 border-t border-omf-line pt-4">
+                    <button
+                      type="button"
+                      aria-expanded={showFeat}
+                      onClick={() => {
+                        hapticMap.selection();
+                        setShowFeat((v) => !v);
+                      }}
+                      className="omf-press flex w-full items-center justify-between text-left"
+                    >
+                      <label className="mb-0 block cursor-pointer text-[15px] text-omf-ink">
+                        Дополнительные артисты
+                      </label>
+                      <CollapseChevron open={showFeat} />
+                    </button>
+                    <Collapse open={showFeat} className="!mt-0" innerClassName="space-y-3 pt-3">
+                      <p className="text-[13px] leading-relaxed text-omf-graphite">
+                        Если на треке есть фит или другой участник, кроме основного артиста, добавь
+                        его имя. Имена со всех треков попадут в данные релиза.
+                      </p>
                       <ul className="space-y-2">
                         {(values.tracks[index]?.featuringArtistNames ?? []).map((name, featIdx) => (
                           <li key={`${field.id}-feat-${featIdx}`} className="flex items-center gap-2">
@@ -663,49 +621,73 @@ export default function CreateTracksPage() {
                           Добавить артиста
                         </button>
                       ) : null}
+                    </Collapse>
+                  </div>
+                ) : (
+                  <div className="space-y-3 border-t border-omf-line pt-4">
+                    <div>
+                      <label className="mb-2 block text-[15px] text-omf-ink">
+                        Дополнительные артисты
+                      </label>
+                      <p className="text-[13px] leading-relaxed text-omf-graphite">
+                        Если на треке есть фит или другой участник, кроме основного артиста, добавь
+                        его имя. Имена со всех треков попадут в данные релиза.
+                      </p>
                     </div>
-                  )}
-
-                  {isSingle ? (
-                    <div className="space-y-3 border-t border-omf-line pt-4">
+                    <ul className="space-y-2">
+                      {(values.tracks[index]?.featuringArtistNames ?? []).map((name, featIdx) => (
+                        <li key={`${field.id}-feat-${featIdx}`} className="flex items-center gap-2">
+                          <input
+                            value={name}
+                            onChange={(e) => setFeaturingAt(index, featIdx, e.target.value)}
+                            placeholder="Имя артиста"
+                            autoComplete="off"
+                            className={`${WIZARD_INPUT_CLASS} min-w-0 flex-1`}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeFeaturingAt(index, featIdx)}
+                            className="omf-focus shrink-0 rounded-control px-3 py-3 text-[13px] text-omf-graphite transition-colors hover:text-omf-ink"
+                          >
+                            Убрать
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                    {(values.tracks[index]?.featuringArtistNames ?? []).length <
+                    MAX_FEATURING_ARTISTS ? (
                       <button
                         type="button"
-                        onClick={() => setShowLyrics((v) => !v)}
-                        className="flex w-full items-center justify-between text-left"
+                        onClick={() => addFeaturingSlot(index)}
+                        className="omf-btn-secondary min-h-[44px] w-full text-[14px]"
                       >
-                        <label
-                          htmlFor={`track-${field.id}-lyrics`}
-                          className="mb-0 block cursor-pointer text-[15px] text-omf-ink"
-                        >
-                          Текст песни
-                        </label>
-                        {showLyrics ? (
-                          <ChevronUp className="h-4 w-4 text-omf-graphite" />
-                        ) : (
-                          <ChevronDown className="h-4 w-4 text-omf-graphite" />
-                        )}
+                        <UserPlus className="h-4 w-4 shrink-0 opacity-90" />
+                        Добавить артиста
                       </button>
-                      {showLyrics && (
-                        <>
-                          <textarea
-                            id={`track-${field.id}-lyrics`}
-                            {...register(`tracks.${index}.lyrics` as const)}
-                            rows={5}
-                            placeholder="Необязательно"
-                            className={`${WIZARD_INPUT_CLASS} min-h-[120px] resize-y py-3`}
-                          />
-                          <FormFieldError message={errors.tracks?.[index]?.lyrics?.message} />
-                        </>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="space-y-1.5">
+                    ) : null}
+                  </div>
+                )}
+
+                {isSingle ? (
+                  <div className="space-y-3 border-t border-omf-line pt-4">
+                    <button
+                      type="button"
+                      aria-expanded={showLyrics}
+                      onClick={() => {
+                        hapticMap.selection();
+                        setShowLyrics((v) => !v);
+                      }}
+                      className="omf-press flex w-full items-center justify-between text-left"
+                    >
                       <label
                         htmlFor={`track-${field.id}-lyrics`}
-                        className={`mb-2.5 block ${WIZARD_FIELD_LABEL_CLASS}`}
+                        className="mb-0 block cursor-pointer text-[15px] text-omf-ink"
                       >
                         Текст песни
                       </label>
+                      <CollapseChevron open={showLyrics} />
+                    </button>
+                    <Collapse open={showLyrics} className="!mt-0" innerClassName="space-y-3 pt-3">
                       <textarea
                         id={`track-${field.id}-lyrics`}
                         {...register(`tracks.${index}.lyrics` as const)}
@@ -714,10 +696,27 @@ export default function CreateTracksPage() {
                         className={`${WIZARD_INPUT_CLASS} min-h-[120px] resize-y py-3`}
                       />
                       <FormFieldError message={errors.tracks?.[index]?.lyrics?.message} />
-                    </div>
-                  )}
-                </>
-              )}
+                    </Collapse>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    <label
+                      htmlFor={`track-${field.id}-lyrics`}
+                      className={`mb-2.5 block ${WIZARD_FIELD_LABEL_CLASS}`}
+                    >
+                      Текст песни
+                    </label>
+                    <textarea
+                      id={`track-${field.id}-lyrics`}
+                      {...register(`tracks.${index}.lyrics` as const)}
+                      rows={5}
+                      placeholder="Необязательно"
+                      className={`${WIZARD_INPUT_CLASS} min-h-[120px] resize-y py-3`}
+                    />
+                    <FormFieldError message={errors.tracks?.[index]?.lyrics?.message} />
+                  </div>
+                )}
+              </Collapse>
             </motion.div>
           ))}
 
