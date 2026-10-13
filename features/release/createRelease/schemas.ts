@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { RELEASE_TYPE_VALUES } from "@/lib/db-enums";
 import { PERFORMANCE_LANGUAGE_VALUES } from "@/lib/performance-language";
+import { isLicenseType, parseTimecodeToSeconds } from "@/lib/release-rights";
 
 /** Единственный допустимый лейбл в мастере (поле только для отображения). */
 export const FIXED_RELEASE_LABEL = "OMF" as const;
@@ -35,7 +36,24 @@ export const metadataSchema = z.object({
       minDate.setDate(minDate.getDate() + 5);
       return selected >= minDate;
     }, "Дата релизного издания должна быть не раньше чем через 5 дней от сегодняшней даты"),
-  explicit: z.boolean()
+  explicit: z.boolean(),
+  authorFullName: z
+    .string()
+    .trim()
+    .min(1, "Укажите ФИО артиста")
+    .max(200, "ФИО слишком длинное (макс. 200 символов)"),
+  musicAuthor: z
+    .string()
+    .trim()
+    .min(1, "Укажите автора бита")
+    .max(200, "Слишком длинно (макс. 200 символов)"),
+  licenseType: z.string().refine(isLicenseType, "Выберите условия использования бита"),
+  /** Начало отрывка для TikTok в формате «м:сс». */
+  tiktokStart: z
+    .string()
+    .trim()
+    .min(1, "Укажите, с какой секунды начинается отрывок")
+    .refine((v) => parseTimecodeToSeconds(v) != null, "Формат: 0:45 или 1:05")
 });
 
 /**
@@ -54,7 +72,11 @@ export const metadataHydrateSchema = z.object({
   label: z.literal(FIXED_RELEASE_LABEL),
   primaryArtist: z.string().trim().min(1, "Укажите имя артиста"),
   releaseDate: z.string().min(1, "Укажите дату релизного издания"),
-  explicit: z.boolean()
+  explicit: z.boolean(),
+  authorFullName: z.string(),
+  musicAuthor: z.string(),
+  licenseType: z.string(),
+  tiktokStart: z.string()
 });
 
 export const assetsSchema = z.object({

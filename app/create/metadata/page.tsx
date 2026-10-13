@@ -7,7 +7,7 @@ import { Suspense } from "react";
 import { Controller, useForm, type FieldErrors } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AnimatePresence, motion } from "framer-motion";
-import { AlertTriangle, Calendar, Disc, Languages, Mic2, Music2 } from "lucide-react";
+import { AlertTriangle, Calendar, Disc, FileSignature, Languages, Mic2, Music2, Timer } from "lucide-react";
 import { FormFieldError } from "@/components/FormFieldError";
 import { MetadataSelectField } from "@/features/release/createRelease/components/MetadataSelectField";
 import { CreateShell } from "@/features/release/createRelease/components/CreateShell";
@@ -48,6 +48,11 @@ import {
   WIZARD_INPUT_CLASS
 } from "@/lib/glass-form-classes";
 import type { ReleaseType } from "@/lib/db-enums";
+import {
+  GENRE_OPTIONS,
+  LICENSE_TYPE_LABELS,
+  LICENSE_TYPE_VALUES
+} from "@/lib/release-rights";
 
 const ArtistProfileLinksSection = dynamic(
   () =>
@@ -591,12 +596,11 @@ function CreateMetadataPageInner() {
               <option value="" disabled hidden>
                 —
               </option>
-              <option value="Techno">Techno</option>
-              <option value="House">House</option>
-              <option value="Hip-hop">Hip-hop</option>
-              <option value="Pop">Pop</option>
-              <option value="Electronic">Electronic</option>
-              <option value="Other">Другое</option>
+              {GENRE_OPTIONS.map((g) => (
+                <option key={g.value} value={g.value}>
+                  {g.label}
+                </option>
+              ))}
             </MetadataSelectField>
 
             <div className="min-w-0">
@@ -680,6 +684,115 @@ function CreateMetadataPageInner() {
                 <p className="text-[13px] leading-relaxed text-omf-faint">
                   Лейбл задан сервисом, поменять его нельзя.
                 </p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <p className="pt-2 text-[17px] font-semibold text-omf-ink">Авторство и права</p>
+              <div className="min-w-0 space-y-1.5">
+                <label className={`mb-2.5 block ${WIZARD_FIELD_LABEL_CLASS}`}>
+                  ФИО артиста
+                </label>
+                <Controller
+                  name="authorFullName"
+                  control={control}
+                  render={({ field }) => (
+                    <input
+                      name={field.name}
+                      ref={field.ref}
+                      value={typeof field.value === "string" ? field.value : ""}
+                      onChange={(e) => field.onChange(e.target.value)}
+                      onBlur={field.onBlur}
+                      className={`${WIZARD_INPUT_CLASS} ${borderForField(
+                        Boolean(errors.authorFullName),
+                        touchedFields.authorFullName,
+                        dirtyFields.authorFullName
+                      )}`}
+                      placeholder="Иванов Иван Иванович"
+                      autoComplete="off"
+                    />
+                  )}
+                />
+                <FormFieldError message={errors.authorFullName?.message} />
+                <p className="text-[13px] leading-relaxed text-omf-faint">Как в паспорте. Если артистов несколько, перечислите через запятую.</p>
+              </div>
+
+              <div className="min-w-0 space-y-1.5">
+                <label className={`mb-2.5 block ${WIZARD_FIELD_LABEL_CLASS}`}>
+                  Автор бита
+                </label>
+                <Controller
+                  name="musicAuthor"
+                  control={control}
+                  render={({ field }) => (
+                    <input
+                      name={field.name}
+                      ref={field.ref}
+                      value={typeof field.value === "string" ? field.value : ""}
+                      onChange={(e) => field.onChange(e.target.value)}
+                      onBlur={field.onBlur}
+                      className={`${WIZARD_INPUT_CLASS} ${borderForField(
+                        Boolean(errors.musicAuthor),
+                        touchedFields.musicAuthor,
+                        dirtyFields.musicAuthor
+                      )}`}
+                      placeholder="Ник или ФИО битмейкера"
+                      autoComplete="off"
+                    />
+                  )}
+                />
+                <FormFieldError message={errors.musicAuthor?.message} />
+              </div>
+
+              <MetadataSelectField
+                label="Условия использования бита"
+                Icon={FileSignature}
+                errorMessage={errors.licenseType?.message}
+                {...register("licenseType")}
+                selectClassName={borderForField(
+                  Boolean(errors.licenseType),
+                  touchedFields.licenseType,
+                  dirtyFields.licenseType
+                )}
+              >
+                <option value="" disabled hidden>
+                  —
+                </option>
+                {LICENSE_TYPE_VALUES.map((v) => (
+                  <option key={v} value={v}>
+                    {LICENSE_TYPE_LABELS[v]}
+                  </option>
+                ))}
+              </MetadataSelectField>
+
+              <div className="min-w-0 space-y-1.5">
+                <label className={`mb-2.5 flex items-center gap-2 ${WIZARD_FIELD_LABEL_CLASS}`}>
+                  <Timer className="h-3.5 w-3.5 text-omf-faint" aria-hidden />
+                  Начало отрывка для TikTok
+                </label>
+                <Controller
+                  name="tiktokStart"
+                  control={control}
+                  render={({ field }) => (
+                    <input
+                      name={field.name}
+                      ref={field.ref}
+                      value={typeof field.value === "string" ? field.value : ""}
+                      onChange={(e) => field.onChange(e.target.value)}
+                      onBlur={field.onBlur}
+                      inputMode="text"
+                      className={`${WIZARD_INPUT_CLASS} ${borderForField(
+                        Boolean(errors.tiktokStart),
+                        touchedFields.tiktokStart,
+                        dirtyFields.tiktokStart
+                      )}`}
+                      placeholder="0:45"
+                      autoComplete="off"
+                    />
+                  )}
+                />
+                <FormFieldError message={errors.tiktokStart?.message} />
+                <p className="text-[13px] leading-relaxed text-omf-faint">С какого момента трека начинать 60-секундный фрагмент для TikTok и Reels.</p>
               </div>
             </div>
 

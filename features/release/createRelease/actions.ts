@@ -60,6 +60,11 @@ import { celebrateReleaseSubmission } from "@/lib/confetti-release-success";
 import { refreshReleasesListAfterSubmit } from "@/lib/releases-swr-cache";
 import { toast } from "sonner";
 import { trackFunnel } from "@/lib/funnel-analytics";
+import {
+  formatSecondsAsTimecode,
+  normalizeGenre,
+  parseTimecodeToSeconds
+} from "@/lib/release-rights";
 
 /** Таймаут коротких операций Supabase (insert/upsert в БД). Загрузка WAV идёт напрямую в Storage без лимита. */
 const SUPABASE_DB_OP_TIMEOUT_MS = 15000;
@@ -476,12 +481,16 @@ export function createMetadataFromReleaseRecord(existing: ReleaseRecord): Create
     primaryArtist: primaryName,
     releaseTitle: getReleaseDisplayTitle(existing),
     releaseType: existing.release_type,
-    genre: existing.genre,
+    genre: normalizeGenre(existing.genre),
     subgenre: "",
     language: parsePerformanceLanguage(existing.performance_language),
     label: FIXED_RELEASE_LABEL,
     releaseDate: existing.release_date,
-    explicit: Boolean(existing.explicit)
+    explicit: Boolean(existing.explicit),
+    authorFullName: existing.author_full_name?.trim() ?? "",
+    musicAuthor: existing.music_author?.trim() ?? "",
+    licenseType: existing.license_type?.trim() ?? "",
+    tiktokStart: formatSecondsAsTimecode(existing.tiktok_start_sec)
   };
 }
 
@@ -962,6 +971,10 @@ function buildReleaseRowPatchFromMetadata(
     genre: m.genre,
     release_date: m.releaseDate,
     explicit: m.explicit,
+    author_full_name: m.authorFullName?.trim() || null,
+    music_author: m.musicAuthor?.trim() || null,
+    license_type: m.licenseType || null,
+    tiktok_start_sec: parseTimecodeToSeconds(m.tiktokStart),
     collaborators: buildCollaboratorsPayloadForDb(
       mainArtist,
       featuringArtistNames,

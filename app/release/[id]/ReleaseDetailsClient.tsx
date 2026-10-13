@@ -301,7 +301,7 @@ export default function ReleaseDetailsClient() {
   passportRows.push({ label: "Язык", value: langLabel });
   passportRows.push({ label: "Мат в тексте", value: isExplicit ? "Есть" : "Нет" });
   const musicAuthor = release.music_author?.trim();
-  if (musicAuthor) passportRows.push({ label: "Автор музыки", value: musicAuthor });
+  if (musicAuthor) passportRows.push({ label: "Автор бита", value: musicAuthor });
   if (featuringLine) passportRows.push({ label: "Участники", value: featuringLine });
   const isrc = release.isrc?.trim();
   if (isrc) passportRows.push({ label: "ISRC", value: isrc });

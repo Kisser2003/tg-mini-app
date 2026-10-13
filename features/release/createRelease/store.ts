@@ -162,7 +162,11 @@ const EMPTY_METADATA: CreateMetadata = {
   label: FIXED_RELEASE_LABEL,
   primaryArtist: "",
   releaseDate: "",
-  explicit: false
+  explicit: false,
+  authorFullName: "",
+  musicAuthor: "",
+  licenseType: "",
+  tiktokStart: ""
 };
 
 function areReleaseArtistLinksEqual(a: ArtistLinksState, b: ArtistLinksState): boolean {
@@ -184,7 +188,11 @@ function areMetadataEqual(current: CreateMetadata, next: CreateMetadata) {
     current.label === next.label &&
     current.primaryArtist === next.primaryArtist &&
     current.releaseDate === next.releaseDate &&
-    current.explicit === next.explicit
+    current.explicit === next.explicit &&
+    current.authorFullName === next.authorFullName &&
+    current.musicAuthor === next.musicAuthor &&
+    current.licenseType === next.licenseType &&
+    current.tiktokStart === next.tiktokStart
   );
 }
 

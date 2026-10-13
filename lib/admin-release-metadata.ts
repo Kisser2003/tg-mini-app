@@ -1,6 +1,21 @@
 import type { ReleaseRecord, ReleaseTrackRow } from "@/repositories/releases/types";
 import { getReleaseDisplayTitle } from "@/repositories/releases/types";
 import { featuringNamesFromCollaboratorsJson } from "@/lib/collaborators";
+import {
+  formatSecondsAsTimecode,
+  isLicenseType,
+  LICENSE_TYPE_LABELS
+} from "@/lib/release-rights";
+
+function licenseLabel(v: unknown): string | null {
+  if (isLicenseType(v)) return LICENSE_TYPE_LABELS[v];
+  return typeof v === "string" && v.trim() ? v.trim() : null;
+}
+
+function tiktokStartLabel(v: unknown): string | null {
+  if (typeof v !== "number") return null;
+  return formatSecondsAsTimecode(v) || null;
+}
 
 /** Строка `releases` + возможные доп. колонки из БД для админки. */
 export type AdminReleaseRow = ReleaseRecord & Record<string, unknown>;
@@ -73,6 +88,7 @@ export function buildReleaseMetadataSections(release: AdminReleaseRow, tracks: R
   if (isEx != null) {
     main.push({ label: "Explicit (is_explicit)", value: yn(Boolean(isEx)) });
   }
+  pushString(main, "Начало отрывка TikTok", tiktokStartLabel(release.tiktok_start_sec));
   pushString(main, "Текст песни / лирика", release.lyrics as string | undefined);
 
   const lang: MetadataEntry[] = [];
@@ -83,8 +99,8 @@ export function buildReleaseMetadataSections(release: AdminReleaseRow, tracks: R
   pushString(rights, "Авторы (текст)", release.authors as string | undefined);
   pushString(rights, "Сплиты", release.splits as string | undefined);
   pushString(rights, "Автор музыки", release.music_author as string | undefined);
-  pushString(rights, "Полное имя автора", release.author_full_name as string | undefined);
-  pushString(rights, "Тип лицензии", release.license_type as string | undefined);
+  pushString(rights, "ФИО артиста", release.author_full_name as string | undefined);
+  pushString(rights, "Условия бита", licenseLabel(release.license_type));
   pushString(rights, "C-line", release.c_line as string | undefined);
   pushString(rights, "P-line", release.p_line as string | undefined);
 
@@ -164,6 +180,20 @@ export function buildReleaseMetadataSections(release: AdminReleaseRow, tracks: R
 export function buildReleaseExportPayload(release: AdminReleaseRow, tracks: ReleaseTrackRow[]) {
   return {
     exportedAt: new Date().toISOString(),
+    /** Человекочитаемые поля для анкеты дистрибьютора. */
+    distribution: {
+      title: getReleaseDisplayTitle(release),
+      artist: release.artist_name ?? null,
+      genre: release.genre ?? null,
+      explicit: Boolean(release.explicit ?? release.is_explicit),
+      release_date: release.release_date ?? null,
+      author_full_name: release.author_full_name ?? null,
+      music_author: release.music_author ?? null,
+      license_type: release.license_type ?? null,
+      license_type_label: licenseLabel(release.license_type),
+      tiktok_start_sec: release.tiktok_start_sec ?? null,
+      tiktok_start: tiktokStartLabel(release.tiktok_start_sec)
+    },
     release: { ...release },
     tracks: tracks.map((t) => ({ ...t }))
   };

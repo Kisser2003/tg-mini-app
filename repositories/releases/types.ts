@@ -94,6 +94,8 @@ export type ReleaseRecord = {
   mood?: string | null;
   music_author?: string | null;
   author_full_name?: string | null;
+  /** Начало отрывка для TikTok, секунды. */
+  tiktok_start_sec?: number | null;
   c_line?: string | null;
   p_line?: string | null;
   upc?: string | null;

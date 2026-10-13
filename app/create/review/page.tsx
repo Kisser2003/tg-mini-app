@@ -1,5 +1,6 @@
 "use client";
 
+import { isLicenseType, LICENSE_TYPE_LABELS } from "@/lib/release-rights";
 import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
@@ -271,7 +272,16 @@ export default function CreateReviewPage() {
         PERFORMANCE_LANGUAGE_LABELS[metadata.language as PerformanceLanguage] ?? metadata.language
     },
     { label: "Дата выхода", value: formatReleaseDateBadge(metadata.releaseDate) },
-    { label: "Мат в тексте", value: metadata.explicit ? "Есть" : "Нет" }
+    { label: "Мат в тексте", value: metadata.explicit ? "Есть" : "Нет" },
+    { label: "ФИО артиста", value: metadata.authorFullName?.trim() || "Не указано" },
+    { label: "Автор бита", value: metadata.musicAuthor?.trim() || "Не указан" },
+    {
+      label: "Бит",
+      value: isLicenseType(metadata.licenseType)
+        ? LICENSE_TYPE_LABELS[metadata.licenseType]
+        : "Не указано"
+    },
+    { label: "Отрывок TikTok", value: metadata.tiktokStart?.trim() ? `с ${metadata.tiktokStart.trim()}` : "Не указан" }
   ];
   if (featuringLine) passportRows.push({ label: "Участники", value: featuringLine });
 
