@@ -206,3 +206,25 @@ export async function updateReleasePayment(
     payment_updated_by: json.release.payment_updated_by ?? null
   };
 }
+
+/** Бот просит клиента оплатить (только при «не оплачено», раз в сутки). Бросает ошибку с понятным текстом. */
+export async function remindArtistToPay(releaseId: string): Promise<void> {
+  await assertAdminAsync();
+  const authHeaders = await getAdminApiAuthHeaders();
+  const res = await fetch("/api/admin/release-payment", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { Accept: "application/json", "Content-Type": "application/json", ...authHeaders },
+    body: JSON.stringify({ releaseId, action: "remind_artist" }),
+    cache: "no-store"
+  });
+  let json: { ok?: boolean; error?: string } | null = null;
+  try {
+    json = (await res.json()) as { ok?: boolean; error?: string };
+  } catch {
+    json = null;
+  }
+  if (!res.ok || json?.ok !== true) {
+    throw new Error(json?.error || "Не удалось написать клиенту.");
+  }
+}

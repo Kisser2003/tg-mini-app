@@ -24,6 +24,8 @@ export type SendTelegramBotMessageResult =
   | { ok: true }
   | { ok: false; error: string };
 
+const BOT_API_TIMEOUT_MS = 8000;
+
 /** POST в Bot API. Requires TELEGRAM_BOT_TOKEN on the server. Ошибки возвращаются, не бросаются. */
 async function callBotApi(method: string, payload: Record<string, unknown>): Promise<SendTelegramBotMessageResult> {
   const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -37,7 +39,9 @@ async function callBotApi(method: string, payload: Record<string, unknown>): Pro
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
+      // Медленный Telegram не должен подвешивать отправку релиза и ответы API.
+      signal: AbortSignal.timeout(BOT_API_TIMEOUT_MS)
     });
 
     const data = (await res.json()) as { ok?: boolean; description?: string };

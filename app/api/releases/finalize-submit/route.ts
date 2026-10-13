@@ -32,17 +32,24 @@ async function notifyReleaseSubmittedForModeration(admin: SupabaseClient, record
     `🚀 <b>Ваш релиз «${title}» отправлен на модерацию!</b>\n\n` +
     `Мы проверим его в течение 24 часов и пришлем уведомление здесь.`;
   await notifyArtist(record, text);
-  await requestPaymentConfirmationOnSubmit(admin, record);
+  // Вопрос студии об оплате — вспомогательный: его сбой не должен ломать отправку релиза.
+  try {
+    await requestPaymentConfirmationOnSubmit(admin, record);
+  } catch (e) {
+    console.error("[finalize-submit] payment request:", e);
+  }
 }
 
 const bodySchema = z.object({
   releaseId: z.string().uuid(),
   clientRequestId: z.string().uuid(),
-  /** Артист отметил условия (платный выпуск, без возвратов) на шаге «Проверка». */
+  /**
+   * Артист отметил условия (платный выпуск, без возвратов) на шаге «Проверка».
+   * Галочку требует интерфейс; сервер только записывает время. Без поля (открытая во время
+   * деплоя старая версия приложения) релиз всё равно уходит — отправку не блокируем.
+   */
   termsAccepted: z.boolean().optional()
 });
-
-const TERMS_REQUIRED_ERROR = "Отметь, что согласен с условиями выпуска, и отправь ещё раз.";
 
 /** PostgREST для `RETURNS SETOF releases` отдаёт полную строку; кастомный `RETURNS jsonb` — нет (ломает клиент). */
 const RELEASE_ROW_STATUSES = new Set([
@@ -116,15 +123,16 @@ async function handleFinalizeSubmit(request: NextRequest, actor: ReleaseActor): 
     return NextResponse.json({ ok: true, record: current });
   }
 
-  if (termsAccepted !== true) {
-    return NextResponse.json({ ok: false, error: TERMS_REQUIRED_ERROR }, { status: 400 });
-  }
-  const { error: termsErr } = await admin
-    .from("releases")
-    .update({ terms_accepted_at: new Date().toISOString() })
-    .eq("id", releaseId);
-  if (termsErr) {
-    console.error("[finalize-submit] terms_accepted_at:", termsErr.message);
+  if (termsAccepted === true) {
+    const { error: termsErr } = await admin
+      .from("releases")
+      .update({ terms_accepted_at: new Date().toISOString() })
+      .eq("id", releaseId);
+    if (termsErr) {
+      console.error("[finalize-submit] terms_accepted_at:", termsErr.message);
+    }
+  } else {
+    console.warn("[finalize-submit] submit without termsAccepted (old app version?)", releaseId);
   }
 
   const aiUserId = numericUserIdForReleaseAiLogs(actor, rowObj);

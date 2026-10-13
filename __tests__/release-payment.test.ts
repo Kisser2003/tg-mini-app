@@ -18,9 +18,10 @@ vi.mock("../lib/telegram-bot.server", async () => {
     answerTelegramCallbackQuery: (...a: unknown[]) => answerCallback(...a)
   };
 });
-vi.mock("../lib/server/artist-notify", () => ({
-  notifyArtist: (...a: unknown[]) => notifyArtist(...a)
-}));
+vi.mock("../lib/server/artist-notify", async () => {
+  const actual = await vi.importActual<typeof import("../lib/server/artist-notify")>("../lib/server/artist-notify");
+  return { artistTelegramId: actual.artistTelegramId, notifyArtist: (...a: unknown[]) => notifyArtist(...a) };
+});
 vi.mock("../lib/admin-notify.server", () => ({
   notifyAdminPaymentAnswer: (...a: unknown[]) => notifyAdminPaymentAnswer(...a)
 }));
@@ -29,6 +30,13 @@ vi.mock("../lib/admin-release-api-guard", () => ({
 }));
 vi.mock("../lib/api/with-telegram-auth", () => ({
   getTelegramAuthContextFromRequest: () => null
+}));
+const cache = new Map<string, unknown>();
+vi.mock("../lib/server/redis-cache", () => ({
+  getJsonCache: async (k: string) => cache.get(k) ?? null,
+  setJsonCache: async (k: string, v: unknown) => {
+    cache.set(k, v);
+  }
 }));
 
 import {
@@ -78,6 +86,7 @@ function query(answer: string, fromId: string) {
 }
 
 beforeEach(() => {
+  cache.clear();
   for (const m of [sendMessage, editMessage, answerCallback, notifyArtist, notifyAdminPaymentAnswer, guard]) m.mockReset();
   sendMessage.mockResolvedValue({ ok: true });
   editMessage.mockResolvedValue({ ok: true });
@@ -134,7 +143,7 @@ describe("handlePaymentCallback", () => {
     expect(answerCallback).toHaveBeenCalledWith("cb1", "Эта кнопка не для тебя.");
   });
 
-  it("Денис: «Не оплатил» → статус, лог, сообщение артисту и админу, правка сообщения", async () => {
+  it("Денис: «Не оплатил» → статус, лог, сообщение админу, правка сообщения; клиенту — ничего", async () => {
     const mock = db(baseRow);
     await handlePaymentCallback(mock.client as never, query("unpaid", STUDIO));
 
@@ -144,10 +153,13 @@ describe("handlePaymentCallback", () => {
     const log = mock.calls.find((c) => c.table === "release_logs");
     expect(log?.payload).toMatchObject({ release_id: ID, stage: "payment", status: "unpaid" });
 
-    expect(notifyArtist).toHaveBeenCalledTimes(1);
-    expect(String(notifyArtist.mock.calls[0][1])).toContain("скинь чек @denis");
+    expect(notifyArtist).not.toHaveBeenCalled();
     expect(notifyAdminPaymentAnswer).toHaveBeenCalledWith(
-      expect.objectContaining({ answer: "⏳ Не оплатил", who: "Денис" })
+      expect.objectContaining({
+        answer: "⏳ Не оплатил",
+        who: "Денис",
+        hint: expect.stringContaining("Клиенту бот ничего не писал")
+      })
     );
     expect(editMessage).toHaveBeenCalledWith(expect.objectContaining({ chatId: Number(STUDIO), messageId: 42 }));
     expect(answerCallback).toHaveBeenCalledWith("cb1", "Записал: ⏳ Не оплатил");
@@ -160,6 +172,13 @@ describe("handlePaymentCallback", () => {
     expect(notifyArtist).not.toHaveBeenCalled();
     expect(notifyAdminPaymentAnswer).not.toHaveBeenCalled();
     expect(answerCallback).toHaveBeenCalledWith("cb1", "Уже отмечено.");
+  });
+
+  it("Денис ошибся и сразу исправил — клиент ничего не получает", async () => {
+    const mock = db({ ...baseRow, payment_status: "unpaid", payment_updated_by: "studio" });
+    await handlePaymentCallback(mock.client as never, query("paid", STUDIO));
+    expect(mock.calls.find((c) => c.op === "update")?.payload).toMatchObject({ payment_status: "paid" });
+    expect(notifyArtist).not.toHaveBeenCalled();
   });
 
   it("Денис «Оплатил» — артисту не пишем", async () => {
@@ -279,6 +298,25 @@ describe("POST /api/admin/release-payment", () => {
     expect(res.status).toBe(200);
     expect(mock.calls.find((c) => c.op === "update")?.payload).toMatchObject({ payment_status: "awaiting" });
     expect(sendMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it("«Попросить клиента оплатить» — бот пишет клиенту, второй раз за сутки нельзя", async () => {
+    const mock = db({ ...baseRow, payment_status: "unpaid" });
+    guard.mockResolvedValue({ ok: true, supabase: mock.client });
+    const { POST } = await import("@/app/api/admin/release-payment/route");
+    expect((await POST(post({ releaseId: ID, action: "remind_artist" }))).status).toBe(200);
+    expect(notifyArtist).toHaveBeenCalledTimes(1);
+    expect(String(notifyArtist.mock.calls[0][1])).toContain("скинь чек @denis");
+    expect((await POST(post({ releaseId: ID, action: "remind_artist" }))).status).toBe(429);
+    expect(notifyArtist).toHaveBeenCalledTimes(1);
+  });
+
+  it("«Попросить клиента оплатить» без отметки «не оплачено» — 409, клиенту не пишем", async () => {
+    const mock = db({ ...baseRow, payment_status: "paid" });
+    guard.mockResolvedValue({ ok: true, supabase: mock.client });
+    const { POST } = await import("@/app/api/admin/release-payment/route");
+    expect((await POST(post({ releaseId: ID, action: "remind_artist" }))).status).toBe(409);
+    expect(notifyArtist).not.toHaveBeenCalled();
   });
 
   it("«Спросить Дениса» без его id в env — 503 с понятной ошибкой", async () => {

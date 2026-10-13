@@ -16,7 +16,7 @@ import {
   type InlineKeyboard
 } from "@/lib/telegram-bot.server";
 import { getReleaseDisplayTitle, type ReleaseRecord } from "@/repositories/releases/types";
-import { notifyArtist } from "@/lib/server/artist-notify";
+import { artistTelegramId, notifyArtist } from "@/lib/server/artist-notify";
 import { notifyAdminPaymentAnswer } from "@/lib/admin-notify.server";
 
 /**
@@ -45,6 +45,13 @@ const ANSWER_BUTTON: Record<StudioAnswer, string> = {
   paid: "✅ Оплатил",
   unpaid: "⏳ Не оплатил",
   not_client: "❓ Не мой клиент"
+};
+
+/** Подсказка админу к ответу студии: клиенту бот сам ничего не пишет. */
+const ADMIN_HINT: Record<StudioAnswer, string | null> = {
+  paid: null,
+  unpaid: "Клиенту бот ничего не писал. Попросить оплатить — кнопкой в админке или сам в личке.",
+  not_client: "Клиент не от студии: напиши ему сам — откуда узнал и сколько стоит выпуск."
 };
 
 const CALLBACK_RE = /^pay:(paid|unpaid|not_client):([0-9a-f-]{36})$/i;
@@ -138,7 +145,7 @@ export function buildStudioPaymentKeyboard(release: PaymentRelease): InlineKeybo
   return { inline_keyboard: [[button("paid")], [button("unpaid"), button("not_client")]] };
 }
 
-/** Сообщение артисту, когда студия ответила «Не оплатил». */
+/** Сообщение артисту «нужна оплата» — отправляет админ кнопкой, не автоматически. */
 export function buildPaymentNeededArtistText(release: PaymentRelease): string {
   const titleRaw = getReleaseDisplayTitle(release as ReleaseRecord);
   const title = escapeHtml(titleRaw.length > 0 ? titleRaw : "релиз");
@@ -284,7 +291,8 @@ function callbackActor(fromId: unknown): PaymentActor | null {
 
 /**
  * Нажатие кнопки в сообщении «Оплатил?». Принимаем только от Дениса и админа.
- * «Не оплатил» от студии → бот пишет артисту, что нужна оплата.
+ * Клиенту бот ничего не пишет: ответ Дениса видит только админ (ошибочное нажатие не дойдёт
+ * до клиента). Попросить клиента оплатить — кнопкой в админке (`remindArtistToPay`).
  */
 export async function handlePaymentCallback(admin: SupabaseClient, query: TelegramCallbackQuery): Promise<void> {
   const parsed = parsePaymentCallbackData(query.data);
@@ -324,16 +332,42 @@ export async function handlePaymentCallback(admin: SupabaseClient, query: Telegr
   }
 
   if (changed && actor === "studio") {
-    if (parsed.answer === "unpaid") {
-      await notifyArtist(result.release, buildPaymentNeededArtistText(result.release));
-    }
     await notifyAdminPaymentAnswer({
       title: getReleaseDisplayTitle(result.release as ReleaseRecord),
       artist: result.release.artist_name ?? "",
       answer: ANSWER_BUTTON[parsed.answer],
-      who: STUDIO_CONFIRMER_NAME
+      who: STUDIO_CONFIRMER_NAME,
+      hint: ADMIN_HINT[parsed.answer]
     });
   }
 
   await answerTelegramCallbackQuery(query.id, changed ? `Записал: ${ANSWER_BUTTON[parsed.answer]}` : "Уже отмечено.");
+}
+
+export type RemindToPayResult = { ok: true } | { ok: false; status: 404 | 409 | 422 | 500; error: string };
+
+/** Админ просит клиента оплатить: бот пишет артисту, только если студия ответила «Не оплатил». */
+export async function remindArtistToPay(admin: SupabaseClient, releaseId: string): Promise<RemindToPayResult> {
+  const { data: row, error } = await admin
+    .from("releases")
+    .select(PAYMENT_RELEASE_SELECT)
+    .eq("id", releaseId)
+    .maybeSingle();
+  if (error) {
+    console.error("[payment-confirm] remind load:", error.message);
+    return { ok: false, status: 500, error: "Не удалось загрузить релиз." };
+  }
+  if (!row) return { ok: false, status: 404, error: "Релиз не найден." };
+  const release = row as unknown as PaymentRelease;
+  if (parsePaymentStatus(release.payment_status) !== "unpaid") {
+    return { ok: false, status: 409, error: "Просить оплату можно, только когда отмечено «Не оплачено»." };
+  }
+  if (!artistTelegramId(release)) {
+    return { ok: false, status: 422, error: "У клиента нет Telegram — напиши ему сам." };
+  }
+  const sent = await notifyArtist(release, buildPaymentNeededArtistText(release));
+  if (!sent) {
+    return { ok: false, status: 422, error: "Клиент выключил уведомления — напиши ему сам." };
+  }
+  return { ok: true };
 }

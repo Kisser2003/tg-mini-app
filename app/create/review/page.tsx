@@ -81,6 +81,8 @@ export default function CreateReviewPage() {
   const tracksUploadInProgress = useCreateReleaseDraftStore((s) => s.tracksUploadInProgress);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
+  /** Нажали «Отправить» без галочки — подсвечиваем её вместо неактивной кнопки. */
+  const [termsHint, setTermsHint] = useState(false);
   const [progressDismissed, setProgressDismissed] = useState(false);
   const prevSubmitErrorRef = useRef<string | null>(null);
 
@@ -89,7 +91,6 @@ export default function CreateReviewPage() {
     return tracks.some((_t, i) => !trackFiles[i]);
   }, [tracksWavSyncedToDb, trackFiles, tracks]);
   const submitBlocked =
-    !termsAccepted ||
     missingFiles ||
     tracksUploadInProgress ||
     isSubmitting ||
@@ -146,6 +147,11 @@ export default function CreateReviewPage() {
   }, [submitError]);
 
   const handleSubmit = useCallback(async () => {
+    if (!termsAccepted) {
+      setTermsHint(true);
+      hapticMap.notificationError();
+      return;
+    }
     setSubmitError(null);
     setProgressDismissed(false);
     if (missingFiles) {
@@ -379,22 +385,31 @@ export default function CreateReviewPage() {
 
         <div>
           {!progressActive ? (
-            <label className="mb-4 flex cursor-pointer items-start gap-3 text-[14px] leading-relaxed text-omf-graphite">
-              <input
-                type="checkbox"
-                checked={termsAccepted}
-                disabled={isSubmitting}
-                onChange={(e) => {
-                  triggerHaptic("light");
-                  setTermsAccepted(e.target.checked);
-                }}
-                className="mt-0.5 h-5 w-5 shrink-0 rounded-[6px] accent-[var(--omf-ultra)]"
-              />
-              <span>
-                Выпуск платный, стоимость согласовывается со студией. Оплата не возвращается, в том
-                числе если площадки не пропустили релиз из-за содержания.
-              </span>
-            </label>
+            <div className="mb-4">
+              <label className="flex cursor-pointer items-start gap-3 text-[14px] leading-relaxed text-omf-graphite">
+                <input
+                  type="checkbox"
+                  checked={termsAccepted}
+                  disabled={isSubmitting}
+                  aria-invalid={termsHint && !termsAccepted}
+                  onChange={(e) => {
+                    triggerHaptic("light");
+                    setTermsAccepted(e.target.checked);
+                    if (e.target.checked) setTermsHint(false);
+                  }}
+                  className="mt-0.5 h-5 w-5 shrink-0 rounded-[6px] accent-[var(--omf-ultra)]"
+                />
+                <span>
+                  Выпуск платный, стоимость согласовывается со студией. Оплата не возвращается, в
+                  том числе если площадки не пропустили релиз из-за содержания.
+                </span>
+              </label>
+              {termsHint && !termsAccepted ? (
+                <p role="alert" className="mt-2 pl-8 text-[14px] text-omf-red">
+                  Отметь галочку, чтобы отправить релиз.
+                </p>
+              ) : null}
+            </div>
           ) : null}
           {!progressActive ? (
             <button

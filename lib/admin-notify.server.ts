@@ -37,10 +37,12 @@ export async function notifyAdminPaymentAnswer(params: {
   artist: string;
   answer: string;
   who: string;
+  hint?: string | null;
 }): Promise<void> {
   await sendToAdmin(
     `💳 <b>${escapeHtml(params.who)}: ${escapeHtml(params.answer)}</b>\n\n` +
-      `«${escapeHtml(params.title || "без названия")}» — ${escapeHtml(params.artist || "—")}`
+      `«${escapeHtml(params.title || "без названия")}» — ${escapeHtml(params.artist || "—")}` +
+      (params.hint ? `\n\n${escapeHtml(params.hint)}` : "")
   );
 }
 

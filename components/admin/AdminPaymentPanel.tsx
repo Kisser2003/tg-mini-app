@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { updateReleasePayment } from "@/features/admin/actions";
+import { remindArtistToPay, updateReleasePayment } from "@/features/admin/actions";
 import {
   STUDIO_CONFIRMER_NAME,
   describePayment,
@@ -27,9 +27,7 @@ function hintFor(release: PaymentFields): string | null {
     case "awaiting":
       return `Бот спросил ${STUDIO_CONFIRMER_NAME}а. Ответ появится здесь.`;
     case "unpaid":
-      return release.payment_updated_by === "studio"
-        ? "Бот попросил артиста оплатить и скинуть чек. Когда оплатит, ответ поменяется."
-        : null;
+      return "Клиенту бот сам ничего не пишет. Попроси оплатить кнопкой ниже или напиши ему сам.";
     case "not_client":
       return `Клиент не от ${STUDIO_CONFIRMER_NAME}а: напиши ему сам — откуда узнал о нас и сколько стоит выпуск.`;
     case "paid":
@@ -51,6 +49,7 @@ export function AdminPaymentPanel({
   onChange: (fields: PaymentFields) => void;
 }) {
   const [busy, setBusy] = useState(false);
+  const [reminded, setReminded] = useState(false);
   const status = parsePaymentStatus(release.payment_status);
   const { label, tone } = describePayment(release.payment_status);
   const updated = describePaymentUpdate(release.payment_updated_by, release.payment_updated_at);
@@ -76,6 +75,20 @@ export function AdminPaymentPanel({
     }
   };
 
+  const remind = async () => {
+    setBusy(true);
+    try {
+      await remindArtistToPay(release.id);
+      setReminded(true);
+      triggerHaptic("success");
+      toast.success("Бот попросил клиента оплатить и скинуть чек");
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Не удалось написать клиенту.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <section className="mt-6 rounded-control border border-omf-line p-4" aria-labelledby="admin-payment">
       <div className="flex items-baseline justify-between gap-3">
@@ -95,6 +108,11 @@ export function AdminPaymentPanel({
         {status !== "unpaid" ? (
           <button type="button" disabled={busy} onClick={() => void run("unpaid")} className={pillClass}>
             Не оплачено
+          </button>
+        ) : null}
+        {status === "unpaid" ? (
+          <button type="button" disabled={busy || reminded} onClick={() => void remind()} className={pillClass}>
+            {reminded ? "Клиенту написали" : "Попросить клиента оплатить"}
           </button>
         ) : null}
         {status == null || status === "awaiting" ? (

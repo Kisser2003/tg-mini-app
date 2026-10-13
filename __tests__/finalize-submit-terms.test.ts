@@ -50,14 +50,22 @@ beforeEach(() => {
   (dbMock.client as { rpc?: unknown }).rpc = async () => ({ data: null, error: { message: "could not find function", code: "PGRST202" } });
 });
 
-describe("finalize-submit: условия выпуска", () => {
-  it("без галочки — 400, статус не меняется", async () => {
+describe("finalize-submit: условия выпуска и оплата не блокируют отправку", () => {
+  it("без поля (старая версия приложения) — релиз всё равно уходит, время согласия не пишем", async () => {
     const { POST } = await import("@/app/api/releases/finalize-submit/route");
     const res = await POST(post({}));
-    expect(res.status).toBe(400);
-    expect(((await res.json()) as { error: string }).error).toContain("условиями");
-    expect(dbMock.calls.some((c) => c.op === "update")).toBe(false);
-    expect(requestPayment).not.toHaveBeenCalled();
+    expect(res.status).toBe(200);
+    const updates = dbMock.calls.filter((c) => c.table === "releases" && c.op === "update");
+    expect(updates.some((c) => "terms_accepted_at" in (c.payload as object))).toBe(false);
+    expect(updates.some((c) => (c.payload as { status?: string }).status === "processing")).toBe(true);
+    expect(requestPayment).toHaveBeenCalledTimes(1);
+  });
+
+  it("сбой вопроса Денису не ломает отправку", async () => {
+    requestPayment.mockRejectedValueOnce(new Error("telegram down"));
+    const { POST } = await import("@/app/api/releases/finalize-submit/route");
+    const res = await POST(post({ termsAccepted: true }));
+    expect(res.status).toBe(200);
   });
 
   it("с галочкой — пишем время согласия, отправляем и спрашиваем оплату", async () => {

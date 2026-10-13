@@ -6,20 +6,28 @@ import { getTelegramAuthContextFromRequest } from "@/lib/api/with-telegram-auth"
 import {
   PAYMENT_RELEASE_SELECT,
   askStudioAboutPayment,
+  remindArtistToPay,
   setReleasePaymentStatus,
   type PaymentRelease
 } from "@/lib/server/payment-confirm";
 import { parsePaymentStatus } from "@/lib/release-payment";
+import { getJsonCache, setJsonCache } from "@/lib/server/redis-cache";
 
 export const runtime = "nodejs";
 
 const bodySchema = z.object({
   releaseId: z.string().uuid(),
-  /** paid / unpaid — админ ставит сам; ask_studio — ещё раз спросить Дениса в боте. */
-  action: z.enum(["paid", "unpaid", "ask_studio"])
+  /**
+   * paid / unpaid — админ ставит сам; ask_studio — ещё раз спросить Дениса в боте;
+   * remind_artist — бот просит клиента оплатить (только при «не оплачено»).
+   */
+  action: z.enum(["paid", "unpaid", "ask_studio", "remind_artist"])
 });
 
-/** Оплата релиза из админки. Артисту бот здесь не пишет — только при ответе студии. */
+/** Не чаще раза в сутки на релиз (Redis; без него — защита только в интерфейсе). */
+const REMIND_COOLDOWN_SECONDS = 24 * 60 * 60;
+
+/** Оплата релиза из админки. Клиенту бот пишет только по действию remind_artist. */
 async function handleReleasePayment(request: NextRequest): Promise<Response> {
   const guard = await requireAdminSupabaseClient(request, getTelegramAuthContextFromRequest(request));
   if (!guard.ok) return guard.response;
@@ -35,6 +43,17 @@ async function handleReleasePayment(request: NextRequest): Promise<Response> {
     return NextResponse.json({ ok: false, error: "Некорректное тело запроса." }, { status: 400 });
   }
   const { releaseId, action } = parsed.data;
+
+  if (action === "remind_artist") {
+    const cooldownKey = `remind-pay:release:${releaseId}`;
+    if (await getJsonCache<boolean>(cooldownKey)) {
+      return NextResponse.json({ ok: false, error: "Уже просили сегодня." }, { status: 429 });
+    }
+    const reminded = await remindArtistToPay(guard.supabase, releaseId);
+    if (!reminded.ok) return NextResponse.json({ ok: false, error: reminded.error }, { status: reminded.status });
+    await setJsonCache(cooldownKey, true, REMIND_COOLDOWN_SECONDS);
+    return NextResponse.json({ ok: true });
+  }
 
   if (action === "ask_studio") {
     const { data: row, error } = await guard.supabase
