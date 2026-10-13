@@ -10,6 +10,7 @@ import { AdminReleaseDownloads } from "@/components/admin/AdminReleaseDownloads"
 import { AdminReleaseMetadataCard } from "@/components/admin/AdminReleaseMetadataCard";
 import { ReleaseSleeve } from "@/components/ReleaseSleeve";
 import { AdminApproveSmartLinkModal } from "@/components/AdminApproveSmartLinkModal";
+import { AdminRejectModal } from "@/components/AdminRejectModal";
 import { publishReleaseWithSmartLink, rejectRelease } from "@/features/admin/actions";
 import { fetchAdminReleaseDetail } from "@/features/admin/release-detail";
 import { isAdminUi, isAdminUiByWebSession } from "@/lib/admin";
@@ -54,7 +55,6 @@ export default function AdminReleaseDetailPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
-  const [rejectReason, setRejectReason] = useState("");
   const [approveModalReleaseId, setApproveModalReleaseId] = useState<string | null>(null);
 
   const [isAdmin, setIsAdmin] = useState(false);
@@ -109,18 +109,12 @@ export default function AdminReleaseDetailPage() {
     [router]
   );
 
-  const handleReject = useCallback(async () => {
+  const handleReject = useCallback(async (comment: string, reasonKeys: string[]) => {
     if (!release) return;
-    if (
-      !window.confirm(
-        "Отклонить релиз? Артист увидит указанную причину в уведомлении."
-      )
-    ) {
-      return;
-    }
     setBusy(true);
     try {
-      await rejectRelease(release.id, rejectReason);
+      await rejectRelease(release.id, comment, reasonKeys);
+      setRejectOpen(false);
       triggerHaptic("warning");
       toast.success("Релиз отклонён");
       router.push("/admin");
@@ -130,7 +124,7 @@ export default function AdminReleaseDetailPage() {
     } finally {
       setBusy(false);
     }
-  }, [release, rejectReason, router]);
+  }, [release, router]);
 
   if (userId == null && !isAdmin && process.env.NODE_ENV === "production") {
     return (
@@ -177,6 +171,13 @@ export default function AdminReleaseDetailPage() {
 
   return (
     <div className="mx-auto w-full max-w-lg px-1 pb-40 pt-4 text-omf-ink">
+      <AdminRejectModal
+        open={rejectOpen}
+        busy={busy}
+        onClose={() => setRejectOpen(false)}
+        onSubmit={(comment, keys) => void handleReject(comment, keys)}
+      />
+
       <AdminApproveSmartLinkModal
         releaseId={approveModalReleaseId}
         busy={approveModalReleaseId != null && busy}
@@ -260,7 +261,7 @@ export default function AdminReleaseDetailPage() {
               disabled={busy}
               onClick={() => {
                 triggerHaptic("light");
-                setRejectOpen((v) => !v);
+                setRejectOpen(true);
               }}
               className="omf-btn-secondary w-full disabled:opacity-50"
             >
@@ -278,37 +279,6 @@ export default function AdminReleaseDetailPage() {
               Одобрить
             </button>
           </div>
-          {rejectOpen ? (
-            <div className="mt-4">
-              <label htmlFor="reject-reason" className="text-[13px] text-omf-graphite">
-                Что исправить артисту
-              </label>
-              <textarea
-                id="reject-reason"
-                value={rejectReason}
-                onChange={(e) => setRejectReason(e.target.value)}
-                rows={4}
-                placeholder="Например: обложка меньше 3000×3000"
-                className="omf-focus mt-2 w-full resize-none break-words rounded-control border border-omf-line bg-omf-surface px-4 py-3 text-[16px] leading-relaxed text-omf-ink outline-none placeholder:text-omf-faint focus:border-omf-ultra"
-              />
-              <div className="mt-3 grid grid-cols-2 gap-2.5">
-                <button type="button" onClick={() => setRejectOpen(false)} className="omf-btn-secondary w-full">
-                  Отмена
-                </button>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => {
-                    triggerHaptic("light");
-                    void handleReject();
-                  }}
-                  className="omf-btn-primary w-full"
-                >
-                  {busy ? "Отправляем…" : "Вернуть релиз"}
-                </button>
-              </div>
-            </div>
-          ) : null}
         </section>
       ) : (
         <p className="mt-8 border-t border-omf-line pt-6 text-[14px] leading-relaxed text-omf-graphite">

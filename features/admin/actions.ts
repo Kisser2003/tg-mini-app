@@ -82,14 +82,14 @@ export async function approveRelease(releaseId: string): Promise<ReleaseRecord> 
 export async function rejectRelease(
   releaseId: string,
   comment: string,
-  reasonKey?: string
+  reasonKeys: string[] = []
 ): Promise<ReleaseRecord> {
   await assertAdminAsync();
   return postModeration({
     releaseId,
     action: "reject",
     comment,
-    ...(reasonKey ? { reasonKeys: [reasonKey] } : {})
+    ...(reasonKeys.length > 0 ? { reasonKeys } : {})
   });
 }
 

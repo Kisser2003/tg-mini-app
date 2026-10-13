@@ -197,11 +197,11 @@ export default function AdminPage() {
   );
 
   const handleRejectWithReason = useCallback(
-    async (id: string, reason: string, reasonKey?: string) => {
+    async (id: string, reason: string, reasonKeys: string[]) => {
       setBusyId(id);
       setActionError(null);
       try {
-        await rejectRelease(id, reason, reasonKey);
+        await rejectRelease(id, reason, reasonKeys);
         hapticMap.notificationWarning();
         setRejectModalReleaseId(null);
         await refreshAll();
@@ -233,7 +233,7 @@ export default function AdminPage() {
   }, []);
 
   const handleBulkReject = useCallback(
-    async (reason: string, reasonKey?: string) => {
+    async (reason: string, reasonKeys: string[]) => {
       if (selectedReleaseIds.length === 0) return;
       setBulkBusy(true);
       setActionError(null);
@@ -241,7 +241,7 @@ export default function AdminPage() {
       let failedCount = 0;
       for (const releaseId of selectedReleaseIds) {
         try {
-          await rejectRelease(releaseId, reason, reasonKey);
+          await rejectRelease(releaseId, reason, reasonKeys);
           successCount += 1;
         } catch {
           failedCount += 1;
@@ -468,43 +468,21 @@ export default function AdminPage() {
       />
 
       <AdminRejectModal
-        releaseId={rejectModalReleaseId}
-        busy={busyId === rejectModalReleaseId}
+        open={rejectModalReleaseId != null}
+        busy={rejectModalReleaseId != null && busyId === rejectModalReleaseId}
         onClose={() => setRejectModalReleaseId(null)}
-        onSelectReason={(id, reason, key) => void handleRejectWithReason(id, reason, key)}
+        onSubmit={(reason, keys) => {
+          if (rejectModalReleaseId) void handleRejectWithReason(rejectModalReleaseId, reason, keys);
+        }}
       />
 
-      {bulkRejectOpen && (
-        <div className="fixed inset-0 z-[110] flex flex-col justify-end">
-          <button
-            type="button"
-            aria-label="Закрыть"
-            className="absolute inset-0 bg-black/60"
-            onClick={() => !bulkBusy && setBulkRejectOpen(false)}
-          />
-          <div className="relative z-10 mx-auto w-full max-w-md rounded-t-[24px] border border-b-0 border-omf-line bg-omf-surface p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))]">
-            <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-omf-line-strong" aria-hidden />
-            <h3 className="text-[20px] font-bold tracking-tight">Вернуть выбранные релизы</h3>
-            <p className="mt-1 text-[14px] text-omf-graphite">
-              Выбрано: {selectedReleaseIds.length}. Причину увидят все артисты.
-            </p>
-            <div className="mt-4 flex flex-col">
-              {ADMIN_REJECT_PRESETS.map((preset) => (
-                <button
-                  key={preset.key}
-                  type="button"
-                  disabled={bulkBusy}
-                  onClick={() => void handleBulkReject(preset.message, preset.key)}
-                  className="omf-focus border-t border-omf-line py-3.5 text-left transition-colors hover:bg-omf-surface-2 disabled:opacity-50"
-                >
-                  <span className="block text-[16px] font-medium">{preset.label}</span>
-                  <span className="mt-0.5 block text-[14px] leading-snug text-omf-graphite">{preset.message}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+      <AdminRejectModal
+        open={bulkRejectOpen}
+        busy={bulkBusy}
+        count={selectedReleaseIds.length}
+        onClose={() => setBulkRejectOpen(false)}
+        onSubmit={(reason, keys) => void handleBulkReject(reason, keys)}
+      />
 
       <div
         className="mb-4 flex gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"

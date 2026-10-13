@@ -113,3 +113,32 @@ export function describeRejection(input: {
 export function faqTopicHref(topic: FaqTopicKey): string {
   return `/requirements?topic=${topic}`;
 }
+
+/** Лимит текста причины в API `update-release-status`. */
+export const REJECTION_COMMENT_MAX = 2000;
+/** Своя причина короче — скорее случайный ввод. */
+export const REJECTION_CUSTOM_MIN = 5;
+
+/**
+ * Текст и ключи для возврата релиза: выбранные пресеты (в порядке списка) + своя причина.
+ * `null` — причины нет, возвращать нельзя.
+ */
+export function buildRejection(
+  selectedKeys: readonly string[],
+  customText: string
+): { comment: string; reasonKeys: string[] } | null {
+  const selected = REJECT_REASONS.filter((r) => selectedKeys.includes(r.key));
+  const custom = customText.trim();
+  const hasCustom = custom.length >= REJECTION_CUSTOM_MIN;
+  if (selected.length === 0 && !hasCustom) return null;
+
+  const parts: string[] = selected.map((r) => r.message);
+  if (hasCustom) parts.push(custom);
+  const comment =
+    parts.length === 1 ? parts[0] : parts.map((p) => `• ${p}`).join("\n");
+
+  return {
+    comment: comment.slice(0, REJECTION_COMMENT_MAX),
+    reasonKeys: [...selected.map((r) => r.key), ...(hasCustom ? ["custom"] : [])]
+  };
+}

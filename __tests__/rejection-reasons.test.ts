@@ -4,7 +4,8 @@ import {
   REJECTION_FALLBACK_TEXT,
   describeRejection,
   faqTopicHref,
-  findRejectReason
+  findRejectReason,
+  buildRejection
 } from "@/lib/rejection-reasons";
 import { FAQ_TOPIC_KEYS, parseFaqTopic } from "@/lib/faq-topics";
 
@@ -50,5 +51,32 @@ describe("REJECT_REASONS", () => {
   it("findRejectReason", () => {
     expect(findRejectReason("artwork")?.label).toBe("Обложка");
     expect(findRejectReason("nope")).toBeNull();
+  });
+});
+
+describe("buildRejection", () => {
+  it("без причины — null", () => {
+    expect(buildRejection([], "")).toBeNull();
+    expect(buildRejection([], "  ок ")).toBeNull();
+  });
+
+  it("одна причина — её текст как есть", () => {
+    const r = buildRejection(["artwork"], "");
+    expect(r?.comment).toBe(findRejectReason("artwork")?.message);
+    expect(r?.reasonKeys).toEqual(["artwork"]);
+  });
+
+  it("несколько причин и своя — списком, в порядке пресетов, с ключом custom", () => {
+    const r = buildRejection(["quality", "caps"], "  Убери тег в конце трека  ");
+    expect(r?.reasonKeys).toEqual(["caps", "quality", "custom"]);
+    expect(r?.comment.split("\n")).toHaveLength(3);
+    expect(r?.comment.startsWith("• ")).toBe(true);
+    expect(r?.comment.endsWith("• Убери тег в конце трека")).toBe(true);
+  });
+
+  it("неизвестные ключи игнорирует, текст обрезает до лимита", () => {
+    expect(buildRejection(["nope"], "")).toBeNull();
+    const long = "я".repeat(5000);
+    expect(buildRejection([], long)?.comment.length).toBe(2000);
   });
 });
