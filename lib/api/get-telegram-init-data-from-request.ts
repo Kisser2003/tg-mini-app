@@ -10,7 +10,9 @@ const INIT_DATA_COOKIE = "tg_init_data";
 export function getTelegramInitDataFromRequest(request: NextRequest): string | null {
   const fromHeader = request.headers.get(TELEGRAM_INIT_DATA_HEADER)?.trim();
   if (fromHeader && fromHeader.length > 0) {
-    return fromHeader;
+    // Если клиент прислал один и тот же заголовок дважды, HTTP склеивает значения через ", ".
+    // В URL-кодированном initData литерального ", " не бывает, поэтому берём первое значение.
+    return fromHeader.split(", ")[0].trim();
   }
 
   const rawCookie = request.cookies.get(INIT_DATA_COOKIE)?.value;

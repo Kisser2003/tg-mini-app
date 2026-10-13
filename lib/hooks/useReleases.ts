@@ -93,11 +93,11 @@ async function buildTelegramRequestHeaders(uidCandidate?: number): Promise<Recor
     Number.isFinite(uidCandidate ?? NaN) && (uidCandidate ?? 0) > 0
       ? Math.trunc(uidCandidate as number)
       : getTelegramUserIdForSupabaseRequests();
-  const initData = getTelegramInitDataForApiHeader();
+  // X-Telegram-Init-Data уже есть в baseHeaders. Второй ключ с другим регистром fetch склеивает
+  // в «значение, значение», и подпись initData на сервере не проходит.
   const baseHeaders = getTelegramApiAuthHeaders(uid != null ? { userId: uid } : undefined);
   return {
     ...(uid != null && uid > 0 ? { "x-telegram-user-id": String(uid) } : {}),
-    ...(initData.length > 0 ? { "x-telegram-init-data": initData } : {}),
     ...baseHeaders
   };
 }
