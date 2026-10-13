@@ -162,7 +162,7 @@ function CreateMetadataPageInner() {
     if (localRid) return;
     let cancelled = false;
     void (async () => {
-      const id = await fetchLatestDraftReleaseIdForUser(uid);
+      const id = await fetchLatestDraftReleaseIdForUser();
       if (!cancelled && id) setDraftOfferId(id);
     })();
     return () => {

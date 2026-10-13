@@ -23,18 +23,17 @@ import {
   addReleaseTrack,
   cleanupReleaseTracks,
   createDraftRelease,
-  createDraftReleaseWeb,
   deleteReleaseFiles,
-  ensureReleaseProcessing,
+  getLatestDraftReleaseId,
   getReleaseById,
   getReleaseDisplayTitle,
-  getReleaseTracksByReleaseId,
-  submitRelease,
+  getReleaseWithTracks,
+  markReleaseFailed,
   updateRelease,
   uploadReleaseArtwork,
   uploadReleaseTrackAudio
 } from "@/repositories/releases.repo";
-import type { ReleaseRecord, ReleaseStep1Payload, ReleaseTrackRow } from "@/repositories/releases.repo";
+import type { ReleaseRecord, ReleaseTrackRow, UpdateReleasePatch } from "@/repositories/releases.repo";
 import type { CreateMetadata, CreateTrack } from "./types";
 import {
   FIXED_RELEASE_LABEL,
@@ -46,7 +45,9 @@ import {
   tracksSchema
 } from "./schemas";
 import { selectTracksWavFullySynced, useCreateReleaseDraftStore } from "./store";
-import { createSupabaseBrowser, supabase } from "@/lib/supabase";
+import { createSupabaseBrowser } from "@/lib/supabase";
+import { ReleaseApiError } from "@/lib/api/release-client";
+import { RELEASE_TYPE_VALUES } from "@/lib/db-enums";
 import { stableNumericIdFromAuthUserId } from "@/lib/stable-web-user-id";
 import { artistLinksToJson, parseArtistLinksFromJson } from "@/lib/artist-links";
 import {
@@ -158,7 +159,9 @@ async function syncWebUserIntoStore(): Promise<void> {
   });
 }
 
+/** Релиза нет (404 / PGRST116) или он чужой (403, например после смены аккаунта) — id в сторе устарел. */
 function isPostgrestNoSuchRowError(e: unknown): boolean {
+  if (e instanceof ReleaseApiError && e.status === 403) return true;
   const code =
     typeof e === "object" && e !== null && "code" in e
       ? String((e as { code: unknown }).code)
@@ -184,73 +187,20 @@ async function verifyStoredReleaseExistsOrClearReleaseId(): Promise<void> {
   }
 }
 
-/** Как в `ensureDraftRelease`: telegram_id строки tracks = WebApp user id или стор. */
-function getTrackRowTelegramId(userId: number): number {
-  return getTelegramUser()?.id ?? userId;
-}
-
-/** JWT-строка для `tracks.user_uuid` при веб-черновике без Telegram (RLS по `auth.uid()`). */
-async function getWebOnlySupabaseUserUuid(): Promise<string | undefined> {
-  if (typeof window === "undefined") return undefined;
-  if (getTelegramUser()?.id) return undefined;
-  const {
-    data: { session }
-  } = await createSupabaseBrowser().auth.getSession();
-  if (!session?.user) return undefined;
-  const storeUid = parseStoreUserId(useCreateReleaseDraftStore.getState().userId);
-  const syn = stableNumericIdFromAuthUserId(session.user.id);
-  if (storeUid === syn) return session.user.id;
-  return undefined;
-}
-
 /** Заголовки Telegram / dev для API мастера создания релиза (user_id должен совпадать с владельцем в БД). */
 function getCreateReleaseApiAuthHeaders(): Record<string, string> {
   const n = parseStoreUserId(useCreateReleaseDraftStore.getState().userId);
   return getTelegramApiAuthHeaders(n != null ? { userId: n } : undefined);
 }
 
-async function saveDraftPatchViaServiceApi(
-  releaseId: string,
-  patch: Record<string, unknown>,
-  fetchInit?: RequestInit
-): Promise<boolean> {
-  const doFetch = (authHeaders: Record<string, string>) =>
-    fetch("/api/releases/save-draft-patch", {
-      method: "POST",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-        ...authHeaders
-      },
-      body: JSON.stringify({ releaseId, patch }),
-      ...fetchInit
-    });
-
-  let authHeaders =
-    typeof window !== "undefined" ? getCreateReleaseApiAuthHeaders() : {};
-  let res = await doFetch(authHeaders);
-
-  if (res.status === 401 && typeof window !== "undefined") {
-    initTelegramWebApp();
-    authHeaders = getCreateReleaseApiAuthHeaders();
-    res = await doFetch(authHeaders);
-  }
-
-  if (res.status === 503) {
-    return false;
-  }
-
-  return res.ok;
-}
-
 /**
- * Финальная отправка через service role на сервере (обход RLS), если задан `SUPABASE_SERVICE_ROLE_KEY`.
- * Иначе вернуть `null` — вызывающий код использует клиентский `submitRelease`.
+ * Финальная отправка на модерацию через `/api/releases/finalize-submit` (service role + проверка владельца).
+ * Клиентского fallback нет: RLS не даёт anon-ключу менять статус релиза.
  */
 async function submitReleaseViaServiceApi(params: {
   releaseId: string;
   clientRequestId: string;
-}): Promise<ReleaseRecord | null> {
+}): Promise<ReleaseRecord> {
   const doFetch = (authHeaders: Record<string, string>) =>
     fetch("/api/releases/finalize-submit", {
       method: "POST",
@@ -270,10 +220,6 @@ async function submitReleaseViaServiceApi(params: {
     initTelegramWebApp();
     authHeaders = getCreateReleaseApiAuthHeaders();
     res = await doFetch(authHeaders);
-  }
-
-  if (res.status === 503) {
-    return null;
   }
 
   let body: { ok?: boolean; record?: ReleaseRecord; error?: string; details?: unknown } = {};
@@ -522,20 +468,14 @@ async function syncTrackRowsAndReleaseLyrics(args: {
   releaseId: string;
   tracks: CreateTrack[];
   audioUrls: (string | null)[];
-  userId: number;
-  telegramId: number;
-  webOnlyUuid: string | null | undefined;
 }): Promise<void> {
-  const { releaseId, tracks, audioUrls, userId, telegramId, webOnlyUuid } = args;
+  const { releaseId, tracks, audioUrls } = args;
   for (let index = 0; index < tracks.length; index += 1) {
     const audioUrl = audioUrls[index]?.trim() ?? "";
     if (!audioUrl) continue;
     await withRequestTimeout(
       addReleaseTrack({
         releaseId,
-        userId,
-        telegramId,
-        supabaseUserUuid: webOnlyUuid,
         index,
         title: tracks[index].title,
         explicit: Boolean(tracks[index].explicit),
@@ -623,7 +563,7 @@ export function getResumeCreatePath(args: {
 export async function resumeDraftFromRelease(releaseId: string): Promise<string | null> {
   try {
     initUserContextInStore();
-    const existing = await getReleaseById(releaseId);
+    const { record: existing, tracks: trackRows } = await getReleaseWithTracks(releaseId);
 
     if (existing.status !== "draft" && existing.status !== "pending") {
       useCreateReleaseDraftStore
@@ -650,7 +590,6 @@ export async function resumeDraftFromRelease(releaseId: string): Promise<string 
       }
     }
 
-    const trackRows = await getReleaseTracksByReleaseId(releaseId);
     const metadata = createMetadataFromReleaseRecord(existing);
     metadataHydrateSchema.parse(metadata);
     const featFromDb = featuringNamesFromCollaboratorsJson(existing.collaborators);
@@ -806,87 +745,30 @@ export async function ensureDraftRelease(): Promise<ReleaseRecord | null> {
   const {
     data: { session }
   } = await createSupabaseBrowser().auth.getSession();
-  const webSyntheticId =
-    session?.user != null ? stableNumericIdFromAuthUserId(session.user.id) : null;
-  const isWebOnlyDraft =
-    Boolean(session?.user) &&
-    !tgUser?.id &&
-    webSyntheticId != null &&
-    storeUid === webSyntheticId;
 
-  if (process.env.NODE_ENV === "production") {
-    const hasIdentity =
-      Boolean(tgUser?.id) ||
-      (storeUid != null && storeUid > 0) ||
-      Boolean(session?.user);
-    if (!hasIdentity) {
-      store.setSubmitError(
-        "Не удалось определить аккаунт. Откройте приложение из Telegram или войдите на сайте."
-      );
-      return null;
-    }
+  const hasIdentity =
+    Boolean(tgUser?.id) || (storeUid != null && storeUid > 0) || Boolean(session?.user);
+  if (!hasIdentity) {
+    store.setSubmitError(
+      "Не удалось определить аккаунт. Откройте приложение из Telegram или войдите на сайте."
+    );
+    return null;
   }
 
   const clientRequestId = createClientRequestId(store.clientRequestId);
 
   try {
     store.setSubmitError(null);
-    let draft: ReleaseRecord;
-
-    if (isWebOnlyDraft && session?.user && webSyntheticId != null) {
-      draft = await createDraftReleaseWeb({
-        syntheticUserId: webSyntheticId,
-        authUserUuid: session.user.id,
-        client_request_id: clientRequestId,
-        artist_name: mainArtistName,
-        track_name: parsed.data.releaseTitle,
-        release_type: parsed.data.releaseType,
-        genre: parsed.data.genre,
-        release_date: parsed.data.releaseDate,
-        explicit: Boolean(parsed.data.explicit)
-      });
-    } else if (tgUser?.id) {
-      const effectiveUserId = storeUid ?? tgUser.id;
-      if (!Number.isFinite(effectiveUserId) || effectiveUserId <= 0) {
-        store.setSubmitError("Ошибка авторизации Telegram");
-        return null;
-      }
-      const telegramId = tgUser.id;
-      const rawUsername = getTelegramUsername();
-      const telegramUsername = rawUsername && rawUsername.length > 0 ? rawUsername : null;
-
-      const payload: ReleaseStep1Payload = {
-        user_id: effectiveUserId,
-        telegram_id: telegramId,
-        telegram_username: telegramUsername,
-        client_request_id: clientRequestId,
-        artist_name: mainArtistName,
-        track_name: parsed.data.releaseTitle,
-        release_type: parsed.data.releaseType,
-        genre: parsed.data.genre,
-        release_date: parsed.data.releaseDate,
-        explicit: Boolean(parsed.data.explicit)
-      };
-      draft = await createDraftRelease(payload);
-    } else if (storeUid != null && storeUid > 0) {
-      const effectiveUserId = storeUid;
-      const payload: ReleaseStep1Payload = {
-        user_id: effectiveUserId,
-        telegram_id: effectiveUserId,
-        telegram_username: null,
-        client_request_id: clientRequestId,
-        artist_name: mainArtistName,
-        track_name: parsed.data.releaseTitle,
-        release_type: parsed.data.releaseType,
-        genre: parsed.data.genre,
-        release_date: parsed.data.releaseDate,
-        explicit: Boolean(parsed.data.explicit)
-      };
-      draft = await createDraftRelease(payload);
-    } else {
-      store.setSubmitError("Ошибка авторизации Telegram");
-      return null;
-    }
+    // Владельца (user_id / telegram_id / user_uuid) сервер берёт из initData или cookie-сессии.
+    const draft = await createDraftRelease({
+      client_request_id: clientRequestId,
+      artist_name: mainArtistName,
+      track_name: parsed.data.releaseTitle,
+      release_type: parsed.data.releaseType,
+      genre: parsed.data.genre,
+      release_date: parsed.data.releaseDate,
+      explicit: Boolean(parsed.data.explicit)
+    });
 
     store.setReleaseId(draft.id);
     store.setClientRequestId(clientRequestId);
@@ -1010,7 +892,16 @@ export async function syncPassportFormToReleaseDraft(
     store.artworkUrl,
     store.tracks
   );
-  return saveDraftPatchViaServiceApi(rid, patch, options?.keepalive ? { keepalive: true } : undefined);
+  // Форма может быть заполнена частично: тип релиза сервер принимает только из списка.
+  if (!(RELEASE_TYPE_VALUES as readonly unknown[]).includes(patch.release_type)) {
+    delete patch.release_type;
+  }
+  try {
+    await updateRelease(rid, patch as UpdateReleasePatch, { keepalive: options?.keepalive });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -1071,66 +962,24 @@ export async function saveDraftAction(
       currentRow.collaborators
     );
 
-    try {
-      const viaService = await saveDraftPatchViaServiceApi(rid, finalData);
-      if (viaService) {
-        return { ok: true };
-      }
-      await updateRelease(rid, finalData as Parameters<typeof updateRelease>[1]);
-    } catch (e: unknown) {
-      console.error("FULL DB ERROR:", e);
-      if (process.env.NODE_ENV === "development") {
-        void fetch("/api/dev/log-db-error", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            tag: "FULL_DB_ERROR",
-            releaseId: rid,
-            finalData,
-            error: formatErrorMessage(e, String(e))
-          })
-        }).catch(() => {});
-      }
-      /** TEMP bypass: не блокируем флоу из-за PostgREST / схемы */
-      return { ok: true };
-    }
+    await updateRelease(rid, finalData as UpdateReleasePatch);
     return { ok: true };
   } catch (e: unknown) {
-    console.error("FULL DB ERROR (saveDraft outer):", e);
-    if (process.env.NODE_ENV === "development") {
-      void fetch("/api/dev/log-db-error", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tag: "saveDraft_outer",
-          error: formatErrorMessage(e, String(e))
-        })
-      }).catch(() => {});
-    }
-    /** TEMP bypass: не блокируем флоу */
-    return { ok: true };
+    console.error("[saveDraftAction] failed:", e);
+    return {
+      ok: false,
+      message: formatErrorMessage(e, "Не удалось сохранить черновик.")
+    };
   }
 }
 
-/** Последний черновик пользователя (для предложения «Продолжить»). */
-export async function fetchLatestDraftReleaseIdForUser(
-  userId: number | string
-): Promise<string | null> {
-  const idStr = String(userId).trim();
-  if (!idStr || idStr === "NaN") return null;
-  const asNum = Number(idStr);
-  if (!Number.isFinite(asNum) || asNum <= 0) return null;
-
-  const { data, error } = await supabase
-    .from("releases")
-    .select("id")
-    .or(`user_id.eq.${idStr},telegram_id.eq.${idStr}`)
-    .in("status", ["draft", "pending"])
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (error || !data) return null;
-  return data.id as string;
+/** Последний черновик текущего пользователя (для предложения «Продолжить»). */
+export async function fetchLatestDraftReleaseIdForUser(): Promise<string | null> {
+  try {
+    return await getLatestDraftReleaseId();
+  } catch {
+    return null;
+  }
 }
 
 async function postDraftUploadState(
@@ -1239,7 +1088,6 @@ export async function uploadTrackWavAtIndex(options: {
     return false;
   }
 
-  const telegramId = getTrackRowTelegramId(userId);
   useCreateReleaseDraftStore.getState().setTracksUploadInProgress(true);
   const wake = await requestScreenWakeLock();
   try {
@@ -1278,13 +1126,9 @@ export async function uploadTrackWavAtIndex(options: {
     }
 
     try {
-      const webOnlyUuid = await getWebOnlySupabaseUserUuid();
       await withRequestTimeout(
         addReleaseTrack({
           releaseId,
-          userId,
-          telegramId,
-          supabaseUserUuid: webOnlyUuid,
           index: options.index,
           title: track.title,
           explicit: Boolean(track.explicit),
@@ -1369,15 +1213,11 @@ export async function uploadTracksForDraftStep(options: {
     store.setSubmitError("Нет данных пользователя для загрузки треков.");
     return false;
   }
-  const telegramId = getTrackRowTelegramId(userId);
-
   useCreateReleaseDraftStore.getState().setTracksUploadInProgress(true);
   const wake = await requestScreenWakeLock();
   try {
     store.setSubmitError(null);
     await postDraftUploadState(releaseId, "start");
-
-    const webOnlyUuid = await getWebOnlySupabaseUserUuid();
 
     try {
       for (let index = 0; index < tracks.length; index += 1) {
@@ -1434,9 +1274,6 @@ export async function uploadTracksForDraftStep(options: {
           await withRequestTimeout(
             addReleaseTrack({
               releaseId,
-              userId,
-              telegramId,
-              supabaseUserUuid: webOnlyUuid,
               index,
               title: track.title,
               explicit: Boolean(track.explicit),
@@ -1534,8 +1371,6 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
   const releaseId = store.releaseId;
   const clientRequestId = store.clientRequestId;
   const submitUserId = parseStoreUserId(store.userId)!;
-  const submitTelegramId = getTrackRowTelegramId(submitUserId);
-  const webOnlyUuid = await getWebOnlySupabaseUserUuid();
 
   const setTrackUploadProgress = (trackIndex: number, filePercent: number) => {
     const segment = (trackIndex + filePercent / 100) / Math.max(totalTracks, 1);
@@ -1572,10 +1407,7 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
         await syncTrackRowsAndReleaseLyrics({
           releaseId,
           tracks: parsedTracks.data.tracks,
-          audioUrls: stNow.trackAudioUrlsFromDb,
-          userId: submitUserId,
-          telegramId: submitTelegramId,
-          webOnlyUuid
+          audioUrls: stNow.trackAudioUrlsFromDb
         });
       } else {
         for (let index = 0; index < parsedTracks.data.tracks.length; index += 1) {
@@ -1598,9 +1430,6 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
           await withRequestTimeout(
             addReleaseTrack({
               releaseId,
-              userId: submitUserId,
-              telegramId: submitTelegramId,
-              supabaseUserUuid: webOnlyUuid,
               index,
               title: track.title,
               explicit: Boolean(track.explicit),
@@ -1663,12 +1492,10 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
         }
 
         if (!current || current.status !== "failed") {
-          await updateRelease(releaseId, {
-            status: "failed",
-            error_message: skipWavUpload
-              ? "Отправка прервана."
-              : "Отправка прервана, временные файлы очищены."
-          });
+          await markReleaseFailed(
+            releaseId,
+            skipWavUpload ? "Отправка прервана." : "Отправка прервана, временные файлы очищены."
+          );
         }
       } catch {
         cleanupFailed = true;
@@ -1721,7 +1548,7 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
               storeAfterUpload.artworkUrl,
               storeAfterUpload.tracks,
               existing.collaborators
-            ) as Parameters<typeof updateRelease>[1]
+            ) as UpdateReleasePatch
           ),
           SUPABASE_DB_OP_TIMEOUT_MS,
           USER_REQUEST_TIMEOUT_MESSAGE
@@ -1757,19 +1584,7 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
         return false;
       }
 
-      let verified: ReleaseRecord;
-      const viaService = await submitReleaseViaServiceApi({ releaseId, clientRequestId }).catch(
-        (e: unknown) => {
-          console.error("[submitTracksAndFinalize] service finalize failed, falling back to client", e);
-          return null;
-        }
-      );
-      if (viaService) {
-        verified = viaService;
-      } else {
-        await submitRelease({ releaseId, clientRequestId });
-        verified = await ensureReleaseProcessing(releaseId, clientRequestId);
-      }
+      const verified = await submitReleaseViaServiceApi({ releaseId, clientRequestId });
 
       if (process.env.NODE_ENV === "development") {
         if (verified.status !== "processing" && verified.status !== "ready") {

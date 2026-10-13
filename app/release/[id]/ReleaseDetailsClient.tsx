@@ -17,6 +17,8 @@ import { USER_REQUEST_TIMEOUT_MESSAGE } from "@/lib/errors";
 import { supabase } from "@/lib/supabase";
 import { getTelegramUserId, initTelegramWebApp } from "@/lib/telegram";
 import { getReleaseDisplayTitle } from "@/repositories/releases/types";
+import { getReleaseWithTracks } from "@/repositories/releases/queries";
+import { ReleaseApiError } from "@/lib/api/release-client";
 
 type ReleaseDetailsTrackRow = {
   title: string;
@@ -136,18 +138,11 @@ export default function ReleaseDetailsClient() {
       const startedAt = Date.now();
       debugInit("release/details", "load start", { releaseId: params.id, userId, webUserId });
       try {
-        const base = supabase
-          .from("releases")
-          .select(
-            "id, user_id, artist_name, track_name, title, artwork_url, audio_url, release_type, genre, sub_genre, status, error_message, created_at, smart_link, release_date, explicit, is_explicit, performance_language, isrc, upc, collaborators, music_author"
-          )
-          .eq("id", params.id);
-        const filtered = isAdminView
-          ? base
-          : webUserId
-            ? base.eq("user_uuid", webUserId)
-            : base.or(`user_id.eq.${String(userId!)},telegram_id.eq.${String(userId!)}`);
-        const queryPromise = Promise.resolve(filtered.maybeSingle());
+        // Через API владельца: RLS по anon-ключу больше не отдаёт релизы по x-telegram-user-id.
+        const queryPromise = getReleaseWithTracks(params.id).catch((e: unknown) => {
+          if (e instanceof ReleaseApiError && (e.status === 404 || e.status === 403)) return null;
+          throw e;
+        });
         queryPromise.catch(() => {});
         const timeoutPromise = new Promise<Awaited<typeof queryPromise>>((_, reject) => {
           timeoutId = window.setTimeout(() => {
@@ -155,32 +150,26 @@ export default function ReleaseDetailsClient() {
           }, RELEASE_DETAILS_TIMEOUT_MS);
         });
 
-        const { data, error: dbError } = await Promise.race([
-          queryPromise,
-          timeoutPromise
-        ]);
+        const data = await Promise.race([queryPromise, timeoutPromise]);
         if (timeoutId != null) {
           window.clearTimeout(timeoutId);
           timeoutId = null;
         }
 
-        if (dbError) throw dbError;
         if (!cancelled) {
           if (!data) {
             setRelease(null);
           } else {
-            const { data: trackRows } = await supabase
-              .from("tracks")
-              .select("title, explicit, duration, index")
-              .eq("release_id", params.id)
-              .order("index", { ascending: true });
-            const tracks: ReleaseDetailsTrackRow[] = (trackRows ?? []).map((row) => ({
+            const tracks: ReleaseDetailsTrackRow[] = data.tracks.map((row) => ({
               title: typeof row.title === "string" ? row.title : "",
               explicit: Boolean(row.explicit),
               duration: row.duration ?? null,
               index: row.index ?? 0
             }));
-            setRelease({ ...(data as Omit<ReleaseDetailsRow, "tracks">), tracks });
+            setRelease({
+              ...(data.record as unknown as Omit<ReleaseDetailsRow, "tracks">),
+              tracks
+            });
           }
         }
         debugInit("release/details", "load success", {
