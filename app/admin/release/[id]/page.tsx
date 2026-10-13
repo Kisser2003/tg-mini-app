@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, ChevronDown } from "lucide-react";
+import { ArrowLeft, ChevronDown, Send } from "lucide-react";
 import { createPortal } from "react-dom";
 import useSWR from "swr";
 import { toast } from "sonner";
@@ -19,6 +19,8 @@ import { fetchAdminModerationQueue } from "@/features/admin/moderation-queue";
 import { buildAdminReleaseSummary, pickNextReleaseId, type AdminReleaseRow } from "@/lib/admin-release-metadata";
 import { SWR_LIST_OPTIONS } from "@/lib/swr-config";
 import { cn } from "@/lib/utils";
+import { hapticMap } from "@/lib/haptic-map";
+import { openTelegramChat } from "@/lib/open-smart-link";
 import { isAdminUi, isAdminUiByWebSession } from "@/lib/admin";
 import { normalizeReleaseStatus } from "@/lib/release-status";
 import type { ReleaseRecord, ReleaseTrackRow } from "@/repositories/releases.repo";
@@ -211,6 +213,7 @@ export default function AdminReleaseDetailPage() {
   const previousRejection = describePreviousRejection(release);
 
   const summary = buildAdminReleaseSummary(release as AdminReleaseRow, tracks);
+  const artistUsername = release.telegram_username?.trim().replace(/^@/, "") || null;
   const title = displayTitle || release.track_name || "Релиз";
 
   return (
@@ -265,6 +268,19 @@ export default function AdminReleaseDetailPage() {
           ) : null}
           {summary.length > 0 ? (
             <p className="mt-2 text-[13px] leading-snug text-omf-faint">{summary.join(" · ")}</p>
+          ) : null}
+          {artistUsername ? (
+            <button
+              type="button"
+              onClick={() => {
+                hapticMap.impactLight();
+                openTelegramChat(artistUsername);
+              }}
+              className="omf-focus mt-2 inline-flex items-center gap-1.5 rounded-full py-1 text-[14px] text-omf-ultra-text hover:text-omf-ink"
+            >
+              <Send className="h-4 w-4" aria-hidden />
+              Написать @{artistUsername}
+            </button>
           ) : null}
         </div>
       </header>

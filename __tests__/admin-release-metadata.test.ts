@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { buildAdminReleaseSummary, pickNextReleaseId, type AdminReleaseRow } from "@/lib/admin-release-metadata";
+import {
+  buildAdminReleaseSummary,
+  formatAgoRu,
+  pickNextReleaseId,
+  type AdminReleaseRow
+} from "@/lib/admin-release-metadata";
 import type { ReleaseTrackRow } from "@/repositories/releases/types";
 
 describe("pickNextReleaseId", () => {
@@ -38,5 +43,17 @@ describe("buildAdminReleaseSummary", () => {
   it("5 треков", () => {
     const row = { release_type: "album" } as unknown as AdminReleaseRow;
     expect(buildAdminReleaseSummary(row, Array.from({ length: 5 }, () => tr(false)))).toContain("5 треков");
+  });
+});
+
+describe("formatAgoRu", () => {
+  const now = new Date("2026-10-13T12:00:00Z");
+  it.each([
+    ["2026-10-13T11:55:00Z", "5 мин назад"],
+    ["2026-10-13T09:00:00Z", "3 ч назад"],
+    ["2026-10-11T12:00:00Z", "2 дн назад"],
+    ["bad", ""]
+  ])("%s → %s", (iso, out) => {
+    expect(formatAgoRu(iso, now)).toBe(out);
   });
 });

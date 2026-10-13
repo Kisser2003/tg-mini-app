@@ -250,3 +250,13 @@ export function buildAdminReleaseSummary(release: AdminReleaseRow, tracks: Relea
   if (date) parts.push(`выход ${date}`);
   return parts.filter((p): p is string => Boolean(p));
 }
+
+/** «5 мин назад», «3 ч назад», «2 дн назад». */
+export function formatAgoRu(iso: string, now: Date = new Date()): string {
+  const min = Math.max(0, Math.round((now.getTime() - new Date(iso).getTime()) / 60000));
+  if (!Number.isFinite(min)) return "";
+  if (min < 60) return `${min} мин назад`;
+  const h = Math.round(min / 60);
+  if (h < 24) return `${h} ч назад`;
+  return `${Math.round(h / 24)} дн назад`;
+}
