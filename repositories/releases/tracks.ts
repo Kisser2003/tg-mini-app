@@ -1,15 +1,11 @@
 import { z } from "zod";
-import { logSupabaseTracksInsertRlsDenied, logSupabaseUpdateError } from "../../lib/errors";
-import { supabase } from "../../lib/supabase";
+import { releaseApiRequest } from "../../lib/api/release-client";
 import { RELEASE_TYPE_VALUES } from "../../lib/db-enums";
-import { withRetry } from "./queries";
+import { getReleaseWithTracks } from "./queries";
 import type { ReleaseTrackRow } from "./types";
 
 const trackInsertSchema = z.object({
   releaseId: z.string().min(1),
-  userId: z.number().int().nonnegative(),
-  /** Как в `releases.telegram_id` — для RLS (x-telegram-user-id). */
-  telegramId: z.number().int().nonnegative().optional(),
   index: z.number().int().nonnegative(),
   title: z.string().min(1).max(256).trim(),
   explicit: z.boolean(),
@@ -20,13 +16,12 @@ const trackInsertSchema = z.object({
 
 export { RELEASE_TYPE_VALUES };
 
+/**
+ * Upsert трека (`release_id, index`) через `/api/releases/tracks`.
+ * Владелец строки (`user_id` / `telegram_id` / `user_uuid`) копируется сервером из релиза.
+ */
 export async function addReleaseTrack(params: {
   releaseId: string;
-  userId: number;
-  /** Совпадает с `user_id` и заголовком RLS; по умолчанию = userId. */
-  telegramId?: number;
-  /** Для веб без Telegram: `auth.uid()` в RLS. */
-  supabaseUserUuid?: string | null;
   index: number;
   title: string;
   explicit: boolean;
@@ -34,46 +29,16 @@ export async function addReleaseTrack(params: {
   /** Текст песни; пустая строка → null в БД. */
   lyrics?: string | null;
 }): Promise<void> {
-  const { supabaseUserUuid, lyrics, ...schemaInput } = params;
+  const { lyrics, ...rest } = params;
   const validated = trackInsertSchema.parse({
-    ...schemaInput,
+    ...rest,
     lyrics: lyrics == null || String(lyrics).trim() === "" ? null : String(lyrics).trim()
   });
-  const telegramId = validated.telegramId ?? validated.userId;
-
-  const { error } = await withRetry(async () => {
-    const row: Record<string, unknown> = {
-      release_id: validated.releaseId,
-      user_id: validated.userId,
-      telegram_id: supabaseUserUuid ? null : String(telegramId),
-      index: validated.index,
-      title: validated.title,
-      explicit: validated.explicit,
-      file_path: validated.audioUrl,
-      lyrics: validated.lyrics ?? null
-    };
-    if (supabaseUserUuid) {
-      row.user_uuid = supabaseUserUuid;
-    }
-    const response = await supabase.from("tracks").upsert(row as never, {
-      onConflict: "release_id,index"
-    });
-    return response;
-  });
-
-  if (error) {
-    logSupabaseTracksInsertRlsDenied("addReleaseTrack", error);
-    logSupabaseUpdateError("addReleaseTrack", error);
-    throw error;
-  }
+  await releaseApiRequest("/api/releases/tracks", { method: "POST", body: validated });
 }
 
 export async function cleanupReleaseTracks(releaseId: string): Promise<void> {
-  await withRetry(async () => {
-    const response = await supabase.from("tracks").delete().eq("release_id", releaseId);
-    if (response.error) throw response.error;
-    return response;
-  });
+  await releaseApiRequest("/api/releases/tracks", { method: "DELETE", body: { releaseId } });
 }
 
 /**
@@ -81,16 +46,6 @@ export async function cleanupReleaseTracks(releaseId: string): Promise<void> {
  * Сортировка по `index` по возрастанию.
  */
 export async function getReleaseTracksByReleaseId(releaseId: string): Promise<ReleaseTrackRow[]> {
-  const { data, error } = await withRetry(async () => {
-    const response = await supabase
-      .from("tracks")
-      .select("id, release_id, user_id, index, position, title, explicit, file_path, lyrics, duration")
-      .eq("release_id", releaseId)
-      .order("index", { ascending: true });
-    return response;
-  });
-
-  if (error) throw error;
-
-  return (data ?? []) as ReleaseTrackRow[];
+  const { tracks } = await getReleaseWithTracks(releaseId);
+  return tracks;
 }

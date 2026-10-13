@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import { initUserContextInStore } from "@/features/release/createRelease/actions";
-import { getMyReleases } from "@/repositories/releases.repo";
 import { type ReleaseRecord } from "@/repositories/releases.repo";
 import {
   getTelegramApiAuthHeaders,
@@ -106,19 +105,6 @@ async function fetchReleasesTelegram([, , uid]: readonly ["releases", "telegram"
   ReleaseListRow[]
 > {
   const numericUid = Number(uid);
-  const fallbackUid =
-    Number.isFinite(numericUid) && numericUid > 0
-      ? Math.trunc(numericUid)
-      : getTelegramUserIdForSupabaseRequests();
-  const tryDirectFallback = async (): Promise<ReleaseListRow[]> => {
-    if (!Number.isFinite(fallbackUid ?? NaN) || (fallbackUid ?? 0) <= 0) return [];
-    const rows = await withRequestTimeout(
-      getMyReleases(fallbackUid as number),
-      RELEASES_LIST_TIMEOUT_MS,
-      USER_REQUEST_TIMEOUT_MESSAGE
-    );
-    return rows as ReleaseListRow[];
-  };
 
   const run = async () => {
     const telegramHeaders = await buildTelegramRequestHeaders(numericUid);
@@ -132,14 +118,9 @@ async function fetchReleasesTelegram([, , uid]: readonly ["releases", "telegram"
       cache: "no-store"
     });
     const json = (await res.json()) as { ok?: boolean; rows?: ReleaseListRow[]; error?: string };
+    // Без прямого fallback в Supabase: RLS не доверяет x-telegram-user-id, источник — только API.
     if (!res.ok || json.ok !== true || !Array.isArray(json.rows)) {
-      const directRows = await tryDirectFallback();
-      if (directRows.length > 0) return directRows;
       throw new Error(json.error || "Не удалось загрузить релизы.");
-    }
-    if (json.rows.length === 0) {
-      const directRows = await tryDirectFallback();
-      if (directRows.length > 0) return directRows;
     }
     return json.rows;
   };

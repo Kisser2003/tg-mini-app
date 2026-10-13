@@ -52,57 +52,47 @@ async function seedReviewReadyState(page: Page) {
   );
 }
 
-async function mockSupabaseRest(route: Route, release: ReleaseMock) {
+/**
+ * Мок API владельца релиза (`/api/releases/*`). Клиент больше не ходит в `/rest/v1/releases|tracks`
+ * напрямую — RLS не доверяет заголовку x-telegram-user-id.
+ */
+async function mockReleaseOwnerApi(route: Route, release: ReleaseMock) {
   const req = route.request();
   const method = req.method();
-  const url = req.url();
+  const { pathname, searchParams } = new URL(req.url());
+  const json = (body: unknown, status = 200) =>
+    route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
 
-  if (url.includes("/rest/v1/releases")) {
-    if (method === "GET") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([release])
-      });
-      return;
-    }
-
-    if (method === "PATCH" || method === "POST") {
-      const patch = (req.postDataJSON() as Record<string, unknown> | null) ?? {};
-      const merged = { ...release, ...patch };
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([merged])
-      });
-      return;
-    }
+  if (pathname === `/api/releases/${release.id}` && method === "GET") {
+    const tracks = [
+      {
+        release_id: release.id,
+        index: 0,
+        title: "Regression Track",
+        explicit: false,
+        file_path: "https://example.com/audio.wav",
+        lyrics: ""
+      }
+    ];
+    await json(searchParams.get("tracks") === "1" ? { ok: true, record: release, tracks } : { ok: true, record: release });
+    return;
   }
 
-  if (url.includes("/rest/v1/tracks")) {
-    if (method === "GET") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([
-          {
-            release_id: release.id,
-            index: 0,
-            title: "Regression Track",
-            explicit: false,
-            audio_url: "https://example.com/audio.wav",
-            lyrics: ""
-          }
-        ])
-      });
-      return;
-    }
+  if (pathname === "/api/releases/save-draft-patch" && method === "POST") {
+    const body = (req.postDataJSON() as { patch?: Record<string, unknown> } | null) ?? {};
+    Object.assign(release, body.patch ?? {});
+    await json({ ok: true, record: release });
+    return;
+  }
 
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify([{ ok: true }])
-    });
+  if (pathname === "/api/releases/tracks") {
+    await json({ ok: true });
+    return;
+  }
+
+  if (pathname === "/api/releases/mark-failed" && method === "POST") {
+    release.status = "failed";
+    await json({ ok: true, record: release });
     return;
   }
 
@@ -123,8 +113,8 @@ test.describe("@full-submit Create release submit full-flow with mocked backend"
 
     await seedReviewReadyState(page);
 
-    await page.route("**/rest/v1/**", async (route) => {
-      await mockSupabaseRest(route, release);
+    await page.route("**/api/releases/**", async (route) => {
+      await mockReleaseOwnerApi(route, release);
     });
 
     await page.route("**/api/releases/submit-precheck", async (route) => {
@@ -170,8 +160,8 @@ test.describe("@full-submit Create release submit full-flow with mocked backend"
 
     await seedReviewReadyState(page);
 
-    await page.route("**/rest/v1/**", async (route) => {
-      await mockSupabaseRest(route, release);
+    await page.route("**/api/releases/**", async (route) => {
+      await mockReleaseOwnerApi(route, release);
     });
 
     await page.route("**/api/releases/submit-precheck", async (route) => {
