@@ -48,7 +48,7 @@ import {
 import { selectTracksWavFullySynced, useCreateReleaseDraftStore } from "./store";
 import { createSupabaseBrowser, supabase } from "@/lib/supabase";
 import { stableNumericIdFromAuthUserId } from "@/lib/stable-web-user-id";
-import { parseArtistLinksFromJson } from "@/lib/artist-links";
+import { artistLinksToJson, parseArtistLinksFromJson } from "@/lib/artist-links";
 import {
   buildCollaboratorsPayloadForDb,
   featuringNamesFromCollaboratorsJson,
@@ -964,6 +964,7 @@ function buildReleaseRowPatchFromMetadata(
 ): Record<string, unknown> {
   const mainArtist = m.primaryArtist ?? "";
   const featuringArtistNames = unionFeaturingNamesFromTracks(tracks);
+  const artistLinks = artistLinksToJson(useCreateReleaseDraftStore.getState().releaseArtistLinks);
   return {
     artist_name: mainArtist,
     title: m.releaseTitle,
@@ -975,6 +976,8 @@ function buildReleaseRowPatchFromMetadata(
     music_author: m.musicAuthor?.trim() || null,
     license_type: m.licenseType || null,
     tiktok_start_sec: parseTimecodeToSeconds(m.tiktokStart),
+    artist_links: artistLinks,
+    has_existing_profiles: Object.keys(artistLinks).length > 0,
     collaborators: buildCollaboratorsPayloadForDb(
       mainArtist,
       featuringArtistNames,

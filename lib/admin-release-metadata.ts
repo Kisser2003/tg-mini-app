@@ -192,7 +192,8 @@ export function buildReleaseExportPayload(release: AdminReleaseRow, tracks: Rele
       license_type: release.license_type ?? null,
       license_type_label: licenseLabel(release.license_type),
       tiktok_start_sec: release.tiktok_start_sec ?? null,
-      tiktok_start: tiktokStartLabel(release.tiktok_start_sec)
+      tiktok_start: tiktokStartLabel(release.tiktok_start_sec),
+      artist_links: release.artist_links ?? {}
     },
     release: { ...release },
     tracks: tracks.map((t) => ({ ...t }))

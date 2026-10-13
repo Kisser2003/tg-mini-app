@@ -289,6 +289,25 @@ function CreateMetadataPageInner() {
     return () => clearServerSyncTimer();
   }, [values, isDirty, releaseId, getValues, clearServerSyncTimer]);
 
+  // Ссылки на профили живут в сторе, а не в RHF: синхронизируем их отдельно.
+  const releaseArtistLinks = useCreateReleaseDraftStore((s) => s.releaseArtistLinks);
+  const lastSyncedLinksRef = useRef<string | null>(null);
+  useEffect(() => {
+    const serialized = JSON.stringify(releaseArtistLinks);
+    if (lastSyncedLinksRef.current === null) {
+      lastSyncedLinksRef.current = serialized;
+      return;
+    }
+    if (serialized === lastSyncedLinksRef.current || !releaseId) return;
+    lastSyncedLinksRef.current = serialized;
+    clearServerSyncTimer();
+    serverSyncTimerRef.current = window.setTimeout(() => {
+      serverSyncTimerRef.current = null;
+      void syncPassportFormToReleaseDraft(getValues());
+    }, 1100);
+    return () => clearServerSyncTimer();
+  }, [releaseArtistLinks, releaseId, getValues, clearServerSyncTimer]);
+
   useEffect(() => {
     const onVisibilityHidden = () => {
       if (document.visibilityState !== "hidden") return;
