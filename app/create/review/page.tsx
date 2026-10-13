@@ -80,6 +80,7 @@ export default function CreateReviewPage() {
   const tracksWavSyncedToDb = useCreateReleaseDraftStore(selectTracksWavFullySynced);
   const tracksUploadInProgress = useCreateReleaseDraftStore((s) => s.tracksUploadInProgress);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const [progressDismissed, setProgressDismissed] = useState(false);
   const prevSubmitErrorRef = useRef<string | null>(null);
 
@@ -88,6 +89,7 @@ export default function CreateReviewPage() {
     return tracks.some((_t, i) => !trackFiles[i]);
   }, [tracksWavSyncedToDb, trackFiles, tracks]);
   const submitBlocked =
+    !termsAccepted ||
     missingFiles ||
     tracksUploadInProgress ||
     isSubmitting ||
@@ -165,7 +167,7 @@ export default function CreateReviewPage() {
     setIsSubmitting(true);
     let ok = false;
     try {
-      ok = await submitTracksAndFinalize({ files });
+      ok = await submitTracksAndFinalize({ files, termsAccepted });
     } finally {
       setIsSubmitting(false);
     }
@@ -225,7 +227,7 @@ export default function CreateReviewPage() {
       return;
     }
     router.replace("/create/success");
-  }, [missingFiles, setSubmitError, trackFiles, router]);
+  }, [missingFiles, setSubmitError, trackFiles, router, termsAccepted]);
 
   if (submitStatus === "success" && successSummary) {
     return (
@@ -376,6 +378,24 @@ export default function CreateReviewPage() {
         )}
 
         <div>
+          {!progressActive ? (
+            <label className="mb-4 flex cursor-pointer items-start gap-3 text-[14px] leading-relaxed text-omf-graphite">
+              <input
+                type="checkbox"
+                checked={termsAccepted}
+                disabled={isSubmitting}
+                onChange={(e) => {
+                  triggerHaptic("light");
+                  setTermsAccepted(e.target.checked);
+                }}
+                className="mt-0.5 h-5 w-5 shrink-0 rounded-[6px] accent-[var(--omf-ultra)]"
+              />
+              <span>
+                Выпуск платный, стоимость согласовывается со студией. Оплата не возвращается, в том
+                числе если площадки не пропустили релиз из-за содержания.
+              </span>
+            </label>
+          ) : null}
           {!progressActive ? (
             <button
               type="button"

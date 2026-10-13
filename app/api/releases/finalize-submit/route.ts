@@ -15,9 +15,11 @@ import { notifyArtist } from "@/lib/server/artist-notify";
 import { invalidateMyReleasesCache } from "@/lib/server/release-list-cache";
 import { getReleaseDisplayTitle, type ReleaseRecord } from "@/repositories/releases.repo";
 import { runAiMetadataPrecheckForRelease } from "@/lib/release-ai-moderation.server";
+import { requestPaymentConfirmationOnSubmit } from "@/lib/server/payment-confirm";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 /** Уведомление в Telegram только если у релиза есть реальный `telegram_id` (не веб-only). */
-async function notifyReleaseSubmittedForModeration(record: ReleaseRecord): Promise<void> {
+async function notifyReleaseSubmittedForModeration(admin: SupabaseClient, record: ReleaseRecord): Promise<void> {
   await invalidateMyReleasesCache(record as Record<string, unknown>);
   await notifyAdminReleaseSubmitted({
     title: getReleaseDisplayTitle(record),
@@ -30,12 +32,17 @@ async function notifyReleaseSubmittedForModeration(record: ReleaseRecord): Promi
     `🚀 <b>Ваш релиз «${title}» отправлен на модерацию!</b>\n\n` +
     `Мы проверим его в течение 24 часов и пришлем уведомление здесь.`;
   await notifyArtist(record, text);
+  await requestPaymentConfirmationOnSubmit(admin, record);
 }
 
 const bodySchema = z.object({
   releaseId: z.string().uuid(),
-  clientRequestId: z.string().uuid()
+  clientRequestId: z.string().uuid(),
+  /** Артист отметил условия (платный выпуск, без возвратов) на шаге «Проверка». */
+  termsAccepted: z.boolean().optional()
 });
+
+const TERMS_REQUIRED_ERROR = "Отметь, что согласен с условиями выпуска, и отправь ещё раз.";
 
 /** PostgREST для `RETURNS SETOF releases` отдаёт полную строку; кастомный `RETURNS jsonb` — нет (ломает клиент). */
 const RELEASE_ROW_STATUSES = new Set([
@@ -75,7 +82,7 @@ async function handleFinalizeSubmit(request: NextRequest, actor: ReleaseActor): 
     return NextResponse.json({ ok: false, error: "Некорректное тело запроса." }, { status: 400 });
   }
 
-  const { releaseId, clientRequestId } = parsed.data;
+  const { releaseId, clientRequestId, termsAccepted } = parsed.data;
 
   const { data: currentRow, error: loadErr } = await admin
     .from("releases")
@@ -107,6 +114,17 @@ async function handleFinalizeSubmit(request: NextRequest, actor: ReleaseActor): 
   const current = currentRow as ReleaseRecord;
   if (current.status === "processing" || current.status === "ready") {
     return NextResponse.json({ ok: true, record: current });
+  }
+
+  if (termsAccepted !== true) {
+    return NextResponse.json({ ok: false, error: TERMS_REQUIRED_ERROR }, { status: 400 });
+  }
+  const { error: termsErr } = await admin
+    .from("releases")
+    .update({ terms_accepted_at: new Date().toISOString() })
+    .eq("id", releaseId);
+  if (termsErr) {
+    console.error("[finalize-submit] terms_accepted_at:", termsErr.message);
   }
 
   const aiUserId = numericUserIdForReleaseAiLogs(actor, rowObj);
@@ -150,7 +168,7 @@ async function handleFinalizeSubmit(request: NextRequest, actor: ReleaseActor): 
         }
       }
       if (rec != null && (rec.status === "processing" || rec.status === "ready")) {
-        await notifyReleaseSubmittedForModeration(rec);
+        await notifyReleaseSubmittedForModeration(admin, rec);
         return NextResponse.json({ ok: true, record: rec });
       }
     }
@@ -223,7 +241,7 @@ async function handleFinalizeSubmit(request: NextRequest, actor: ReleaseActor): 
     );
   }
 
-  await notifyReleaseSubmittedForModeration(rows[0]);
+  await notifyReleaseSubmittedForModeration(admin, rows[0]);
   return NextResponse.json({ ok: true, record: rows[0] });
 }
 

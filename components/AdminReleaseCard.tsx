@@ -16,6 +16,7 @@ import { triggerHaptic } from "@/lib/telegram";
 import { featuringNamesFromCollaboratorsJson } from "@/lib/collaborators";
 import { describeHistoryDecision, describePreviousRejection } from "@/lib/rejection-reasons";
 import { pluralRu } from "@/lib/release-next-step";
+import { describePayment, type PaymentTone } from "@/lib/release-payment";
 
 const STATUS_LABEL: Record<CanonicalReleaseStatus, string> = {
   draft: "черновик",
@@ -32,6 +33,13 @@ function statusTextClass(status: CanonicalReleaseStatus): string {
   if (status === "failed") return "text-omf-red";
   return "text-omf-graphite";
 }
+
+const PAYMENT_TONE_CLASS: Record<PaymentTone, string> = {
+  done: "text-omf-green",
+  wait: "text-omf-yellow",
+  problem: "text-omf-red",
+  muted: "text-omf-faint"
+};
 
 function releaseTypeLabel(type: ReleaseRecord["release_type"]): string {
   if (type === "single") return "Сингл";
@@ -113,6 +121,7 @@ function AdminReleaseCardInner({
     [release.created_at]
   );
   const hasError = (release.error_message ?? "").trim().length > 0;
+  const payment = describePayment(release.payment_status);
   const previousRejection = showModerationActions ? describePreviousRejection(release) : null;
   /** В истории: почему вернули / какая ссылка ушла артисту. */
   const decisionLine = showModerationActions ? null : describeHistoryDecision(release);
@@ -175,6 +184,7 @@ function AdminReleaseCardInner({
         ) : null}
         <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">
           <span className={statusTextClass(canonical)}>{STATUS_LABEL[canonical]}</span>
+          <span className={PAYMENT_TONE_CLASS[payment.tone]}>{payment.label}</span>
           {hasError ? <span className="text-omf-red">есть ошибка</span> : null}
         </p>
       </div>

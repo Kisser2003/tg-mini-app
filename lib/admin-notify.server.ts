@@ -31,6 +31,19 @@ export async function notifyAdminReleaseSubmitted(params: {
   );
 }
 
+/** Студия ответила по оплате кнопкой в боте. */
+export async function notifyAdminPaymentAnswer(params: {
+  title: string;
+  artist: string;
+  answer: string;
+  who: string;
+}): Promise<void> {
+  await sendToAdmin(
+    `💳 <b>${escapeHtml(params.who)}: ${escapeHtml(params.answer)}</b>\n\n` +
+      `«${escapeHtml(params.title || "без названия")}» — ${escapeHtml(params.artist || "—")}`
+  );
+}
+
 /** Не чаще одного сообщения об ошибке в 2 минуты (защита от спама и циклов ошибок). */
 export async function notifyAdminError(where: string, message: string): Promise<void> {
   const now = Date.now();

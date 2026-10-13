@@ -172,3 +172,37 @@ export async function remindArtist(releaseId: string): Promise<void> {
     throw new Error(json?.error || "Не удалось отправить напоминание.");
   }
 }
+
+/**
+ * Оплата из админки: отметить «оплачено» / «не оплачено» или ещё раз спросить Дениса в боте.
+ * Возвращает обновлённые поля оплаты релиза.
+ */
+export async function updateReleasePayment(
+  releaseId: string,
+  action: "paid" | "unpaid" | "ask_studio"
+): Promise<Pick<ReleaseRecord, "payment_status" | "payment_updated_at" | "payment_updated_by">> {
+  await assertAdminAsync();
+  const authHeaders = await getAdminApiAuthHeaders();
+  const res = await fetch("/api/admin/release-payment", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { Accept: "application/json", "Content-Type": "application/json", ...authHeaders },
+    body: JSON.stringify({ releaseId, action }),
+    cache: "no-store"
+  });
+  type PaymentResponse = { ok?: boolean; error?: string; release?: Partial<ReleaseRecord> };
+  let json: PaymentResponse | null = null;
+  try {
+    json = (await res.json()) as PaymentResponse;
+  } catch {
+    json = null;
+  }
+  if (!res.ok || json?.ok !== true || !json.release) {
+    throw new Error(json?.error || "Не удалось сохранить оплату.");
+  }
+  return {
+    payment_status: json.release.payment_status ?? null,
+    payment_updated_at: json.release.payment_updated_at ?? null,
+    payment_updated_by: json.release.payment_updated_by ?? null
+  };
+}

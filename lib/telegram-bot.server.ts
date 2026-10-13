@@ -7,41 +7,37 @@ export function escapeHtml(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+/** Кнопки под сообщением (callback приходит в /api/telegram/webhook). */
+export type InlineKeyboardButton = { text: string; callback_data?: string; url?: string };
+export type InlineKeyboard = { inline_keyboard: InlineKeyboardButton[][] };
+
 export type SendTelegramBotMessageOptions = {
   /** Telegram принимает и число, и строку; из БД bigint часто сериализуется как string. */
   chatId: number | string;
   text: string;
   parseMode?: "HTML" | "MarkdownV2";
   disableWebPagePreview?: boolean;
+  replyMarkup?: InlineKeyboard;
 };
 
 export type SendTelegramBotMessageResult =
   | { ok: true }
   | { ok: false; error: string };
 
-/**
- * sendMessage via Telegram Bot API. Requires TELEGRAM_BOT_TOKEN on the server.
- */
-export async function sendTelegramBotMessage(
-  options: SendTelegramBotMessageOptions
-): Promise<SendTelegramBotMessageResult> {
+/** POST в Bot API. Requires TELEGRAM_BOT_TOKEN on the server. Ошибки возвращаются, не бросаются. */
+async function callBotApi(method: string, payload: Record<string, unknown>): Promise<SendTelegramBotMessageResult> {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) {
     return { ok: false, error: "TELEGRAM_BOT_TOKEN is not set" };
   }
 
-  const url = `https://api.telegram.org/bot${token}/sendMessage`;
+  const url = `https://api.telegram.org/bot${token}/${method}`;
 
   try {
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: options.chatId,
-        text: options.text,
-        parse_mode: options.parseMode ?? "HTML",
-        disable_web_page_preview: options.disableWebPagePreview ?? true
-      })
+      body: JSON.stringify(payload)
     });
 
     const data = (await res.json()) as { ok?: boolean; description?: string };
@@ -58,4 +54,47 @@ export async function sendTelegramBotMessage(
     const message = e instanceof Error ? e.message : String(e);
     return { ok: false, error: message };
   }
+}
+
+/**
+ * sendMessage via Telegram Bot API. Requires TELEGRAM_BOT_TOKEN on the server.
+ */
+export async function sendTelegramBotMessage(
+  options: SendTelegramBotMessageOptions
+): Promise<SendTelegramBotMessageResult> {
+  return callBotApi("sendMessage", {
+    chat_id: options.chatId,
+    text: options.text,
+    parse_mode: options.parseMode ?? "HTML",
+    disable_web_page_preview: options.disableWebPagePreview ?? true,
+    ...(options.replyMarkup ? { reply_markup: options.replyMarkup } : {})
+  });
+}
+
+/** Заменить текст и кнопки уже отправленного сообщения (HTML). */
+export async function editTelegramBotMessage(options: {
+  chatId: number | string;
+  messageId: number;
+  text: string;
+  replyMarkup?: InlineKeyboard;
+}): Promise<SendTelegramBotMessageResult> {
+  return callBotApi("editMessageText", {
+    chat_id: options.chatId,
+    message_id: options.messageId,
+    text: options.text,
+    parse_mode: "HTML",
+    disable_web_page_preview: true,
+    ...(options.replyMarkup ? { reply_markup: options.replyMarkup } : {})
+  });
+}
+
+/** Ответ на нажатие кнопки: убирает «часики» и показывает короткий тост. */
+export async function answerTelegramCallbackQuery(
+  callbackQueryId: string,
+  text?: string
+): Promise<SendTelegramBotMessageResult> {
+  return callBotApi("answerCallbackQuery", {
+    callback_query_id: callbackQueryId,
+    ...(text ? { text } : {})
+  });
 }

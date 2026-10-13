@@ -105,6 +105,13 @@ export type ReleaseRecord = {
   is_explicit?: boolean | null;
   /** Публичная smart-link страница / DSP после выпуска (задаётся модерацией). */
   smart_link?: string | null;
+  /** Оплата: awaiting | paid | unpaid | not_client (см. lib/release-payment.ts). */
+  payment_status?: string | null;
+  payment_updated_at?: string | null;
+  /** studio — кнопка в боте, admin — админка. */
+  payment_updated_by?: string | null;
+  /** Когда артист принял условия перед отправкой. */
+  terms_accepted_at?: string | null;
 } & ReleaseStep2Payload;
 
 export type UploadAssetOptions = {
