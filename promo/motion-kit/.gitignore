@@ -11,3 +11,4 @@ assets/music.wav
 /*.png
 !assets/**/*.png
 render.log
+brag-output-*/
