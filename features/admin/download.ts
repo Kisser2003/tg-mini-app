@@ -1,6 +1,7 @@
 "use client";
 
 import { getAdminApiAuthHeaders } from "@/lib/admin";
+import { isTelegramMiniApp, getTelegramWebApp } from "@/lib/telegram";
 
 /**
  * Скачивание файла из админ API (Telegram initData / dev-заголовки).
@@ -60,7 +61,36 @@ export function triggerBrowserDownload(blob: Blob, filename: string): void {
   URL.revokeObjectURL(url);
 }
 
+/**
+ * В Telegram blob-ссылки не открываются (macOS отдаёт их системе, и скачивания нет).
+ * Берём у сервера подписанную ссылку и открываем её во внешнем браузере.
+ */
+async function openSignedDownloadInBrowser(path: string): Promise<boolean> {
+  const authHeaders = await getAdminApiAuthHeaders();
+  const res = await fetch("/api/admin/download-link", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json", Accept: "application/json", ...authHeaders },
+    body: JSON.stringify({ path }),
+    cache: "no-store"
+  });
+  if (!res.ok) return false;
+  const json = (await res.json().catch(() => null)) as { ok?: boolean; path?: string } | null;
+  if (!json?.ok || typeof json.path !== "string") return false;
+  const url = new URL(json.path, window.location.origin).toString();
+  const webApp = getTelegramWebApp();
+  if (webApp?.openLink) {
+    webApp.openLink(url);
+  } else {
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+  return true;
+}
+
 export async function adminDownloadToDisk(path: string, filenameFallback: string): Promise<void> {
+  if (isTelegramMiniApp() && (await openSignedDownloadInBrowser(path).catch(() => false))) {
+    return;
+  }
   const { blob, filename } = await fetchAdminBlobDownload(path);
   triggerBrowserDownload(blob, filename || filenameFallback);
 }

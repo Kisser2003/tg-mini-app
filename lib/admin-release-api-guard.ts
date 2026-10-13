@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { TelegramAuthContext } from "@/lib/api/with-telegram-auth";
 import { getExpectedAdminTelegramId, telegramIdsEqual } from "@/lib/admin";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
+import { verifyAdminDownloadUrl } from "@/lib/admin-download-token";
 import { createClient } from "@supabase/supabase-js";
 
 export type AdminGuardResult =
@@ -65,7 +66,9 @@ export async function requireAdminSupabaseClient(
   }
 
   const telegramAllowed = ctx ? telegramIdsEqual(ctx.user.id, adminId) : false;
-  if (!telegramAllowed) {
+  // Подписанная ссылка на скачивание (GET, выдаётся только админу через /api/admin/download-link).
+  const signedDownload = request.method === "GET" && verifyAdminDownloadUrl(request.url);
+  if (!telegramAllowed && !signedDownload) {
     const webAllowed = await isWebAdminRequest(request, supabase);
     if (!webAllowed) {
       return {
