@@ -20,7 +20,11 @@ import { withRequestTimeout } from "@/lib/withRequestTimeout";
 import { normalizeReleaseStatus } from "@/lib/release-status";
 import type { Session } from "@supabase/supabase-js";
 
-export type ReleaseListRow = Pick<
+export type ReleaseListRow = ReleaseListBaseRow & {
+  /** Когда ушёл на проверку (только для `processing`), из API. */
+  submitted_at?: string | null;
+};
+type ReleaseListBaseRow = Pick<
   ReleaseRecord,
   | "id"
   | "title"

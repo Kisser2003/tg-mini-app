@@ -5,6 +5,7 @@ import { resolveReleaseActor } from "@/lib/api/resolve-submit-actor";
 import type { ReleaseRecord } from "@/repositories/releases.repo";
 import { getJsonCache, setJsonCache } from "@/lib/server/redis-cache";
 import { isMissingReleasesColumnError } from "@/lib/errors";
+import { loadSubmittedAt } from "@/lib/server/release-submitted-at";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -28,7 +29,11 @@ const RELEASE_LIST_SELECT = [
 /** `rejection_reasons` — из миграции 20261012190000; без неё список грузится по базовому набору. */
 const RELEASE_LIST_SELECT_WITH_REASONS = `${RELEASE_LIST_SELECT},rejection_reasons`;
 const RELEASES_CACHE_TTL_SECONDS = 20;
-type ReleaseListRow = Pick<
+type ReleaseListRow = ReleaseListBaseRow & {
+  /** Когда ушёл на проверку (последний finalize), только для `processing`. */
+  submitted_at?: string | null;
+};
+type ReleaseListBaseRow = Pick<
   ReleaseRecord,
   | "id"
   | "title"
@@ -132,6 +137,14 @@ async function handleGetMyReleases(request: NextRequest): Promise<Response> {
   }
 
   const rows = (data ?? []) as unknown as ReleaseListRow[];
+  const processingIds = rows.filter((r) => r.status === "processing").map((r) => r.id);
+  if (processingIds.length > 0) {
+    const submitted = await loadSubmittedAt(admin, processingIds);
+    for (const r of rows) {
+      const at = submitted.get(r.id);
+      if (at) r.submitted_at = at;
+    }
+  }
   if (cacheKey) {
     await setJsonCache(cacheKey, rows, RELEASES_CACHE_TTL_SECONDS);
   }

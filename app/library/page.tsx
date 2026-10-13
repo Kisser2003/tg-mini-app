@@ -19,6 +19,7 @@ import { useIsTelegramMiniApp } from "@/lib/hooks/useIsTelegramMiniApp";
 import { pickProfileGreetingName, useAuthProfile } from "@/lib/hooks/useAuthProfile";
 import { cn } from "@/lib/utils";
 import { RejectionNotice } from "@/components/RejectionNotice";
+import { getReleaseNextStep, NEXT_STEP_TONE_CLASS } from "@/lib/release-next-step";
 import { describeRejection, type RejectionSummary } from "@/lib/rejection-reasons";
 import { getTelegramInitDataForApiHeader, getTelegramUserIdForSupabaseRequests } from "@/lib/telegram";
 
@@ -348,6 +349,11 @@ function LibraryPageInner() {
       .join(" · ");
 
     const isNew = isUnseenDecision(normalized, seenStatuses[release.id]);
+    const nextStep = getReleaseNextStep({
+      status: release.status,
+      smartLink: release.smart_link,
+      submittedAt: release.submitted_at
+    });
 
     const onCardClick = () => {
       if (isResumingDraft) return;
@@ -388,6 +394,7 @@ function LibraryPageInner() {
         priority={listIndex < 4}
         busy={isResumingDraft}
         isNew={isNew}
+        nextStep={{ text: nextStep.cardLine, className: NEXT_STEP_TONE_CLASS[nextStep.tone] }}
         onClick={onCardClick}
       />
     );

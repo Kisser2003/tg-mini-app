@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { jsonError, loadOwnedRelease, RELEASE_TRACKS_SELECT } from "@/lib/api/release-owner-route";
+import { loadSubmittedAt } from "@/lib/server/release-submitted-at";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -23,7 +24,11 @@ async function handleGetOwnRelease(
 
   const owned = await loadOwnedRelease(request, releaseId, { columns: "*", allowAdmin: true });
   if (!owned.ok) return owned.response;
-  const { admin, row } = owned.value;
+  const { admin } = owned.value;
+  const row: Record<string, unknown> = { ...owned.value.row };
+  if (row.status === "processing") {
+    row.submitted_at = (await loadSubmittedAt(admin, [releaseId])).get(releaseId) ?? null;
+  }
 
   const withTracks = request.nextUrl.searchParams.get("tracks") === "1";
   if (!withTracks) {

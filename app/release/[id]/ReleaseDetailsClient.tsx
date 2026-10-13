@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Download, ExternalLink } from "lucide-react";
 import { ReleaseSleeve } from "@/components/ReleaseSleeve";
@@ -21,7 +22,8 @@ import { getReleaseWithTracks } from "@/repositories/releases/queries";
 import { ReleaseApiError } from "@/lib/api/release-client";
 import { RejectionNotice } from "@/components/RejectionNotice";
 import { describeRejection } from "@/lib/rejection-reasons";
-import { reopenRejectedRelease } from "@/features/release/createRelease/actions";
+import { reopenRejectedRelease, resumeDraftFromRelease } from "@/features/release/createRelease/actions";
+import { getReleaseNextStep } from "@/lib/release-next-step";
 import { useCreateReleaseDraftStore } from "@/features/release/createRelease/store";
 import { hapticMap } from "@/lib/haptic-map";
 import { toast } from "sonner";
@@ -48,6 +50,7 @@ type ReleaseDetailsRow = {
   error_message: string | null;
   admin_notes?: string | null;
   rejection_reasons?: string[] | null;
+  submitted_at?: string | null;
   created_at: string;
   smart_link: string | null;
   release_date?: string | null;
@@ -245,6 +248,21 @@ export default function ReleaseDetailsClient() {
     }
   };
 
+  const handleResumeDraft = async (releaseId: string) => {
+    hapticMap.impactLight();
+    setFixing(true);
+    try {
+      const path = await resumeDraftFromRelease(releaseId);
+      if (!path) {
+        toast.error(useCreateReleaseDraftStore.getState().submitError ?? "Не удалось открыть черновик.");
+        return;
+      }
+      router.push(path);
+    } finally {
+      setFixing(false);
+    }
+  };
+
   useEffect(() => {
     if (!release) return;
     const st = normalizeReleaseStatus(release.status);
@@ -323,37 +341,12 @@ export default function ReleaseDetailsClient() {
   const upc = release.upc?.trim();
   if (upc) passportRows.push({ label: "UPC", value: upc });
 
-  const statusCopy: Record<typeof canonical, { title: string; body: string }> = {
-    draft: {
-      title: "Черновик",
-      body: "Релиз ещё не отправлен. Открой его из списка релизов и закончи заполнение."
-    },
-    pending: {
-      title: "Не отправлен",
-      body: "Файлы загружены, но релиз ещё не ушёл на модерацию. Открой черновик и нажми «Отправить на проверку»."
-    },
-    processing: {
-      title: "На проверке",
-      body: "Модератор проверяет паспорт, обложку и аудио. Обычно это занимает до 24 часов. Когда решение будет принято, статус обновится здесь и мы напишем в Telegram."
-    },
-    ready: {
-      title: "Одобрен",
-      body: smartLink
-        ? "Релиз прошёл модерацию и отправлен на площадки. Ссылка на все площадки — ниже."
-        : "Релиз прошёл модерацию и отправлен на площадки. Ссылка появится, когда площадки опубликуют релиз."
-    },
-    failed: {
-      title: "Отклонён",
-      body:
-        release.error_message?.trim() ||
-        "Модератор не указал причину. Напиши в поддержку, чтобы узнать, что исправить."
-    },
-    unknown: {
-      title: "Статус уточняется",
-      body: "Не получилось определить статус релиза. Обнови страницу чуть позже."
-    }
-  };
-  const status = statusCopy[canonical];
+  const status = getReleaseNextStep({
+    status: release.status,
+    smartLink,
+    submittedAt: release.submitted_at,
+    notifiesInTelegram: userId != null
+  });
 
   return shell(
     <>
@@ -390,7 +383,10 @@ export default function ReleaseDetailsClient() {
       ) : (
       <section
         aria-labelledby="release-status-title"
-        className="mt-8 rounded-control border border-omf-line p-4"
+        className={cn(
+          "mt-8 rounded-control border p-4",
+          status.tone === "warn" ? "border-omf-yellow" : "border-omf-line"
+        )}
       >
         <h2 id="release-status-title" className="text-[16px] font-bold tracking-tight">
           {status.title}
@@ -404,6 +400,21 @@ export default function ReleaseDetailsClient() {
           >
             <ExternalLink className="h-4 w-4" aria-hidden />
             Открыть ссылку на релиз
+          </button>
+        ) : null}
+        {status.kind === "waiting_long" ? (
+          <Link href="/requirements" className="omf-btn-secondary mt-4 w-full">
+            Написать в поддержку
+          </Link>
+        ) : null}
+        {status.kind === "finish_draft" || status.kind === "submit" ? (
+          <button
+            type="button"
+            onClick={() => void handleResumeDraft(release.id)}
+            disabled={fixing}
+            className="omf-btn-primary mt-4 w-full disabled:opacity-50"
+          >
+            {fixing ? "Открываем…" : "Продолжить"}
           </button>
         ) : null}
       </section>
