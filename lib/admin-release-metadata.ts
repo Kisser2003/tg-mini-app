@@ -260,3 +260,12 @@ export function formatAgoRu(iso: string, now: Date = new Date()): string {
   if (h < 24) return `${h} ч назад`;
   return `${Math.round(h / 24)} дн назад`;
 }
+
+/** Предыдущий релиз очереди (по кругу); `null`, если листать некуда. */
+export function pickPrevReleaseId(queueIds: readonly string[], currentId: string): string | null {
+  const rest = queueIds.filter((id) => id !== currentId);
+  if (rest.length === 0) return null;
+  const idx = queueIds.indexOf(currentId);
+  if (idx <= 0) return rest[rest.length - 1];
+  return queueIds[idx - 1];
+}

@@ -131,7 +131,7 @@ export default function AdminModerationHistoryPage() {
   }
 
   return (
-    <div className="mx-auto min-h-app max-w-lg px-1 pb-40 pt-4 text-omf-ink">
+    <div className="mx-auto min-h-app max-w-lg px-1 pb-40 pt-4 text-omf-ink lg:max-w-3xl">
       <PullRefreshBrand />
 
       <div className="mb-4 flex items-center justify-between gap-3">

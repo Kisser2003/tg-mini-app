@@ -3,6 +3,7 @@ import {
   buildAdminReleaseSummary,
   formatAgoRu,
   pickNextReleaseId,
+  pickPrevReleaseId,
   type AdminReleaseRow
 } from "@/lib/admin-release-metadata";
 import type { ReleaseTrackRow } from "@/repositories/releases/types";
@@ -55,5 +56,13 @@ describe("formatAgoRu", () => {
     ["bad", ""]
   ])("%s → %s", (iso, out) => {
     expect(formatAgoRu(iso, now)).toBe(out);
+  });
+});
+
+describe("pickPrevReleaseId", () => {
+  it("предыдущий по кругу", () => {
+    expect(pickPrevReleaseId(["a", "b", "c"], "b")).toBe("a");
+    expect(pickPrevReleaseId(["a", "b", "c"], "a")).toBe("c");
+    expect(pickPrevReleaseId(["a"], "a")).toBeNull();
   });
 });

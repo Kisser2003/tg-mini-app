@@ -16,7 +16,14 @@ import { AdminRejectModal } from "@/components/AdminRejectModal";
 import { publishReleaseWithSmartLink, rejectRelease } from "@/features/admin/actions";
 import { fetchAdminReleaseDetail } from "@/features/admin/release-detail";
 import { fetchAdminModerationQueue } from "@/features/admin/moderation-queue";
-import { buildAdminReleaseSummary, pickNextReleaseId, type AdminReleaseRow } from "@/lib/admin-release-metadata";
+import {
+  buildAdminReleaseSummary,
+  pickNextReleaseId,
+  pickPrevReleaseId,
+  type AdminReleaseRow
+} from "@/lib/admin-release-metadata";
+import { useAdminHotkeys } from "@/lib/hooks/useAdminHotkeys";
+import { useIsTelegramMiniApp } from "@/lib/hooks/useIsTelegramMiniApp";
 import { SWR_LIST_OPTIONS } from "@/lib/swr-config";
 import { cn } from "@/lib/utils";
 import { hapticMap } from "@/lib/haptic-map";
@@ -67,6 +74,8 @@ export default function AdminReleaseDetailPage() {
   const [rejectOpen, setRejectOpen] = useState(false);
   const [approveModalReleaseId, setApproveModalReleaseId] = useState<string | null>(null);
   const [metaOpen, setMetaOpen] = useState(false);
+  /** Широкая раскладка только в веб-версии: в Telegram Desktop окно бывает широким, а контент — 450px и без сайдбара. */
+  const wide = !useIsTelegramMiniApp();
   /** Панель решения — в портале: у обёртки страницы transform, `fixed` внутри неё уезжает под навигацию. */
   const [portalReady, setPortalReady] = useState(false);
 
@@ -134,6 +143,16 @@ export default function AdminReleaseDetailPage() {
     [mutateQueue, queueIds, router]
   );
 
+  const inQueue = queueIds.includes(releaseId);
+  const openRelease = useCallback(
+    (id: string | null) => {
+      if (!id || id === releaseId) return;
+      router.replace(`/admin/release/${id}`);
+      window.scrollTo({ top: 0 });
+    },
+    [releaseId, router]
+  );
+
   const handlePublishSmartLink = useCallback(
     async (releaseId: string, newStatus: string, smartLink: string) => {
       setBusy(true);
@@ -167,6 +186,17 @@ export default function AdminReleaseDetailPage() {
       setBusy(false);
     }
   }, [release, goNext]);
+
+  const releaseCanModerate = release != null && normalizeReleaseStatus(release.status) === "processing";
+  useAdminHotkeys(
+    {
+      approve: () => releaseCanModerate && setApproveModalReleaseId(releaseId),
+      reject: () => releaseCanModerate && setRejectOpen(true),
+      next: () => openRelease(pickNextReleaseId(queueIds, releaseId)),
+      prev: () => openRelease(pickPrevReleaseId(queueIds, releaseId))
+    },
+    isAdmin && inQueue && !loading && !busy && !rejectOpen && approveModalReleaseId == null
+  );
 
   if (userId == null && !isAdmin && process.env.NODE_ENV === "production") {
     return (
@@ -217,7 +247,13 @@ export default function AdminReleaseDetailPage() {
   const title = displayTitle || release.track_name || "Релиз";
 
   return (
-    <div className={cn("mx-auto w-full max-w-lg px-1 pt-4 text-omf-ink", canModerate ? "pb-44" : "pb-40")}>
+    <div
+      className={cn(
+        "mx-auto w-full max-w-lg px-1 pt-4 text-omf-ink",
+        wide && "lg:max-w-5xl",
+        canModerate ? "pb-44" : "pb-40"
+      )}
+    >
       <AdminRejectModal
         open={rejectOpen}
         busy={busy}
@@ -247,126 +283,150 @@ export default function AdminReleaseDetailPage() {
         ) : null}
       </div>
 
-      <header className="flex items-start gap-4">
-        <div className="w-[38%] max-w-[168px] shrink-0">
-          <ReleaseSleeve
-            seed={release.id}
-            title={title}
-            artist={release.artist_name}
-            coverUrl={release.artwork_url}
-            status={canonical}
-            priority
-          />
+      <div className={cn(wide && "lg:grid lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)] lg:items-start lg:gap-10")}>
+        <div className={cn(wide && "lg:sticky lg:top-6")}>
+          <header className={cn("flex items-start gap-4", wide && "lg:flex-col")}>
+            <div className={cn("w-[38%] max-w-[168px] shrink-0", wide && "lg:w-full lg:max-w-[360px]")}>
+              <ReleaseSleeve
+                seed={release.id}
+                title={title}
+                artist={release.artist_name}
+                coverUrl={release.artwork_url}
+                status={canonical}
+                priority
+              />
+            </div>
+            <div className="min-w-0 flex-1 pt-1">
+              <h1 className="break-words text-[24px] font-extrabold leading-[1] tracking-[-0.03em]">{title}</h1>
+              <p className="mt-1.5 text-[15px] text-omf-graphite">{release.artist_name}</p>
+              {featuringNames.length > 0 ? (
+                <p className="mt-0.5 truncate text-[13px] text-omf-graphite" title={featuringNames.join(", ")}>
+                  feat. {featuringNames.join(", ")}
+                </p>
+              ) : null}
+              {summary.length > 0 ? (
+                <p className="mt-2 text-[13px] leading-snug text-omf-faint">{summary.join(" · ")}</p>
+              ) : null}
+              {artistUsername ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    hapticMap.impactLight();
+                    openTelegramChat(artistUsername);
+                  }}
+                  className="omf-focus mt-2 inline-flex items-center gap-1.5 rounded-full py-1 text-[14px] text-omf-ultra-text hover:text-omf-ink"
+                >
+                  <Send className="h-4 w-4" aria-hidden />
+                  Написать @{artistUsername}
+                </button>
+              ) : null}
+            </div>
+          </header>
+
+          {previousRejection ? (
+            <aside
+              role="note"
+              aria-labelledby="admin-prev-rejection"
+              className="mt-6 rounded-control border border-omf-yellow p-4"
+            >
+              <p id="admin-prev-rejection" className="text-[14px] font-bold text-omf-yellow">
+                Повторная отправка
+                {previousRejection.count > 1
+                  ? `: вернули уже ${previousRejection.count} ${pluralRu(previousRejection.count, ["раз", "раза", "раз"])}`
+                  : ""}
+              </p>
+              {release.admin_notes?.trim() ? (
+                <>
+                  <p className="mt-1.5 text-[13px] text-omf-graphite">В прошлый раз написали артисту:</p>
+                  <p className="mt-1 whitespace-pre-wrap break-words text-[14px] leading-relaxed text-omf-ink">
+                    {release.admin_notes.trim()}
+                  </p>
+                </>
+              ) : null}
+              <p className="mt-2 text-[13px] text-omf-graphite">Сначала проверь, что это исправлено.</p>
+            </aside>
+          ) : null}
+
+          <section className="mt-6" aria-labelledby="admin-listen">
+            <h2 id="admin-listen" className="mb-2 text-[13px] text-omf-graphite">
+              Послушать
+            </h2>
+            {audioItems.length === 0 ? (
+              <p className="text-[14px] text-omf-graphite">Аудио в базе нет, послушать нечего.</p>
+            ) : (
+              <div className="space-y-2.5">
+                {audioItems.map((item) => (
+                  <AudioPlayerLazy key={item.key} src={item.src} label={item.label} variant="admin" />
+                ))}
+              </div>
+            )}
+          </section>
+
         </div>
-        <div className="min-w-0 flex-1 pt-1">
-          <h1 className="break-words text-[24px] font-extrabold leading-[1] tracking-[-0.03em]">{title}</h1>
-          <p className="mt-1.5 text-[15px] text-omf-graphite">{release.artist_name}</p>
-          {featuringNames.length > 0 ? (
-            <p className="mt-0.5 truncate text-[13px] text-omf-graphite" title={featuringNames.join(", ")}>
-              feat. {featuringNames.join(", ")}
-            </p>
-          ) : null}
-          {summary.length > 0 ? (
-            <p className="mt-2 text-[13px] leading-snug text-omf-faint">{summary.join(" · ")}</p>
-          ) : null}
-          {artistUsername ? (
+
+        <div className={cn(wide && "lg:pt-1")}>
+          <section className={cn("mt-6 border-t border-omf-line", wide && "lg:mt-0")} aria-labelledby="admin-meta">
             <button
               type="button"
-              onClick={() => {
-                hapticMap.impactLight();
-                openTelegramChat(artistUsername);
-              }}
-              className="omf-focus mt-2 inline-flex items-center gap-1.5 rounded-full py-1 text-[14px] text-omf-ultra-text hover:text-omf-ink"
+              id="admin-meta"
+              aria-expanded={metaOpen}
+              aria-controls="admin-meta-body"
+              onClick={() => setMetaOpen((v) => !v)}
+              className={cn(
+                "omf-focus flex w-full items-center justify-between py-3.5 text-left text-[15px] font-medium",
+                wide && "lg:pointer-events-none"
+              )}
             >
-              <Send className="h-4 w-4" aria-hidden />
-              Написать @{artistUsername}
+              Все данные релиза
+              <ChevronDown
+                className={cn(
+                  "h-4 w-4 text-omf-graphite transition-transform motion-reduce:transition-none",
+                  wide && "lg:hidden",
+                  metaOpen && "rotate-180"
+                )}
+                aria-hidden
+              />
             </button>
-          ) : null}
+            {/* На широком экране места хватает — данные видны сразу. */}
+            <div id="admin-meta-body" className={cn("pb-2", metaOpen ? "block" : "hidden", wide && "lg:block")}>
+              <AdminReleaseMetadataCard release={release} tracks={tracks} />
+            </div>
+          </section>
+
+          <section className="mt-2 border-t border-omf-line pt-4" aria-labelledby="admin-files">
+            <h2 id="admin-files" className="mb-2 text-[13px] text-omf-graphite">
+              Файлы
+            </h2>
+            <AdminReleaseDownloads
+              releaseId={release.id}
+              hasArtwork={Boolean(release.artwork_url?.trim())}
+              tracks={tracks}
+              legacyAudioUrl={release.audio_url}
+              releaseLyrics={release.lyrics ?? null}
+            />
+          </section>
         </div>
-      </header>
-
-      {previousRejection ? (
-        <aside
-          role="note"
-          aria-labelledby="admin-prev-rejection"
-          className="mt-6 rounded-control border border-omf-yellow p-4"
-        >
-          <p id="admin-prev-rejection" className="text-[14px] font-bold text-omf-yellow">
-            Повторная отправка
-            {previousRejection.count > 1
-              ? `: вернули уже ${previousRejection.count} ${pluralRu(previousRejection.count, ["раз", "раза", "раз"])}`
-              : ""}
-          </p>
-          {release.admin_notes?.trim() ? (
-            <>
-              <p className="mt-1.5 text-[13px] text-omf-graphite">В прошлый раз написали артисту:</p>
-              <p className="mt-1 whitespace-pre-wrap break-words text-[14px] leading-relaxed text-omf-ink">
-                {release.admin_notes.trim()}
-              </p>
-            </>
-          ) : null}
-          <p className="mt-2 text-[13px] text-omf-graphite">Сначала проверь, что это исправлено.</p>
-        </aside>
-      ) : null}
-
-      <section className="mt-6" aria-labelledby="admin-listen">
-        <h2 id="admin-listen" className="mb-2 text-[13px] text-omf-graphite">
-          Послушать
-        </h2>
-        {audioItems.length === 0 ? (
-          <p className="text-[14px] text-omf-graphite">Аудио в базе нет, послушать нечего.</p>
-        ) : (
-          <div className="space-y-2.5">
-            {audioItems.map((item) => (
-              <AudioPlayerLazy key={item.key} src={item.src} label={item.label} variant="admin" />
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section className="mt-6 border-t border-omf-line" aria-labelledby="admin-meta">
-        <button
-          type="button"
-          id="admin-meta"
-          aria-expanded={metaOpen}
-          aria-controls="admin-meta-body"
-          onClick={() => setMetaOpen((v) => !v)}
-          className="omf-focus flex w-full items-center justify-between py-3.5 text-left text-[15px] font-medium"
-        >
-          Все данные релиза
-          <ChevronDown
-            className={cn("h-4 w-4 text-omf-graphite transition-transform motion-reduce:transition-none", metaOpen && "rotate-180")}
-            aria-hidden
-          />
-        </button>
-        {metaOpen ? (
-          <div id="admin-meta-body" className="pb-2">
-            <AdminReleaseMetadataCard release={release} tracks={tracks} />
-          </div>
-        ) : null}
-      </section>
-
-      <section className="mt-2 border-t border-omf-line pt-4" aria-labelledby="admin-files">
-        <h2 id="admin-files" className="mb-2 text-[13px] text-omf-graphite">
-          Файлы
-        </h2>
-        <AdminReleaseDownloads
-          releaseId={release.id}
-          hasArtwork={Boolean(release.artwork_url?.trim())}
-          tracks={tracks}
-          legacyAudioUrl={release.audio_url}
-          releaseLyrics={release.lyrics ?? null}
-        />
-      </section>
+      </div>
 
       {canModerate && portalReady ? (
         createPortal(
           <div
             role="group"
             aria-label="Решение по релизу"
-            className="fixed inset-x-0 bottom-0 z-[60] border-t border-omf-line bg-omf-bg pb-[env(safe-area-inset-bottom,0px)]"
+            className={cn(
+              "fixed inset-x-0 bottom-0 z-[60] border-t border-omf-line bg-omf-bg pb-[env(safe-area-inset-bottom,0px)]",
+              wide && "lg:left-64"
+            )}
           >
-            <div className="mx-auto grid max-w-lg grid-cols-2 gap-2.5 px-4 py-3">
+            <div className={cn("mx-auto flex max-w-lg items-center gap-2.5 px-4 py-3", wide && "lg:max-w-5xl")}>
+              {inQueue && wide ? (
+                <p className="mr-auto hidden text-[13px] text-omf-faint lg:block">
+                  <kbd className="font-sans text-omf-graphite">A</kbd> одобрить ·{" "}
+                  <kbd className="font-sans text-omf-graphite">R</kbd> вернуть ·{" "}
+                  <kbd className="font-sans text-omf-graphite">J</kbd> /{" "}
+                  <kbd className="font-sans text-omf-graphite">K</kbd> следующий / предыдущий
+                </p>
+              ) : null}
               <button
                 type="button"
                 disabled={busy}
@@ -374,7 +434,7 @@ export default function AdminReleaseDetailPage() {
                   triggerHaptic("light");
                   setRejectOpen(true);
                 }}
-                className="omf-btn-secondary w-full disabled:opacity-50"
+                className={cn("omf-btn-secondary flex-1 disabled:opacity-50", wide && "lg:w-44 lg:flex-none")}
               >
                 Вернуть
               </button>
@@ -385,7 +445,7 @@ export default function AdminReleaseDetailPage() {
                   triggerHaptic("light");
                   setApproveModalReleaseId(release.id);
                 }}
-                className="omf-btn-ink w-full disabled:opacity-50"
+                className={cn("omf-btn-ink flex-1 disabled:opacity-50", wide && "lg:w-44 lg:flex-none")}
               >
                 Одобрить
               </button>
