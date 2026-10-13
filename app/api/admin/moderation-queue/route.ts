@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { requireAdminSupabaseClient } from "@/lib/admin-release-api-guard";
 import { getTelegramAuthContextFromRequest } from "@/lib/api/with-telegram-auth";
-import type { ReleaseRecord, ReleaseTrackRow } from "@/repositories/releases.repo";
+import type { ReleaseRecord } from "@/repositories/releases.repo";
+import { attachTracksToReleases, loadTracksForReleases } from "@/lib/server/admin-release-rows";
 import type { ModerationQueueApiRow } from "@/types/admin";
 
 export const dynamic = "force-dynamic";
@@ -23,26 +24,16 @@ async function handleModerationQueue(request: NextRequest): Promise<Response> {
     return NextResponse.json({ ok: false, error: "Не удалось загрузить очередь." }, { status: 500 });
   }
 
-  const list = releases ?? [];
-  const rows: ModerationQueueApiRow[] = [];
-
-  for (const release of list) {
-    const { data: tracks, error: trErr } = await guard.supabase
-      .from("tracks")
-      .select("id, release_id, user_id, index, position, title, explicit, file_path, lyrics, duration")
-      .eq("release_id", (release as { id: string }).id)
-      .order("index", { ascending: true });
-
-    if (trErr) {
-      console.error("[admin/moderation-queue] tracks:", trErr.message);
-      return NextResponse.json({ ok: false, error: "Не удалось загрузить треки." }, { status: 500 });
-    }
-
-    rows.push({
-      release: release as ReleaseRecord,
-      tracks: (tracks ?? []) as ReleaseTrackRow[]
-    });
+  const list = (releases ?? []) as ReleaseRecord[];
+  // Треки всех релизов очереди одним запросом: очередь опрашивается каждые 8 с.
+  const tracks = await loadTracksForReleases(
+    guard.supabase,
+    list.map((r) => r.id)
+  );
+  if (tracks == null) {
+    return NextResponse.json({ ok: false, error: "Не удалось загрузить треки." }, { status: 500 });
   }
+  const rows: ModerationQueueApiRow[] = attachTracksToReleases(list, tracks);
 
   return NextResponse.json({ ok: true, rows });
 }
