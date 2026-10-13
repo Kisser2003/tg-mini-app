@@ -1,8 +1,10 @@
 import { describe, it, expect } from "vitest";
 import {
   MODERATION_SLA_HOURS,
+  collectLibraryActions,
   formatWaitDuration,
-  getReleaseNextStep
+  getReleaseNextStep,
+  pluralRu
 } from "@/lib/release-next-step";
 
 const NOW = new Date("2026-10-13T12:00:00Z");
@@ -74,5 +76,51 @@ describe("formatWaitDuration", () => {
     [Number.NaN, "меньше часа"]
   ])("%s → %s", (h, out) => {
     expect(formatWaitDuration(h)).toBe(out);
+  });
+});
+
+describe("pluralRu", () => {
+  const f = ["релиз", "релиза", "релизов"] as const;
+  it.each([
+    [1, "релиз"],
+    [2, "релиза"],
+    [5, "релизов"],
+    [11, "релизов"],
+    [12, "релизов"],
+    [21, "релиз"],
+    [22, "релиза"],
+    [111, "релизов"]
+  ])("%s → %s", (n, out) => {
+    expect(pluralRu(n, f)).toBe(out);
+  });
+});
+
+describe("collectLibraryActions", () => {
+  it("пусто, если всё на проверке или готово", () => {
+    expect(
+      collectLibraryActions([
+        { id: "a", status: "processing" },
+        { id: "b", status: "ready" }
+      ])
+    ).toEqual([]);
+  });
+
+  it("сначала возвращённые, потом неотправленные; firstId — первый в списке", () => {
+    const actions = collectLibraryActions([
+      { id: "d1", status: "draft" },
+      { id: "f1", status: "failed" },
+      { id: "p1", status: "pending" },
+      { id: "f2", status: "failed" }
+    ]);
+    expect(actions.map((a) => [a.kind, a.count, a.firstId])).toEqual([
+      ["fix", 2, "f1"],
+      ["unsent", 2, "d1"]
+    ]);
+    expect(actions[0].text).toBe("2 релиза вернули");
+    expect(actions[1].text).toBe("2 релиза не отправлены");
+  });
+
+  it("один релиз — короткий текст", () => {
+    expect(collectLibraryActions([{ id: "f", status: "failed" }])[0].text).toBe("Релиз вернули");
   });
 });

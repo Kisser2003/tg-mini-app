@@ -146,3 +146,63 @@ export const NEXT_STEP_TONE_CLASS: Record<NextStepTone, string> = {
   done: "text-omf-green",
   muted: "text-omf-graphite"
 };
+
+/** «1 релиз», «2 релиза», «5 релизов». */
+export function pluralRu(n: number, forms: readonly [string, string, string]): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return forms[0];
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return forms[1];
+  return forms[2];
+}
+
+export type LibraryActionKind = "fix" | "unsent";
+
+export type LibraryAction = {
+  kind: LibraryActionKind;
+  count: number;
+  /** Самый свежий релиз этой группы — его открываем, если он один. */
+  firstId: string;
+  text: string;
+};
+
+/**
+ * Что артисту нужно сделать самому (для строки в начале библиотеки):
+ * сначала возвращённые модератором, потом не отправленные (черновик + «не отправлен»).
+ * `rows` — в порядке списка (новые сверху).
+ */
+export function collectLibraryActions(
+  rows: readonly { id: string; status: string | null | undefined }[]
+): LibraryAction[] {
+  const fix: string[] = [];
+  const unsent: string[] = [];
+  for (const r of rows) {
+    const kind = getReleaseNextStep({ status: r.status }).kind;
+    if (kind === "fix") fix.push(r.id);
+    else if (kind === "finish_draft" || kind === "submit") unsent.push(r.id);
+  }
+  const out: LibraryAction[] = [];
+  if (fix.length > 0) {
+    out.push({
+      kind: "fix",
+      count: fix.length,
+      firstId: fix[0],
+      text:
+        fix.length === 1
+          ? "Релиз вернули"
+          : `${fix.length} ${pluralRu(fix.length, ["релиз", "релиза", "релизов"])} вернули`
+    });
+  }
+  if (unsent.length > 0) {
+    out.push({
+      kind: "unsent",
+      count: unsent.length,
+      firstId: unsent[0],
+      text:
+        unsent.length === 1
+          ? "Релиз не отправлен"
+          : `${unsent.length} ${pluralRu(unsent.length, ["релиз", "релиза", "релизов"])} не отправлены`
+    });
+  }
+  return out;
+}

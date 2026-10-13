@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Plus, RefreshCw, X } from "lucide-react";
+import { ChevronRight, Plus, RefreshCw, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PullRefreshBrand } from "@/components/PullRefreshBrand";
 import { ReleaseCard } from "@/components/ReleaseCard";
@@ -19,7 +19,12 @@ import { useIsTelegramMiniApp } from "@/lib/hooks/useIsTelegramMiniApp";
 import { pickProfileGreetingName, useAuthProfile } from "@/lib/hooks/useAuthProfile";
 import { cn } from "@/lib/utils";
 import { RejectionNotice } from "@/components/RejectionNotice";
-import { getReleaseNextStep, NEXT_STEP_TONE_CLASS } from "@/lib/release-next-step";
+import {
+  collectLibraryActions,
+  getReleaseNextStep,
+  NEXT_STEP_TONE_CLASS,
+  type LibraryAction
+} from "@/lib/release-next-step";
 import { describeRejection, type RejectionSummary } from "@/lib/rejection-reasons";
 import { getTelegramInitDataForApiHeader, getTelegramUserIdForSupabaseRequests } from "@/lib/telegram";
 
@@ -335,11 +340,56 @@ function LibraryPageInner() {
     return best ?? artistFirstName;
   }, [releases, artistFirstName]);
 
+  /** Открыть релиз: черновик — в мастер, отклонённый — причина и «Исправить», остальное — экран релиза. */
+  const openRelease = (release: ReleaseListRow) => {
+    const normalized = normalizeReleaseStatus(release.status);
+    const isDraft = normalized === "draft" || normalized === "pending";
+    if (isDraft && resumingId === release.id) return;
+    if (isUnseenDecision(normalized, seenStatuses[release.id])) {
+      markStatusSeen(release.id, normalized);
+      setSeenVersion((v) => v + 1);
+    }
+    if (isDraft) {
+      void handleResumeDraft(release);
+      return;
+    }
+    if (normalized === "failed") {
+      hapticMap.notificationError();
+      setAdminNotesModal({
+        id: release.id,
+        title: getReleaseDisplayTitle(release),
+        summary: describeRejection({
+          adminNotes: release.admin_notes,
+          errorMessage: release.error_message,
+          rejectionReasons: release.rejection_reasons
+        })
+      });
+      return;
+    }
+    hapticMap.impactLight();
+    router.push(`/release/${release.id}`);
+  };
+
+  const libraryActions = useMemo(() => collectLibraryActions(releases), [releases]);
+
+  const onLibraryAction = (action: LibraryAction) => {
+    if (action.count === 1) {
+      const release = releases.find((r) => r.id === action.firstId);
+      if (release) openRelease(release);
+      return;
+    }
+    hapticMap.impactLight();
+    if (action.kind === "fix") {
+      setStatusFilter("failed");
+      return;
+    }
+    router.push("/library?view=drafts");
+  };
+
   const renderReleaseBlock = (release: ReleaseListRow, listIndex: number) => {
     const displayTitle = getReleaseDisplayTitle(release);
     const normalized = normalizeReleaseStatus(release.status);
     const isDraft = normalized === "draft" || normalized === "pending";
-    const isFailed = normalized === "failed";
     const isResumingDraft = isDraft && resumingId === release.id;
     const subtitle = [
       formatReleaseTypeLabel(release.release_type ?? null),
@@ -355,33 +405,6 @@ function LibraryPageInner() {
       submittedAt: release.submitted_at
     });
 
-    const onCardClick = () => {
-      if (isResumingDraft) return;
-      if (isNew) {
-        markStatusSeen(release.id, normalized);
-        setSeenVersion((v) => v + 1);
-      }
-      if (isDraft) {
-        void handleResumeDraft(release);
-        return;
-      }
-      if (isFailed) {
-        hapticMap.notificationError();
-        setAdminNotesModal({
-          id: release.id,
-          title: displayTitle,
-          summary: describeRejection({
-            adminNotes: release.admin_notes,
-            errorMessage: release.error_message,
-            rejectionReasons: release.rejection_reasons
-          })
-        });
-        return;
-      }
-      hapticMap.impactLight();
-      router.push(`/release/${release.id}`);
-    };
-
     return (
       <ReleaseCard
         key={release.id}
@@ -395,7 +418,7 @@ function LibraryPageInner() {
         busy={isResumingDraft}
         isNew={isNew}
         nextStep={{ text: nextStep.cardLine, className: NEXT_STEP_TONE_CLASS[nextStep.tone] }}
-        onClick={onCardClick}
+        onClick={() => openRelease(release)}
       />
     );
   };
@@ -483,6 +506,36 @@ function LibraryPageInner() {
           </div>
         ) : (
           <>
+            {selectedView === "all" && statusFilter === "all" && libraryActions.length > 0 ? (
+              <section aria-label="Нужно твоё действие" className="mb-6 border-y border-omf-line">
+                {libraryActions.map((action, i) => (
+                  <button
+                    key={action.kind}
+                    type="button"
+                    onClick={() => onLibraryAction(action)}
+                    disabled={resumingId != null}
+                    className={cn(
+                      "omf-focus flex w-full items-center gap-3 py-3.5 text-left transition-colors hover:bg-omf-surface disabled:opacity-60",
+                      i > 0 && "border-t border-omf-line"
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "h-2.5 w-2.5 shrink-0 rounded-full",
+                        action.kind === "fix" ? "bg-omf-red" : "bg-omf-ink"
+                      )}
+                      aria-hidden
+                    />
+                    <span className="min-w-0 flex-1 text-[15px] font-medium text-omf-ink">{action.text}</span>
+                    <span className="inline-flex shrink-0 items-center gap-0.5 text-[14px] text-omf-ultra-text">
+                      {action.kind === "fix" ? "Исправить" : action.count === 1 ? "Продолжить" : "Открыть"}
+                      <ChevronRight className="h-4 w-4" aria-hidden />
+                    </span>
+                  </button>
+                ))}
+              </section>
+            ) : null}
+
             {hasReleasesInView && error == null && selectedView === "all" && (
               <div
                 className="mb-6 flex gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
