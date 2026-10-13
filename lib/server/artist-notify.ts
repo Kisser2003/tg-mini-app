@@ -32,14 +32,22 @@ async function isPushEnabled(record: NotifiableRelease, telegramId: string): Pro
 /**
  * Сообщение артисту в Telegram о событии по релизу.
  * Пропускается, если у релиза нет telegram_id (веб-аккаунт) или артист выключил уведомления.
+ * Возвращает `false`, если сообщение не отправляли.
  * Веб-пользователи видят изменения статуса в приложении (метка «Новое» в списке релизов).
  */
-export async function notifyArtist(record: NotifiableRelease, text: string): Promise<void> {
+export async function notifyArtist(record: NotifiableRelease, text: string): Promise<boolean> {
+  const tid = artistTelegramId(record);
+  if (!tid) return false;
+  if (!(await isPushEnabled(record, tid))) return false;
+  await sendTelegramNotification(tid, text);
+  return true;
+}
+
+/** Числовой Telegram id артиста из релиза; `null` у веб-аккаунтов без Telegram. */
+export function artistTelegramId(record: NotifiableRelease): string | null {
   const tid =
     record.telegram_id != null && String(record.telegram_id).trim() !== ""
       ? String(record.telegram_id).trim()
       : null;
-  if (!tid || !/^\d+$/.test(tid)) return;
-  if (!(await isPushEnabled(record, tid))) return;
-  await sendTelegramNotification(tid, text);
+  return tid && /^\d+$/.test(tid) ? tid : null;
 }

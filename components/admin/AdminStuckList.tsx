@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Send } from "lucide-react";
+import { Bell, BellRing, Send } from "lucide-react";
+import { toast } from "sonner";
+import { remindArtist } from "@/features/admin/actions";
 import { ReleaseSleeve } from "@/components/ReleaseSleeve";
 import { hapticMap } from "@/lib/haptic-map";
 import { openTelegramChat } from "@/lib/open-smart-link";
@@ -14,7 +16,27 @@ const COLLAPSED_COUNT = 3;
 /** «Застряли до отправки»: начали релиз, но не нажали «Отправить». Показываем первые три. */
 export function AdminStuckList({ stuck }: { stuck: AdminStuckRelease[] }) {
   const [expanded, setExpanded] = useState(false);
+  /** Кому уже напомнили в этой сессии (сервер дополнительно ограничивает раз в сутки). */
+  const [reminded, setReminded] = useState<Record<string, true>>({});
+  const [remindingId, setRemindingId] = useState<string | null>(null);
   if (stuck.length === 0) return null;
+
+  const onRemind = async (id: string) => {
+    hapticMap.impactLight();
+    setRemindingId(id);
+    try {
+      await remindArtist(id);
+      setReminded((prev) => ({ ...prev, [id]: true }));
+      hapticMap.notificationSuccess();
+      toast.success("Напомнили артисту в боте");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Не удалось отправить напоминание.";
+      if (msg.includes("Уже напоминали")) setReminded((prev) => ({ ...prev, [id]: true }));
+      toast.error(msg);
+    } finally {
+      setRemindingId(null);
+    }
+  };
   const visible = expanded ? stuck : stuck.slice(0, COLLAPSED_COUNT);
 
   return (
@@ -24,6 +46,7 @@ export function AdminStuckList({ stuck }: { stuck: AdminStuckRelease[] }) {
       </h2>
       <p className="mt-0.5 text-[13px] text-omf-faint">
         Начали релиз, но не нажали «Отправить». В очередь не попадут, пока артист не закончит.
+        Колокольчик — напомнить в боте.
       </p>
       <ul className="mt-1">
         {visible.map((s) => (
@@ -47,6 +70,22 @@ export function AdminStuckList({ stuck }: { stuck: AdminStuckRelease[] }) {
                 </p>
               </div>
             </Link>
+            {s.can_remind ? (
+              <button
+                type="button"
+                onClick={() => void onRemind(s.id)}
+                disabled={remindingId != null || reminded[s.id] === true}
+                aria-label={reminded[s.id] ? "Уже напомнили" : `Напомнить в боте: ${s.title}`}
+                title={reminded[s.id] ? "Уже напомнили" : "Напомнить в боте"}
+                className="omf-focus flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-omf-ultra-text transition-colors hover:bg-omf-surface hover:text-omf-ink disabled:text-omf-faint disabled:hover:bg-transparent"
+              >
+                {reminded[s.id] ? (
+                  <BellRing className="h-[18px] w-[18px]" aria-hidden />
+                ) : (
+                  <Bell className={remindingId === s.id ? "h-[18px] w-[18px] animate-pulse" : "h-[18px] w-[18px]"} aria-hidden />
+                )}
+              </button>
+            ) : null}
             {s.telegram_username ? (
               <button
                 type="button"

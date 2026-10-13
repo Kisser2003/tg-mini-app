@@ -148,3 +148,25 @@ export async function publishReleaseWithSmartLink(
   await assertAdminAsync();
   return postPublishSmartLink({ releaseId, newStatus, smartLink });
 }
+
+/** Напомнить артисту через бота, что релиз не отправлен. Бросает ошибку с понятным текстом. */
+export async function remindArtist(releaseId: string): Promise<void> {
+  await assertAdminAsync();
+  const authHeaders = await getAdminApiAuthHeaders();
+  const res = await fetch("/api/admin/remind-artist", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { Accept: "application/json", "Content-Type": "application/json", ...authHeaders },
+    body: JSON.stringify({ releaseId }),
+    cache: "no-store"
+  });
+  let json: { ok?: boolean; error?: string } | null = null;
+  try {
+    json = (await res.json()) as { ok?: boolean; error?: string };
+  } catch {
+    json = null;
+  }
+  if (!res.ok || json?.ok !== true) {
+    throw new Error(json?.error || "Не удалось отправить напоминание.");
+  }
+}
