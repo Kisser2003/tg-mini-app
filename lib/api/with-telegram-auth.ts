@@ -142,11 +142,11 @@ export function getTelegramAuthContextFromRequest(
     const ageSec =
       looseOnFail?.authDate != null ? Math.floor(Date.now() / 1000) - looseOnFail.authDate : null;
     const reason = ignoringAge ? "auth_date_stale" : looseOnFail ? "hash_mismatch" : "malformed";
-    const keys = Array.from(new URLSearchParams(initDataRaw).keys()).sort().join(",");
+    // Значения приходят от клиента: оставляем только безопасные символы, чтобы нельзя было подделать строки лога.
+    const safe = (v: string, max: number) => v.replace(/[^\w.,;:/()+ -]/g, "?").slice(0, max);
+    const keys = safe(Array.from(new URLSearchParams(initDataRaw).keys()).sort().join(","), 120);
     console.warn(
-      `[withTelegramAuth] initData rejected: reason=${reason} age_sec=${ageSec ?? "?"} keys=${keys} ua=${(
-        request.headers.get("user-agent") ?? ""
-      ).slice(0, 80)}`
+      `[withTelegramAuth] initData rejected: reason=${reason} age_sec=${ageSec ?? "?"} keys=${keys} ua=${safe(request.headers.get("user-agent") ?? "", 80)}`
     );
     return null;
   }
