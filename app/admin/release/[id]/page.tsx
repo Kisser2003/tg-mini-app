@@ -8,6 +8,7 @@ import { createPortal } from "react-dom";
 import useSWR from "swr";
 import { toast } from "sonner";
 import { AudioPlayerLazy } from "@/components/AudioPlayerLazy";
+import { AdminColleagueFormCopy } from "@/components/admin/AdminColleagueFormCopy";
 import { AdminReleaseDownloads } from "@/components/admin/AdminReleaseDownloads";
 import { AdminReleaseMetadataCard } from "@/components/admin/AdminReleaseMetadataCard";
 import { ReleaseSleeve } from "@/components/ReleaseSleeve";
@@ -422,6 +423,9 @@ export default function AdminReleaseDetailPage() {
             <h2 id="admin-files" className="mb-2 text-[13px] text-omf-graphite">
               Файлы
             </h2>
+            <div className="mb-5">
+              <AdminColleagueFormCopy release={release} tracks={tracks} />
+            </div>
             <AdminReleaseDownloads
               releaseId={release.id}
               hasArtwork={Boolean(release.artwork_url?.trim())}

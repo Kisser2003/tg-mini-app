@@ -1,10 +1,13 @@
 import type { ReleaseRecord, ReleaseTrackRow } from "@/repositories/releases/types";
 import { getReleaseDisplayTitle } from "@/repositories/releases/types";
-import { featuringNamesFromCollaboratorsJson } from "@/lib/collaborators";
+import { featuringNamesFromCollaboratorsJson, parseCollaboratorsFromDb } from "@/lib/collaborators";
+import { parseArtistLinksFromJson } from "@/lib/artist-links";
 import {
   formatSecondsAsTimecode,
+  GENRE_OPTIONS,
   isLicenseType,
-  LICENSE_TYPE_LABELS
+  LICENSE_TYPE_LABELS,
+  normalizeGenre
 } from "@/lib/release-rights";
 
 function licenseLabel(v: unknown): string | null {
@@ -175,6 +178,67 @@ export function buildReleaseMetadataSections(release: AdminReleaseRow, tracks: R
   ];
 
   return sections.filter((s) => s.entries.length > 0);
+}
+
+function formatReleaseDateRu(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(v.trim());
+  return m ? `${m[3]}.${m[2]}.${m[1]}` : v.trim() || null;
+}
+
+function genreLabel(v: unknown): string | null {
+  const g = normalizeGenre(typeof v === "string" ? v : null);
+  if (!g) return null;
+  return GENRE_OPTIONS.find((o) => o.value === g)?.label ?? g;
+}
+
+/**
+ * Текст «Формы релиза» в формате, который принимают коллеги при ручной отгрузке.
+ * Обложка, WAV и текст отправляются отдельными файлами — в форме только пометка.
+ */
+export function buildColleagueReleaseForm(release: AdminReleaseRow, tracks: ReleaseTrackRow[]): string {
+  const dash = "—";
+  const featuring = featuringNamesFromCollaboratorsJson(release.collaborators);
+  const artist = [release.artist_name?.trim(), featuring.length > 0 ? `feat. ${featuring.join(", ")}` : null]
+    .filter(Boolean)
+    .join(" ");
+  const explicit = Boolean(release.explicit ?? release.is_explicit) || tracks.some((t) => t.explicit);
+  const tiktokSec = typeof release.tiktok_start_sec === "number" ? release.tiktok_start_sec : null;
+  const tiktok = tiktokSec != null ? `${formatSecondsAsTimecode(tiktokSec)} (${Math.floor(tiktokSec)} сек)` : null;
+  const license = licenseLabel(release.license_type);
+  const musicAuthor = typeof release.music_author === "string" ? release.music_author.trim() : "";
+  const beat = [license, musicAuthor ? `автор бита: ${musicAuthor}` : null].filter(Boolean).join(", ");
+  const audioCount = tracks.filter((t) => t.file_path?.trim()).length;
+
+  const lines = [
+    "Форма релиза",
+    "",
+    `1. Название релиза: ${getReleaseDisplayTitle(release) || dash}`,
+    `2. Исполнитель: ${artist || dash}`,
+    "3. Обложка (3000 на 3000), JPG: файлом",
+    `4. Трек в формате WAV: файлом${audioCount > 1 ? ` (${audioCount} шт.)` : ""}`,
+    `5. Жанр: ${genreLabel(release.genre) || dash}`,
+    `6. Ненормативная лексика: ${explicit ? "Есть" : "Нет"}`,
+    `7. ФИО артиста(-ов): ${(release.author_full_name as string | undefined)?.trim() || dash}`,
+    `8. Начало отрывка песни в ТикТок: ${tiktok || dash}`,
+    `9. Дата релиза: ${formatReleaseDateRu(release.release_date) || dash}`,
+    `10. Условия использования бита: ${beat || dash}`,
+    "11. Текст релиза: файлом"
+  ];
+
+  const links = parseArtistLinksFromJson(release.artist_links);
+  const primary = parseCollaboratorsFromDb(release.collaborators).find((c) => c.role === "primary");
+  const linkRows = [
+    ["Яндекс Музыка", links.yandex],
+    ["ВК", links.vk],
+    ["Apple Music", links.apple || primary?.appleUrl || ""],
+    ["Spotify", links.spotify || primary?.spotifyUrl || ""]
+  ].filter(([, url]) => url.trim());
+  if (linkRows.length > 0) {
+    lines.push("", "Карточки артиста:", ...linkRows.map(([name, url]) => `${name}: ${url.trim()}`));
+  }
+
+  return lines.join("\n");
 }
 
 export function buildReleaseExportPayload(release: AdminReleaseRow, tracks: ReleaseTrackRow[]) {
