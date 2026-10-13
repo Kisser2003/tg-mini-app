@@ -142,3 +142,25 @@ export function buildRejection(
     reasonKeys: [...selected.map((r) => r.key), ...(hasCustom ? ["custom"] : [])]
   };
 }
+
+/**
+ * Для модератора: релиз уже возвращали и артист прислал исправление.
+ * `admin_notes` и `rejection_reasons` сохраняются при повторной отправке — это прошлое замечание.
+ */
+export function describePreviousRejection(release: {
+  status?: string | null;
+  rejection_count?: number | null;
+  rejection_reasons?: readonly string[] | null;
+  admin_notes?: string | null;
+}): { count: number; summary: string } | null {
+  const count = Number(release.rejection_count ?? 0);
+  if (!Number.isFinite(count) || count <= 0) return null;
+  if (release.status !== "processing" && release.status !== "review") return null;
+  const labels = (release.rejection_reasons ?? [])
+    .map((k) => findRejectReason(k)?.label)
+    .filter((l): l is RejectReason["label"] => Boolean(l));
+  const notes = release.admin_notes?.trim() ?? "";
+  const summary =
+    labels.length > 0 ? labels.join(", ") : notes.length > 120 ? `${notes.slice(0, 117)}…` : notes;
+  return { count, summary };
+}

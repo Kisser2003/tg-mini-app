@@ -19,6 +19,8 @@ import type { ReleaseRecord, ReleaseTrackRow } from "@/repositories/releases.rep
 import { getReleaseDisplayTitle } from "@/repositories/releases/types";
 import { getTelegramUserId, initTelegramWebApp, triggerHaptic } from "@/lib/telegram";
 import { featuringNamesFromCollaboratorsJson } from "@/lib/collaborators";
+import { describePreviousRejection } from "@/lib/rejection-reasons";
+import { pluralRu } from "@/lib/release-next-step";
 
 
 function buildAudioItems(release: ReleaseRecord, tracks: ReleaseTrackRow[]) {
@@ -168,6 +170,7 @@ export default function AdminReleaseDetailPage() {
   const canModerate = canonical === "processing";
   const displayTitle = getReleaseDisplayTitle(release);
   const featuringNames = featuringNamesFromCollaboratorsJson(release.collaborators);
+  const previousRejection = describePreviousRejection(release);
 
   return (
     <div className="mx-auto w-full max-w-lg px-1 pb-40 pt-4 text-omf-ink">
@@ -213,6 +216,30 @@ export default function AdminReleaseDetailPage() {
         <p className="mt-1 text-center text-[14px] text-omf-graphite" title={featuringNames.join(", ")}>
           feat. {featuringNames.join(", ")}
         </p>
+      ) : null}
+
+      {previousRejection ? (
+        <aside
+          role="note"
+          aria-labelledby="admin-prev-rejection"
+          className="mt-6 rounded-control border border-omf-yellow p-4"
+        >
+          <p id="admin-prev-rejection" className="text-[14px] font-bold text-omf-yellow">
+            Повторная отправка
+            {previousRejection.count > 1
+              ? `: вернули уже ${previousRejection.count} ${pluralRu(previousRejection.count, ["раз", "раза", "раз"])}`
+              : ""}
+          </p>
+          {release.admin_notes?.trim() ? (
+            <>
+              <p className="mt-1.5 text-[13px] text-omf-graphite">В прошлый раз написали артисту:</p>
+              <p className="mt-1 whitespace-pre-wrap break-words text-[14px] leading-relaxed text-omf-ink">
+                {release.admin_notes.trim()}
+              </p>
+            </>
+          ) : null}
+          <p className="mt-2 text-[13px] text-omf-graphite">Сначала проверь, что это исправлено.</p>
+        </aside>
       ) : null}
 
       <section className="mt-8" aria-labelledby="admin-listen">

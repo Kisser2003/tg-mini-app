@@ -5,7 +5,8 @@ import {
   describeRejection,
   faqTopicHref,
   findRejectReason,
-  buildRejection
+  buildRejection,
+  describePreviousRejection
 } from "@/lib/rejection-reasons";
 import { FAQ_TOPIC_KEYS, parseFaqTopic } from "@/lib/faq-topics";
 
@@ -78,5 +79,23 @@ describe("buildRejection", () => {
     expect(buildRejection(["nope"], "")).toBeNull();
     const long = "я".repeat(5000);
     expect(buildRejection([], long)?.comment.length).toBe(2000);
+  });
+});
+
+describe("describePreviousRejection", () => {
+  it("только для релиза на проверке, который уже возвращали", () => {
+    expect(describePreviousRejection({ status: "processing", rejection_count: 0 })).toBeNull();
+    expect(describePreviousRejection({ status: "failed", rejection_count: 2 })).toBeNull();
+    expect(describePreviousRejection({ status: "processing" })).toBeNull();
+  });
+
+  it("прошлые причины — названиями пресетов, иначе текстом модератора", () => {
+    expect(
+      describePreviousRejection({ status: "processing", rejection_count: 2, rejection_reasons: ["artwork", "caps", "custom"] })
+    ).toEqual({ count: 2, summary: "Обложка, Верхний регистр" });
+    const long = "а".repeat(200);
+    const r = describePreviousRejection({ status: "processing", rejection_count: 1, admin_notes: long });
+    expect(r?.summary.length).toBe(118);
+    expect(r?.summary.endsWith("…")).toBe(true);
   });
 });

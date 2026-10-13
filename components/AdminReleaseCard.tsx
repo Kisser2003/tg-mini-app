@@ -14,6 +14,8 @@ import {
 import { normalizeReleaseStatus, type CanonicalReleaseStatus } from "@/lib/release-status";
 import { triggerHaptic } from "@/lib/telegram";
 import { featuringNamesFromCollaboratorsJson } from "@/lib/collaborators";
+import { describePreviousRejection } from "@/lib/rejection-reasons";
+import { pluralRu } from "@/lib/release-next-step";
 
 const STATUS_LABEL: Record<CanonicalReleaseStatus, string> = {
   draft: "черновик",
@@ -111,6 +113,7 @@ function AdminReleaseCardInner({
     [release.created_at]
   );
   const hasError = (release.error_message ?? "").trim().length > 0;
+  const previousRejection = showModerationActions ? describePreviousRejection(release) : null;
   const noSmartLink = showModerationActions && (release.smart_link ?? "").trim().length === 0;
   const metaLine = [
     releaseTypeLabel(release.release_type),
@@ -155,6 +158,19 @@ function AdminReleaseCardInner({
             </p>
           ) : null}
           <p className="mt-1.5 text-[13px] text-omf-faint">{metaLine}</p>
+          {previousRejection ? (
+            <p className="mt-1.5 text-[13px] leading-snug">
+              <span className="font-medium text-omf-yellow">
+                Повторно
+                {previousRejection.count > 1
+                  ? `, вернули ${previousRejection.count} ${pluralRu(previousRejection.count, ["раз", "раза", "раз"])}`
+                  : ""}
+              </span>
+              {previousRejection.summary ? (
+                <span className="text-omf-graphite"> · проверь: {previousRejection.summary}</span>
+              ) : null}
+            </p>
+          ) : null}
           <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">
             <span className={statusTextClass(canonical)}>{STATUS_LABEL[canonical]}</span>
             {noSmartLink ? <span className="text-omf-yellow">нет ссылки на релиз</span> : null}
