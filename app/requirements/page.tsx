@@ -1,8 +1,16 @@
 "use client";
 
+import { Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { AuthGuard } from "@/components/AuthGuard";
 import { FeedbackCard } from "@/components/FeedbackCard";
 import { LibraryWebAside } from "@/components/library/LibraryWebAside";
+import { parseFaqTopic } from "@/lib/faq-topics";
+
+function FaqWithTopic() {
+  const topic = parseFaqTopic(useSearchParams().get("topic"));
+  return <LibraryWebAside openTopic={topic} />;
+}
 
 export default function RequirementsPage() {
   return (
@@ -15,7 +23,9 @@ export default function RequirementsPage() {
             Требования к файлам, даты выхода, фиты и статусы модерации.
           </p>
         </header>
-        <LibraryWebAside />
+        <Suspense fallback={<LibraryWebAside />}>
+          <FaqWithTopic />
+        </Suspense>
         <div className="mt-8">
           <FeedbackCard />
         </div>

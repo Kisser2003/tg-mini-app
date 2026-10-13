@@ -18,6 +18,8 @@ import { AuthGuard } from "@/components/AuthGuard";
 import { useIsTelegramMiniApp } from "@/lib/hooks/useIsTelegramMiniApp";
 import { pickProfileGreetingName, useAuthProfile } from "@/lib/hooks/useAuthProfile";
 import { cn } from "@/lib/utils";
+import { RejectionNotice } from "@/components/RejectionNotice";
+import { describeRejection, type RejectionSummary } from "@/lib/rejection-reasons";
 import { getTelegramInitDataForApiHeader, getTelegramUserIdForSupabaseRequests } from "@/lib/telegram";
 
 
@@ -85,9 +87,11 @@ function LibraryPageInner() {
   const didRetryStuckInitialLoadRef = useRef(false);
   const didHardReloadRef = useRef(false);
   const [telegramInitialEmptyRetries, setTelegramInitialEmptyRetries] = useState(0);
-  const [adminNotesModal, setAdminNotesModal] = useState<{ id: string; title: string; body: string } | null>(
-    null
-  );
+  const [adminNotesModal, setAdminNotesModal] = useState<{
+    id: string;
+    title: string;
+    summary: RejectionSummary;
+  } | null>(null);
   const selectedView = parseLibraryView(searchParams.get("view"));
 
   useEffect(() => {
@@ -357,14 +361,14 @@ function LibraryPageInner() {
       }
       if (isFailed) {
         hapticMap.notificationError();
-        const notes = release.admin_notes?.trim();
         setAdminNotesModal({
           id: release.id,
           title: displayTitle,
-          body:
-            notes && notes.length > 0
-              ? notes
-              : "Модератор не оставил комментарий. Открой «Помощь», чтобы написать в поддержку."
+          summary: describeRejection({
+            adminNotes: release.admin_notes,
+            errorMessage: release.error_message,
+            rejectionReasons: release.rejection_reasons
+          })
         });
         return;
       }
@@ -554,17 +558,13 @@ function LibraryPageInner() {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <p className="mt-4 whitespace-pre-wrap break-words text-[15px] leading-relaxed text-omf-ink">
-              {adminNotesModal.body}
-            </p>
-            <button
-              type="button"
-              className="omf-btn-primary mt-5 w-full disabled:opacity-50"
-              disabled={resumingId === adminNotesModal.id}
-              onClick={() => void handleFixRejected(adminNotesModal.id)}
-            >
-              {resumingId === adminNotesModal.id ? "Открываем…" : "Исправить и отправить снова"}
-            </button>
+            <RejectionNotice
+              className="mt-4 max-h-[60vh] overflow-y-auto border-0 p-0"
+              showTitle={false}
+              summary={adminNotesModal.summary}
+              fixing={resumingId === adminNotesModal.id}
+              onFix={() => void handleFixRejected(adminNotesModal.id)}
+            />
             <button
               type="button"
               className="omf-btn-secondary mt-3 w-full"

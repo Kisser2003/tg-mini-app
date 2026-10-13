@@ -5,51 +5,10 @@ import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
 import { hapticMap } from "@/lib/haptic-map";
 import { SPRING_UI } from "@/lib/motion-spring";
+import { REJECT_REASONS } from "@/lib/rejection-reasons";
 
-export const ADMIN_REJECT_PRESETS = [
-  {
-    key: "caps",
-    label: "Верхний регистр",
-    message:
-      "Пожалуйста, поправьте типографику: избегайте длинных фрагментов В ВЕРХНЕМ РЕГИСТРЕ в названиях и именах."
-  },
-  {
-    key: "quality",
-    label: "Качество аудио",
-    message:
-      "К сожалению, качество записи не подходит для площадок: слышны шум, клиппинг или звук не совпадает с заявленным материалом."
-  },
-  {
-    key: "copyright",
-    label: "Авторские права",
-    message:
-      "Есть сомнения в правах на распространение. Пришлите, пожалуйста, подтверждающие материалы в поддержку."
-  },
-  {
-    key: "title",
-    label: "Название и имена",
-    message:
-      "Поправьте название релиза, треков или имя артиста: уберите эмодзи, лишние символы и промо-слова (например, «FREE DOWNLOAD»)."
-  },
-  {
-    key: "explicit",
-    label: "Метка explicit",
-    message:
-      "Метка explicit не соответствует содержанию: отметьте нецензурные треки или уберите метку, если мата нет."
-  },
-  {
-    key: "links",
-    label: "Ссылки артиста",
-    message:
-      "Ссылки на профили артиста указаны неверно или не открываются. Проверьте и исправьте их."
-  },
-  {
-    key: "artwork",
-    label: "Обложка",
-    message:
-      "Обложка не соответствует требованиям площадок: разрешение, читаемость текста или общее оформление."
-  }
-] as const;
+/** Пресеты причин возврата; общий список с экраном артиста (`lib/rejection-reasons`). */
+export const ADMIN_REJECT_PRESETS = REJECT_REASONS;
 
 type Props = {
   releaseId: string | null;

@@ -36,6 +36,7 @@ export type ReleaseListRow = Pick<
   | "upc"
   | "release_type"
   | "smart_link"
+  | "rejection_reasons"
 >;
 
 const RELEASES_LIST_TIMEOUT_MS = 15000;

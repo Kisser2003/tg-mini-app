@@ -4,6 +4,7 @@ import { createSupabaseAdmin } from "@/lib/supabase-admin";
 import { resolveReleaseActor } from "@/lib/api/resolve-submit-actor";
 import type { ReleaseRecord } from "@/repositories/releases.repo";
 import { getJsonCache, setJsonCache } from "@/lib/server/redis-cache";
+import { isMissingReleasesColumnError } from "@/lib/errors";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -24,6 +25,8 @@ const RELEASE_LIST_SELECT = [
   "release_type",
   "smart_link"
 ].join(",");
+/** `rejection_reasons` — из миграции 20261012190000; без неё список грузится по базовому набору. */
+const RELEASE_LIST_SELECT_WITH_REASONS = `${RELEASE_LIST_SELECT},rejection_reasons`;
 const RELEASES_CACHE_TTL_SECONDS = 20;
 type ReleaseListRow = Pick<
   ReleaseRecord,
@@ -41,6 +44,7 @@ type ReleaseListRow = Pick<
   | "upc"
   | "release_type"
   | "smart_link"
+  | "rejection_reasons"
 >;
 
 async function handleGetMyReleases(request: NextRequest): Promise<Response> {
@@ -92,8 +96,8 @@ async function handleGetMyReleases(request: NextRequest): Promise<Response> {
     );
   }
 
-  let query = admin.from("releases").select(RELEASE_LIST_SELECT).order("created_at", { ascending: false });
-
+  // Telegram: legacy user_id / telegram_id + привязанные профили; веб: только user_uuid.
+  let ownerFilter = `user_uuid.eq.${actor.kind === "web" ? actor.authUserId : ""}`;
   if (actor.kind === "telegram") {
     const tid = String(actor.telegramUserId);
     const { data: profiles } = await admin
@@ -111,12 +115,17 @@ async function handleGetMyReleases(request: NextRequest): Promise<Response> {
       // Support multi-linked/legacy rows: include all matching profile UUIDs.
       orParts.push(`user_uuid.in.(${profileUuids.join(",")})`);
     }
-    query = query.or(orParts.join(","));
-  } else {
-    query = query.eq("user_uuid", actor.authUserId);
+    ownerFilter = orParts.join(",");
   }
 
-  const { data, error } = await query;
+  const runQuery = (select: string) => {
+    return admin.from("releases").select(select).or(ownerFilter).order("created_at", { ascending: false });
+  };
+
+  let { data, error } = await runQuery(RELEASE_LIST_SELECT_WITH_REASONS);
+  if (error && isMissingReleasesColumnError(error, "rejection_reasons")) {
+    ({ data, error } = await runQuery(RELEASE_LIST_SELECT));
+  }
   if (error) {
     console.error("[releases/my] fetch:", error.message);
     return NextResponse.json({ ok: false, error: "Не удалось загрузить релизы." }, { status: 500 });
