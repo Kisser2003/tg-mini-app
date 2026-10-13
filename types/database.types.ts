@@ -160,6 +160,9 @@ export type Database = {
           mood: string | null
           music_author: string | null
           p_line: string | null
+          payment_status: string | null
+          payment_updated_at: string | null
+          payment_updated_by: string | null
           performance_language: string | null
           planned_release_date: string | null
           release_date: string | null
@@ -170,6 +173,7 @@ export type Database = {
           telegram_id: string | null
           telegram_pending_ack_sent_at: string | null
           telegram_username: string | null
+          terms_accepted_at: string | null
           title: string | null
           track_name: string | null
           upc: string | null
@@ -201,6 +205,9 @@ export type Database = {
           mood?: string | null
           music_author?: string | null
           p_line?: string | null
+          payment_status?: string | null
+          payment_updated_at?: string | null
+          payment_updated_by?: string | null
           performance_language?: string | null
           planned_release_date?: string | null
           release_date?: string | null
@@ -211,6 +218,7 @@ export type Database = {
           telegram_id?: string | null
           telegram_pending_ack_sent_at?: string | null
           telegram_username?: string | null
+          terms_accepted_at?: string | null
           title?: string | null
           track_name?: string | null
           upc?: string | null
@@ -242,6 +250,9 @@ export type Database = {
           mood?: string | null
           music_author?: string | null
           p_line?: string | null
+          payment_status?: string | null
+          payment_updated_at?: string | null
+          payment_updated_by?: string | null
           performance_language?: string | null
           planned_release_date?: string | null
           release_date?: string | null
@@ -252,6 +263,7 @@ export type Database = {
           telegram_id?: string | null
           telegram_pending_ack_sent_at?: string | null
           telegram_username?: string | null
+          terms_accepted_at?: string | null
           title?: string | null
           track_name?: string | null
           upc?: string | null

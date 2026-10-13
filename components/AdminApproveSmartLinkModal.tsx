@@ -7,6 +7,7 @@ import { X } from "lucide-react";
 import { SPRING_UI } from "@/lib/motion-spring";
 import { normalizeUpc } from "@/lib/admin-release-publish";
 import { DSP_REVIEW_DAYS_TEXT } from "@/lib/release-next-step";
+import { describePayment, isPaymentConfirmed } from "@/lib/release-payment";
 
 export type ApproveModalMode = "accept" | "link";
 
@@ -14,6 +15,8 @@ type Props = {
   releaseId: string | null;
   /** accept — релиз на проверке («Принять», ссылка по желанию); link — уже принят, нужна ссылка. */
   mode: ApproveModalMode;
+  /** releases.payment_status: при «Принять» без подтверждённой оплаты — предупреждение. */
+  paymentStatus?: string | null;
   busy: boolean;
   onClose: () => void;
   /** Принять без ссылки. */
@@ -32,7 +35,15 @@ function validateLink(raw: string): string | null {
   }
 }
 
-export function AdminApproveSmartLinkModal({ releaseId, mode, busy, onClose, onAccept, onSubmitLink }: Props) {
+export function AdminApproveSmartLinkModal({
+  releaseId,
+  mode,
+  paymentStatus,
+  busy,
+  onClose,
+  onAccept,
+  onSubmitLink
+}: Props) {
   const open = releaseId != null;
   const [smartLink, setSmartLink] = useState("");
   const [upc, setUpc] = useState("");
@@ -51,6 +62,7 @@ export function AdminApproveSmartLinkModal({ releaseId, mode, busy, onClose, onA
   const link = smartLink.trim();
   const isLinkMode = mode === "link";
   const showUpc = isLinkMode || link.length > 0;
+  const unpaidWarning = !isLinkMode && !isPaymentConfirmed(paymentStatus);
 
   const submit = () => {
     if (!releaseId) return;
@@ -81,9 +93,11 @@ export function AdminApproveSmartLinkModal({ releaseId, mode, busy, onClose, onA
     ? "Сохраняем…"
     : isLinkMode
       ? "Отправить"
-      : link
-        ? "Принять со ссылкой"
-        : "Принять";
+      : unpaidWarning
+        ? "Всё равно принять"
+        : link
+          ? "Принять со ссылкой"
+          : "Принять";
 
   // Портал: у обёртки страницы есть transform, и `fixed` внутри неё оказывается под нижней навигацией.
   if (!mounted) return null;
@@ -175,6 +189,13 @@ export function AdminApproveSmartLinkModal({ releaseId, mode, busy, onClose, onA
             ) : null}
 
             {localError && <p className="mt-2 text-[14px] text-omf-red">{localError}</p>}
+
+            {unpaidWarning ? (
+              <p role="alert" className="mt-4 rounded-control border border-omf-yellow px-4 py-3 text-[14px] leading-relaxed">
+                <span className="font-bold text-omf-yellow">Оплата не подтверждена</span>
+                <span className="text-omf-graphite"> ({describePayment(paymentStatus).label}). Релиз уйдёт на площадки без оплаты.</span>
+              </p>
+            ) : null}
 
             <div className="mt-5 grid grid-cols-2 gap-2.5">
               <button type="button" disabled={busy} onClick={() => onClose()} className="omf-btn-secondary w-full disabled:opacity-50">

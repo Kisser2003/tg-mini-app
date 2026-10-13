@@ -140,6 +140,7 @@ test.describe("@full-submit Create release submit full-flow with mocked backend"
     });
 
     await navigateTo(page, "/create/review");
+    await page.getByRole("checkbox", { name: /выпуск платный/i }).check();
     await page.getByRole("button", { name: /отправить релиз/i }).click();
 
     await page.waitForURL(/\/create\/success/, { timeout: 15_000 });
@@ -185,6 +186,7 @@ test.describe("@full-submit Create release submit full-flow with mocked backend"
     });
 
     await navigateTo(page, "/create/review");
+    await page.getByRole("checkbox", { name: /выпуск платный/i }).check();
     await page.getByRole("button", { name: /отправить релиз/i }).click();
 
     await expect(page).toHaveURL(/\/create\/review/, { timeout: 10_000 });

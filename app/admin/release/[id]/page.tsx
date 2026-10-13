@@ -11,6 +11,7 @@ import { AudioPlayerLazy } from "@/components/AudioPlayerLazy";
 import { AdminColleagueFormCopy } from "@/components/admin/AdminColleagueFormCopy";
 import { AdminReleaseDownloads } from "@/components/admin/AdminReleaseDownloads";
 import { AdminReleaseMetadataCard } from "@/components/admin/AdminReleaseMetadataCard";
+import { AdminPaymentPanel } from "@/components/admin/AdminPaymentPanel";
 import { ReleaseSleeve } from "@/components/ReleaseSleeve";
 import { AdminApproveSmartLinkModal, type ApproveModalMode } from "@/components/AdminApproveSmartLinkModal";
 import { AdminRejectModal } from "@/components/AdminRejectModal";
@@ -288,6 +289,7 @@ export default function AdminReleaseDetailPage() {
       <AdminApproveSmartLinkModal
         releaseId={approveModal?.id ?? null}
         mode={approveModal?.mode ?? "accept"}
+        paymentStatus={release?.payment_status ?? null}
         busy={approveModal != null && busy}
         onClose={() => setApproveModal(null)}
         onAccept={(id) => void handleAccept(id)}
@@ -372,6 +374,11 @@ export default function AdminReleaseDetailPage() {
               <p className="mt-2 text-[13px] text-omf-graphite">Сначала проверь, что это исправлено.</p>
             </aside>
           ) : null}
+
+          <AdminPaymentPanel
+            release={release}
+            onChange={(fields) => setRelease((prev) => (prev ? { ...prev, ...fields } : prev))}
+          />
 
           <section className="mt-6" aria-labelledby="admin-listen">
             <h2 id="admin-listen" className="mb-2 text-[13px] text-omf-graphite">

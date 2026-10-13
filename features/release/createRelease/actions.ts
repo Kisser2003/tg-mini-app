@@ -200,6 +200,8 @@ function getCreateReleaseApiAuthHeaders(): Record<string, string> {
 async function submitReleaseViaServiceApi(params: {
   releaseId: string;
   clientRequestId: string;
+  /** Галочка с условиями на шаге «Проверка»; без неё сервер не примет отправку. */
+  termsAccepted: boolean;
 }): Promise<ReleaseRecord> {
   const doFetch = (authHeaders: Record<string, string>) =>
     fetch("/api/releases/finalize-submit", {
@@ -1321,7 +1323,10 @@ export async function uploadTracksForDraftStep(options: {
   }
 }
 
-export async function submitTracksAndFinalize(args: { files: File[] }): Promise<boolean> {
+export async function submitTracksAndFinalize(args: {
+  files: File[];
+  termsAccepted: boolean;
+}): Promise<boolean> {
   initUserContextInStore();
   await syncWebUserIntoStore();
   const store = useCreateReleaseDraftStore.getState();
@@ -1584,7 +1589,11 @@ export async function submitTracksAndFinalize(args: { files: File[] }): Promise<
         return false;
       }
 
-      const verified = await submitReleaseViaServiceApi({ releaseId, clientRequestId });
+      const verified = await submitReleaseViaServiceApi({
+        releaseId,
+        clientRequestId,
+        termsAccepted: args.termsAccepted
+      });
 
       if (process.env.NODE_ENV === "development") {
         if (verified.status !== "processing" && verified.status !== "ready") {

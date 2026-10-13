@@ -18,6 +18,7 @@ import { AdminModerationQueueSkeleton } from "@/components/ui/LibrarySkeleton";
 import { approveRelease, publishReleaseWithSmartLink, rejectRelease } from "@/features/admin/actions";
 import { fetchAdminModerationQueue } from "@/features/admin/moderation-queue";
 import { isAdminUi, isAdminUiByWebSession } from "@/lib/admin";
+import { isPaymentConfirmed } from "@/lib/release-payment";
 import { debugInit } from "@/lib/debug";
 import { fetchAdminStats } from "@/lib/fetch-admin-stats";
 import type { ReleaseRecord, ReleaseTrackRow } from "@/repositories/releases.repo";
@@ -51,6 +52,8 @@ export default function AdminPage() {
   const [selectedReleaseIds, setSelectedReleaseIds] = useState<string[]>([]);
   const [bulkRejectOpen, setBulkRejectOpen] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
+  /** Среди выбранных есть без подтверждённой оплаты: первое нажатие «Принять» только предупреждает. */
+  const [bulkAcceptArmed, setBulkAcceptArmed] = useState(false);
 
   useEffect(() => {
     debugInit("admin", "init start");
@@ -271,8 +274,21 @@ export default function AdminPage() {
     [refreshAll, selectedReleaseIds]
   );
 
+  const unpaidSelectedCount = useMemo(
+    () =>
+      moderationQueue.filter(
+        (row) => selectedReleaseIds.includes(row.release.id) && !isPaymentConfirmed(row.release.payment_status)
+      ).length,
+    [moderationQueue, selectedReleaseIds]
+  );
+
+  useEffect(() => {
+    setBulkAcceptArmed(false);
+  }, [selectedReleaseIds]);
+
   const handleBulkAccept = useCallback(async () => {
     if (selectedReleaseIds.length === 0) return;
+    setBulkAcceptArmed(false);
     setBulkBusy(true);
     setActionError(null);
     let successCount = 0;
@@ -353,6 +369,7 @@ export default function AdminPage() {
       <AdminApproveSmartLinkModal
         releaseId={approveModal?.id ?? null}
         mode={approveModal?.mode ?? "accept"}
+        paymentStatus={moderationQueue.find((row) => row.release.id === approveModal?.id)?.release.payment_status ?? null}
         busy={approveModal != null && busyId === approveModal.id}
         onClose={() => setApproveModal(null)}
         onAccept={(id) => void handleAccept(id)}
@@ -437,11 +454,22 @@ export default function AdminPage() {
               </button>
               <button
                 type="button"
-                onClick={() => void handleBulkAccept()}
+                onClick={() => {
+                  if (unpaidSelectedCount > 0 && !bulkAcceptArmed) {
+                    triggerHaptic("warning");
+                    setBulkAcceptArmed(true);
+                    return;
+                  }
+                  void handleBulkAccept();
+                }}
                 disabled={bulkBusy}
-                className="omf-focus rounded-full px-2.5 py-1.5 font-medium text-omf-green hover:text-omf-ink disabled:opacity-40"
+                className={`omf-focus rounded-full px-2.5 py-1.5 font-medium hover:text-omf-ink disabled:opacity-40 ${
+                  bulkAcceptArmed ? "text-omf-yellow" : "text-omf-green"
+                }`}
               >
-                Принять выбранные ({selectedReleaseIds.length})
+                {bulkAcceptArmed
+                  ? `Без оплаты: ${unpaidSelectedCount}. Всё равно принять?`
+                  : `Принять выбранные (${selectedReleaseIds.length})`}
               </button>
               <button
                 type="button"
