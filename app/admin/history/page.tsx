@@ -16,6 +16,9 @@ import { getTelegramUserId, initTelegramWebApp } from "@/lib/telegram";
 import { errorToUserString, USER_REQUEST_TIMEOUT_MESSAGE } from "@/lib/errors";
 import { SWR_LIST_OPTIONS } from "@/lib/swr-config";
 import { withRequestTimeout } from "@/lib/withRequestTimeout";
+import { countHistoryByStatus, filterHistory, type HistoryStatusFilter } from "@/lib/admin-history-filter";
+import { hapticMap } from "@/lib/haptic-map";
+import { cn } from "@/lib/utils";
 
 type HistoryRow = {
   release: ReleaseRecord;
@@ -23,6 +26,11 @@ type HistoryRow = {
 };
 
 const HISTORY_LIMIT = 300;
+const HISTORY_TABS: { key: HistoryStatusFilter; label: string }[] = [
+  { key: "all", label: "Все" },
+  { key: "ready", label: "Одобрены" },
+  { key: "failed", label: "Возвращены" }
+];
 const ADMIN_HISTORY_TIMEOUT_MS = 20000;
 const INITIAL_VISIBLE_ROWS = 40;
 const VISIBLE_ROWS_CHUNK = 40;
@@ -34,6 +42,8 @@ export default function AdminModerationHistoryPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminResolved, setAdminResolved] = useState(false);
   const [visibleRowsCount, setVisibleRowsCount] = useState(INITIAL_VISIBLE_ROWS);
+  const [statusFilter, setStatusFilter] = useState<HistoryStatusFilter>("all");
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
     debugInit("admin/history", "init start");
@@ -70,7 +80,9 @@ export default function AdminModerationHistoryPage() {
     }
   );
 
-  const rows = useMemo(() => data?.rows ?? [], [data?.rows]);
+  const allRows = useMemo(() => data?.rows ?? [], [data?.rows]);
+  const counts = useMemo(() => countHistoryByStatus(allRows), [allRows]);
+  const rows = useMemo(() => filterHistory(allRows, statusFilter, query), [allRows, statusFilter, query]);
   const visibleRows = useMemo(
     () => rows.slice(0, Math.min(visibleRowsCount, rows.length)),
     [rows, visibleRowsCount]
@@ -82,7 +94,7 @@ export default function AdminModerationHistoryPage() {
 
   useEffect(() => {
     setVisibleRowsCount(INITIAL_VISIBLE_ROWS);
-  }, [rows.length]);
+  }, [rows.length, statusFilter, query]);
 
   useEffect(() => {
     if (!hasMoreRows) return;
@@ -146,7 +158,7 @@ export default function AdminModerationHistoryPage() {
         <h1 className="mt-1 text-[40px] font-extrabold leading-[0.92] tracking-[-0.045em]">История</h1>
       </header>
 
-      {listTruncated && rows.length > 0 && (
+      {listTruncated && allRows.length > 0 && (
         <p className="mb-4 text-[14px] text-omf-yellow">
           Показаны последние {HISTORY_LIMIT} релизов. Более старых здесь пока нет.
         </p>
@@ -156,13 +168,62 @@ export default function AdminModerationHistoryPage() {
 
       {showSkeleton && <AdminModerationQueueSkeleton rows={4} />}
 
-      {!showSkeleton && !errorMessage && rows.length === 0 && (
+      {allRows.length > 0 ? (
+        <>
+          <div
+            className="mb-4 flex gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            role="tablist"
+            aria-label="Фильтр истории"
+          >
+            {HISTORY_TABS.map((tab) => {
+              const active = statusFilter === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => {
+                    hapticMap.impactLight();
+                    setStatusFilter(tab.key);
+                  }}
+                  className={cn(
+                    "omf-focus shrink-0 rounded-full px-3.5 py-1.5 text-[13px] transition-colors",
+                    active ? "bg-omf-ink font-medium text-omf-bg" : "text-omf-graphite hover:text-omf-ink"
+                  )}
+                >
+                  {tab.label}
+                  <span className={cn("ml-1.5 tabular-nums", active ? "text-omf-bg/70" : "text-omf-faint")}>
+                    {counts[tab.key]}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Артист, название, ID или ссылка"
+            aria-label="Поиск по истории"
+            className="omf-focus mb-4 min-h-[48px] w-full rounded-control border border-omf-line bg-omf-surface px-4 py-3 text-[16px] text-omf-ink placeholder:text-omf-faint focus:border-omf-ultra focus:outline-none"
+          />
+        </>
+      ) : null}
+
+      {!showSkeleton && !errorMessage && allRows.length === 0 && (
         <div className="border-t border-omf-line pt-6">
           <p className="text-[18px] font-bold tracking-tight">История пока пуста</p>
           <p className="mt-1.5 text-[14px] text-omf-graphite">
             Здесь появятся релизы, по которым вы приняли решение.
           </p>
         </div>
+      )}
+
+      {!showSkeleton && allRows.length > 0 && rows.length === 0 && (
+        <p className="border-t border-omf-line pt-6 text-[14px] text-omf-graphite">
+          Ничего не нашлось. Попробуй другой фильтр или запрос.
+        </p>
       )}
 
       {rows.length > 0 && (

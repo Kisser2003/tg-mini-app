@@ -164,3 +164,26 @@ export function describePreviousRejection(release: {
     labels.length > 0 ? labels.join(", ") : notes.length > 120 ? `${notes.slice(0, 117)}…` : notes;
   return { count, summary };
 }
+
+/** Для истории модерации: что получил артист — причины возврата или ссылку. */
+export function describeHistoryDecision(release: {
+  status?: string | null;
+  smart_link?: string | null;
+  rejection_reasons?: readonly string[] | null;
+  admin_notes?: string | null;
+  error_message?: string | null;
+}): string | null {
+  if (release.status === "ready") {
+    const link = release.smart_link?.trim();
+    return link ? `Ссылка: ${link.replace(/^https?:\/\//, "")}` : null;
+  }
+  if (release.status === "failed") {
+    const labels = (release.rejection_reasons ?? [])
+      .map((k) => findRejectReason(k)?.label)
+      .filter(Boolean);
+    if (labels.length > 0) return `Вернули: ${labels.join(", ")}`;
+    const text = release.admin_notes?.trim() || release.error_message?.trim();
+    return text ? `Вернули: ${text}` : "Вернули без комментария";
+  }
+  return null;
+}

@@ -14,7 +14,7 @@ import {
 import { normalizeReleaseStatus, type CanonicalReleaseStatus } from "@/lib/release-status";
 import { triggerHaptic } from "@/lib/telegram";
 import { featuringNamesFromCollaboratorsJson } from "@/lib/collaborators";
-import { describePreviousRejection } from "@/lib/rejection-reasons";
+import { describeHistoryDecision, describePreviousRejection } from "@/lib/rejection-reasons";
 import { pluralRu } from "@/lib/release-next-step";
 
 const STATUS_LABEL: Record<CanonicalReleaseStatus, string> = {
@@ -114,6 +114,8 @@ function AdminReleaseCardInner({
   );
   const hasError = (release.error_message ?? "").trim().length > 0;
   const previousRejection = showModerationActions ? describePreviousRejection(release) : null;
+  /** В истории: почему вернули / какая ссылка ушла артисту. */
+  const decisionLine = showModerationActions ? null : describeHistoryDecision(release);
   const noSmartLink = showModerationActions && (release.smart_link ?? "").trim().length === 0;
   const metaLine = [
     releaseTypeLabel(release.release_type),
@@ -154,6 +156,11 @@ function AdminReleaseCardInner({
           </p>
         ) : null}
         <p className="mt-1.5 text-[13px] text-omf-faint">{metaLine}</p>
+        {decisionLine ? (
+          <p className="mt-1.5 line-clamp-2 break-words text-[13px] leading-snug text-omf-graphite">
+            {decisionLine}
+          </p>
+        ) : null}
         {previousRejection ? (
           <p className="mt-1.5 text-[13px] leading-snug">
             <span className="font-medium text-omf-yellow">

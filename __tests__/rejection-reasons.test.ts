@@ -6,7 +6,8 @@ import {
   faqTopicHref,
   findRejectReason,
   buildRejection,
-  describePreviousRejection
+  describePreviousRejection,
+  describeHistoryDecision
 } from "@/lib/rejection-reasons";
 import { FAQ_TOPIC_KEYS, parseFaqTopic } from "@/lib/faq-topics";
 
@@ -97,5 +98,17 @@ describe("describePreviousRejection", () => {
     const r = describePreviousRejection({ status: "processing", rejection_count: 1, admin_notes: long });
     expect(r?.summary.length).toBe(118);
     expect(r?.summary.endsWith("…")).toBe(true);
+  });
+});
+
+describe("describeHistoryDecision", () => {
+  it("одобренный — ссылка без протокола", () => {
+    expect(describeHistoryDecision({ status: "ready", smart_link: "https://ffm.to/x" })).toBe("Ссылка: ffm.to/x");
+    expect(describeHistoryDecision({ status: "ready" })).toBeNull();
+  });
+  it("возвращённый — пресеты, иначе текст", () => {
+    expect(describeHistoryDecision({ status: "failed", rejection_reasons: ["quality"] })).toBe("Вернули: Качество аудио");
+    expect(describeHistoryDecision({ status: "failed", admin_notes: "Тег в конце" })).toBe("Вернули: Тег в конце");
+    expect(describeHistoryDecision({ status: "failed" })).toBe("Вернули без комментария");
   });
 });
