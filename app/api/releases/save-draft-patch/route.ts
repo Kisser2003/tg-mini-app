@@ -9,6 +9,7 @@ import { mergeFormCollaboratorsWithExistingDb } from "@/lib/collaborators";
 import { isOwnerEditableStatus } from "@/lib/api/release-owner-route";
 import { invalidateMyReleasesCache } from "@/lib/server/release-list-cache";
 import { RELEASE_TYPE_VALUES } from "@/lib/db-enums";
+import { LICENSE_TYPE_VALUES } from "@/lib/release-rights";
 
 /**
  * Что владелец может править в своём черновике. Идентичность (`user_id`, `telegram_id`, `user_uuid`,
@@ -28,6 +29,11 @@ const patchSchema = z
     isrc: z.string().trim().max(15).nullable(),
     artist_links: z.record(z.string(), z.unknown()).nullable(),
     performance_language: z.string().trim().max(16).nullable(),
+    has_existing_profiles: z.boolean(),
+    author_full_name: z.string().trim().max(256).nullable(),
+    music_author: z.string().trim().max(256).nullable(),
+    license_type: z.enum(LICENSE_TYPE_VALUES).nullable(),
+    tiktok_start_sec: z.number().int().min(0).max(3600).nullable(),
     /** Владелец может только вернуть релиз в работу; на модерацию — через finalize-submit. */
     status: z.enum(["draft", "pending"]),
     /** Только сброс текста ошибки при повторной отправке. */

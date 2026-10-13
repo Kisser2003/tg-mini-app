@@ -82,6 +82,32 @@ describe("POST /api/releases/save-draft-patch", () => {
     expect(db.calls.some((c) => c.op === "update")).toBe(false);
   });
 
+  it("пропускает поля паспорта из мастера (автор, бит, лицензия, TikTok, ссылки)", async () => {
+    resolveReleaseActor.mockResolvedValue(OWNER);
+    const db = useDb((call) => ok(call.op === "update" ? [ownRow()] : ownRow()));
+    const { POST } = await import("@/app/api/releases/save-draft-patch/route");
+    const patch = {
+      artist_name: "Artist",
+      title: "Song",
+      release_type: "single",
+      genre: "Hip-Hop/Rap",
+      release_date: "2026-12-01",
+      explicit: false,
+      author_full_name: "Иван Иванов",
+      music_author: "Beatmaker",
+      license_type: "lease",
+      tiktok_start_sec: 45,
+      artist_links: { spotify: "https://open.spotify.com/artist/x" },
+      has_existing_profiles: true,
+      collaborators: [],
+      artwork_url: "https://example.com/c.png"
+    };
+    const res = await POST(post("/api/releases/save-draft-patch", { releaseId: RELEASE_ID, patch }));
+    expect(res.status).toBe(200);
+    const update = db.calls.find((c) => c.op === "update");
+    expect(update?.payload).toMatchObject({ license_type: "lease", tiktok_start_sec: 45 });
+  });
+
   it("409 если релиз уже на модерации", async () => {
     resolveReleaseActor.mockResolvedValue(OWNER);
     const db = useDb(() => ok(ownRow("processing")));

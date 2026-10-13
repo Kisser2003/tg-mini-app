@@ -83,6 +83,11 @@ export type UpdateReleasePatch = {
   error_message?: null;
   artist_links?: Record<string, unknown> | null;
   performance_language?: string | null;
+  has_existing_profiles?: boolean;
+  author_full_name?: string | null;
+  music_author?: string | null;
+  license_type?: string | null;
+  tiktok_start_sec?: number | null;
   collaborators?: unknown;
   lyrics?: string | null;
 };
