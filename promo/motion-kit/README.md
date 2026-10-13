@@ -24,5 +24,7 @@
 7. **Рендер:** `node promo/motion-kit/tools/render.mjs` (≈8 мин на 23 с; `DUR` в начале файла) → `raw.mp4`.
 8. **Финал:** постер в нулевой кадр (`overlay=enable='lt(t,1/30)'`), сжатие `crf 20, maxrate 12M`, `share-copy.txt`.
 
-Нужен Chrome (Playwright `channel: 'chrome'`) и ffmpeg.
+Нужен Chrome (Playwright `channel: 'chrome'`) и ffmpeg. Без Chrome: `CHROME_PATH=/path/to/chromium` для `capture`, `snap`, `render`;
+у `render` длина и число воркеров — `DUR=17 WORKERS=4`.
+Видео 2 («Всегда понятно, что дальше»): `capture.mjs next`, композиция и план — `examples/video-2`.
 Обложки в `assets/covers`: «Холод» — 4mess, REGOS — KISSER, JAPAN — KISSER, JEEP — SAKRON.

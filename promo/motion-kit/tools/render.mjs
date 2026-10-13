@@ -3,10 +3,12 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path'; import fs from 'node:fs'; import { execFileSync } from 'node:child_process';
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const out = path.dirname(root);
-const FPS = 30, DUR = 23, FRAMES = FPS * DUR, SUB = 4, SHUTTER = 0.5, CHUNK = 30, WORKERS = 6;
+// DUR — длина ролика в секундах (целое число секунд → целое число чанков по 30 кадров); WORKERS — по числу ядер
+const FPS = 30, DUR = +(process.env.DUR || 23), FRAMES = FPS * DUR, SUB = 4, SHUTTER = 0.5, CHUNK = 30, WORKERS = +(process.env.WORKERS || 6);
 const tmp = path.join(root, 'tmp'); fs.rmSync(tmp, { recursive: true, force: true }); fs.mkdirSync(tmp, { recursive: true });
 const chunks = Array.from({ length: FRAMES / CHUNK }, (_, i) => i);
-const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--allow-file-access-from-files'] });
+const launchOpts = process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : { channel: 'chrome' };
+const browser = await chromium.launch({ ...launchOpts, headless: true, args: ['--allow-file-access-from-files'] });
 let next = 0, done = 0;
 async function worker() {
   const page = await browser.newPage({ viewport: { width: 1080, height: 1920 }, deviceScaleFactor: 1 });

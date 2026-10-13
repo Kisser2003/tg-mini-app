@@ -18,7 +18,7 @@ for (const n of names) {
            .replace(/(-?[\d.]+)(d|s|l)?vh\b/g, (m, v) => (+v * 8.44).toFixed(2) + 'px')
            .replace(/(-?[\d.]+)(d|s|l)?vw\b/g, (m, v) => (+v * 3.9).toFixed(2) + 'px');
   // library header nick per screen (by request): «Все» — нейтральный ADMIN, фильтр — артист релиза
-  const NICK = { library: 'ADMIN', 'library-sheet': 'ADMIN', 'library-filter': '4mess', 'library-filter-rej': 'KISSER' };
+  const NICK = { library: 'ADMIN', 'library-sheet': 'ADMIN', 'library-filter': '4mess', 'library-filter-rej': 'KISSER', 'v2-library': 'ADMIN' };
   let html = d.html.replace(/border-omf-yellow/g, '');
   if (NICK[n]) html = html.replace(/(tracking-\[-0\.045em\][^>]*>)[^<]+(<\/h1>)/, `$1${NICK[n]}$2`);
   fs.writeFileSync(path.join(root, 'screens', n + '.json'), JSON.stringify({ css: css + '\n.shroot{background:var(--omf-bg)}', html, cls: d.htmlClass + ' ' + d.bodyClass }));
