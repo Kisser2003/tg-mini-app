@@ -8,7 +8,7 @@ import { ReleaseCard } from "@/components/ReleaseCard";
 import { ReleaseSleeve } from "@/components/ReleaseSleeve";
 import { LibraryReleaseSkeletonGrid } from "@/components/ui/LibrarySkeleton";
 import { reopenRejectedRelease, resumeDraftFromRelease } from "@/features/release/createRelease/actions";
-import { useCreateReleaseDraftStore } from "@/features/release/createRelease/store";
+import { prepareNewReleaseDraft, useCreateReleaseDraftStore } from "@/features/release/createRelease/store";
 import { normalizeReleaseStatus } from "@/lib/release-status";
 import { getReleaseDisplayTitle } from "@/repositories/releases.repo";
 import { useReleases, type ReleaseListRow } from "@/lib/hooks/useReleases";
@@ -238,6 +238,7 @@ function LibraryPageInner() {
 
   const handleCreate = useCallback(() => {
     hapticMap.impactLight();
+    prepareNewReleaseDraft();
     router.push("/create/metadata");
   }, [router]);
 

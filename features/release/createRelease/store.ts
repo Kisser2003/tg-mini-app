@@ -774,3 +774,14 @@ export const useCreateReleaseDraftStore = create<CreateReleaseDraftStore>()(
     }
   )
 );
+
+/**
+ * Перед «Новый релиз» / «Создать релиз»: это всегда новый релиз. Черновик, привязанный к релизу на
+ * сервере (в т.ч. удалённому модератором или возвращённому на правки), сбрасываем — свой черновик
+ * артист откроет с плитки или через «Продолжить». Несохранённый паспорт без releaseId оставляем:
+ * это ввод, который он только начал.
+ */
+export function prepareNewReleaseDraft(): void {
+  const draft = useCreateReleaseDraftStore.getState();
+  if (draft.releaseId || draft.moderatorNotes) draft.resetDraft();
+}
