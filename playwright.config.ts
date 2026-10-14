@@ -9,6 +9,8 @@ export default defineConfig({
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
+  timeout: process.env.CI ? 90_000 : 30_000,
+  expect: { timeout: process.env.CI ? 15_000 : 5_000 },
   reporter: process.env.CI ? "github" : "list",
 
   use: {
@@ -23,19 +25,16 @@ export default defineConfig({
     }
   ],
 
-  webServer: process.env.CI
-    ? {
-        command: "npm run start",
-        port: 3000,
-        reuseExistingServer: false,
-        timeout: 120_000,
-        env: { NEXT_PUBLIC_ALLOW_DEV_API_AUTH: "true" }
-      }
-    : {
-        command: "npm run dev",
-        port: 3000,
-        reuseExistingServer: true,
-        timeout: 60_000,
-        env: { NEXT_PUBLIC_ALLOW_DEV_API_AUTH: "true" }
-      }
+  /**
+   * Всегда `next dev`: тестовый вход (`?devUserId=`) намеренно работает только в development —
+   * в продакшен-сборке клиент и API его игнорируют, и тесты мастера упираются в «Нужна авторизация».
+   * В CI маршруты компилируются при первом заходе, поэтому таймауты длиннее.
+   */
+  webServer: {
+    command: "npm run dev",
+    port: 3000,
+    reuseExistingServer: !process.env.CI,
+    timeout: process.env.CI ? 180_000 : 60_000,
+    env: { NEXT_PUBLIC_ALLOW_DEV_API_AUTH: "true" }
+  }
 });
