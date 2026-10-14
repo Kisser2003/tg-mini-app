@@ -5,6 +5,7 @@ import { ChevronRight, Plus, RefreshCw, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PullRefreshBrand } from "@/components/PullRefreshBrand";
 import { ReleaseCard } from "@/components/ReleaseCard";
+import { ReferralInviteRow } from "@/components/ReferralCard";
 import { ReleaseSleeve } from "@/components/ReleaseSleeve";
 import { LibraryReleaseSkeletonGrid } from "@/components/ui/LibrarySkeleton";
 import { reopenRejectedRelease, resumeDraftFromRelease } from "@/features/release/createRelease/actions";
@@ -545,6 +546,10 @@ function LibraryPageInner() {
                   </button>
                 ))}
               </section>
+            ) : null}
+
+            {isTelegram && releases.length > 0 && selectedView === "all" && statusFilter === "all" ? (
+              <ReferralInviteRow />
             ) : null}
 
             {hasReleasesInView && error == null && selectedView === "all" && (
