@@ -14,12 +14,24 @@
  * upload steps that require real Supabase credentials.
  */
 import { test, expect, type Page } from "@playwright/test";
+import { blockBackendWrites } from "./helpers/block-writes";
 
 const DEV_USER_ID = "1";
 const BASE_PARAMS = `?devUserId=${DEV_USER_ID}`;
 
+test.beforeEach(async ({ page }) => {
+  await blockBackendWrites(page);
+});
+
 async function navigateTo(page: Page, path: string) {
   await page.goto(`${path}${BASE_PARAMS}`);
+}
+
+/** Дата не раньше чем через 5 дней (правило паспорта) — берём с запасом. */
+function futureReleaseDate(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 30);
+  return d.toISOString().slice(0, 10);
 }
 
 async function fillMetadataMinimum(page: Page) {
@@ -27,7 +39,14 @@ async function fillMetadataMinimum(page: Page) {
   await page.getByPlaceholder(/основное название релиза/i).fill("Regression Release");
   await page.locator("select[name='language']").selectOption({ index: 1 });
   await page.locator("select[name='genre']").selectOption("Techno");
+  await page.locator("input[name='releaseDate']").fill(futureReleaseDate());
+  await page.getByPlaceholder("Иванов Иван Иванович").fill("Регрессов Тест Тестович");
+  await page.getByPlaceholder(/ник или фио битмейкера/i).fill("Regression Beatmaker");
+  await page.locator("select[name='licenseType']").selectOption("own");
+  await page.getByPlaceholder("0:45").fill("0:45");
 }
+
+const NEXT_STEP_BUTTON = /дальше: обложка/i;
 
 async function expectStepGate(
   page: Page,
@@ -52,7 +71,7 @@ test.describe("@smoke @regression Create release wizard — metadata step", () =
     await page.waitForLoadState("networkidle");
 
     // Attempt to advance without filling required fields
-    const nextButton = page.getByRole("button", { name: /далее|next|продолжить/i });
+    const nextButton = page.getByRole("button", { name: NEXT_STEP_BUTTON });
     if (await nextButton.isVisible()) {
       // Кнопка может быть disabled до валидного минимума полей — force для проверки отображения ошибок.
       await nextButton.click({ force: true });
@@ -67,8 +86,18 @@ test.describe("@smoke @regression Create release wizard — metadata step", () =
     await page.waitForLoadState("networkidle");
     await fillMetadataMinimum(page);
 
-    const nextButton = page.getByRole("button", { name: /далее|next|продолжить/i });
+    // Черновик создаётся на сервере — подменяем, чтобы прогон не писал в базу.
+    await page.route("**/api/releases/create-draft", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: true, record: { id: "e2e-draft-1", status: "draft", client_request_id: "e2e" } })
+      })
+    );
+
+    const nextButton = page.getByRole("button", { name: NEXT_STEP_BUTTON });
     await expect(nextButton).toBeEnabled();
+    await expect(page.locator("[role='alert']:not(:empty)")).toHaveCount(0);
     await nextButton.click();
     await expect(page).not.toHaveTitle(/500|Error/i);
   });
@@ -147,26 +176,26 @@ test.describe("@regression Create release wizard — metadata form behavior", ()
     await navigateTo(page, "/create/metadata");
     await fillMetadataMinimum(page);
 
-    const single = page.getByRole("button", { name: /^single$/i });
-    const album = page.getByRole("button", { name: /^album$/i });
+    const single = page.getByRole("button", { name: /^сингл$/i });
+    const album = page.getByRole("button", { name: /^альбом$/i });
     await single.click();
     await page.getByPlaceholder(/основное название релиза/i).fill("Single Mode Title");
 
-    await expect(single).toHaveClass(/text-white/);
-    await expect(album).toHaveClass(/text-white\/25/);
+    await expect(single).toHaveAttribute("aria-pressed", "true");
+    await expect(album).toHaveAttribute("aria-pressed", "false");
   });
 
   test("album mode remains selected after form interactions", async ({ page }) => {
     await navigateTo(page, "/create/metadata");
     await fillMetadataMinimum(page);
 
-    const single = page.getByRole("button", { name: /^single$/i });
-    const album = page.getByRole("button", { name: /^album$/i });
+    const single = page.getByRole("button", { name: /^сингл$/i });
+    const album = page.getByRole("button", { name: /^альбом$/i });
     await album.click();
     await page.getByPlaceholder(/основное название релиза/i).fill("Album Mode Title");
 
-    await expect(album).toHaveClass(/text-white/);
-    await expect(single).toHaveClass(/text-white\/25/);
+    await expect(album).toHaveAttribute("aria-pressed", "true");
+    await expect(single).toHaveAttribute("aria-pressed", "false");
   });
 });
 
@@ -186,9 +215,8 @@ test.describe("@smoke @regression Library page", () => {
       await expect(page.getByRole("button", { name: /войти/i })).toBeVisible({ timeout: 10_000 });
       return;
     }
-    const primaryCreateCta = page.locator(
-      'button[aria-label="Новый релиз"], a[href*="/create/metadata"]'
-    ).first();
+    // Пустая библиотека — «Создать релиз», с релизами — плитка «Новый релиз».
+    const primaryCreateCta = page.getByRole("button", { name: /создать релиз|новый релиз/i }).first();
     await expect(primaryCreateCta).toBeVisible({ timeout: 10_000 });
   });
 
@@ -200,10 +228,7 @@ test.describe("@smoke @regression Library page", () => {
       await page.waitForURL(/\/create\/metadata/, { timeout: 10_000 });
       return;
     }
-    await page
-      .locator('button[aria-label="Новый релиз"], a[href*="/create/metadata"]')
-      .first()
-      .click();
+    await page.getByRole("button", { name: /создать релиз|новый релиз/i }).first().click();
     await page.waitForURL(/\/create\/metadata/, { timeout: 10_000 });
   });
 
