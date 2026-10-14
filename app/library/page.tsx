@@ -6,6 +6,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { PullRefreshBrand } from "@/components/PullRefreshBrand";
 import { ReleaseCard } from "@/components/ReleaseCard";
 import { ReferralInviteRow } from "@/components/ReferralCard";
+import { REFEREE_DISCOUNT_RUB, formatRub } from "@/lib/referral";
+import { ReferralWelcome, useReferralDiscountPending } from "@/components/ReferralWelcome";
 import { ReleaseSleeve } from "@/components/ReleaseSleeve";
 import { LibraryReleaseSkeletonGrid } from "@/components/ui/LibrarySkeleton";
 import { reopenRejectedRelease, resumeDraftFromRelease } from "@/features/release/createRelease/actions";
@@ -87,6 +89,7 @@ function LibraryPageInner() {
   );
 
   const isWeb = !isTelegram;
+  const referralDiscountPending = useReferralDiscountPending();
 
   const [resumingId, setResumingId] = useState<string | null>(null);
   /** Версия локального хранилища «просмотрено» — пересчитываем метки «Новое» после открытия релиза. */
@@ -447,6 +450,7 @@ function LibraryPageInner() {
   return (
     <div className="min-h-app text-omf-ink">
       <PullRefreshBrand />
+      {isTelegram ? <ReferralWelcome onCreate={handleCreate} /> : null}
 
       <div className={cn("mx-auto w-full px-1 pb-40 pt-6", isWeb ? "max-w-[1100px]" : "max-w-lg")}>
         <header className="mb-8 flex items-start justify-between gap-4">
@@ -512,6 +516,11 @@ function LibraryPageInner() {
               Яндекс Музыка, VK Музыка, Spotify, Apple Music и другие площадки. После нашей проверки площадки
               принимают релиз за {DSP_REVIEW_DAYS_TEXT}.
             </p>
+            {referralDiscountPending ? (
+              <p className="mt-4 rounded-full bg-omf-yellow px-4 py-2 text-[14px] font-bold text-omf-yellow-ink">
+                🎁 По приглашению друга: −{formatRub(REFEREE_DISCOUNT_RUB)} на первый релиз
+              </p>
+            ) : null}
             <button type="button" onClick={handleCreate} className="omf-btn-primary mt-6 w-full">
               Создать релиз
             </button>

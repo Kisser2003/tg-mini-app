@@ -2,7 +2,6 @@
 
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { toast } from "sonner";
 import { mutate } from "swr";
 import { getAdminTelegramIdForUi, telegramIdsEqual } from "@/lib/admin";
 import {
@@ -14,7 +13,7 @@ import {
   releaseTelegramClosingConfirmation
 } from "@/lib/telegram";
 import { releaseApiRequest } from "@/lib/api/release-client";
-import { REFEREE_DISCOUNT_RUB, formatRub, parseReferralStartParam } from "@/lib/referral";
+import { parseReferralStartParam } from "@/lib/referral";
 import { REFERRAL_SWR_KEY } from "@/lib/hooks/useReferral";
 
 const REFERRAL_ATTEMPT_KEY = "omf:referral-attempted";
@@ -30,9 +29,8 @@ function attributeReferralOnce(): void {
   }
   void releaseApiRequest<{ ok: boolean; result: string }>("/api/referral/attribute", { method: "POST", body: {} })
     .then((res) => {
-      if (res.result !== "attributed") return;
-      toast.success(`Тебя пригласил друг — скидка ${formatRub(REFEREE_DISCOUNT_RUB)} на первый релиз`);
-      void mutate(REFERRAL_SWR_KEY);
+      // Экран-приветствие (ReferralWelcome) покажется сам, когда обновлённая сводка скажет, что скидка ждёт.
+      if (res.result === "attributed") void mutate(REFERRAL_SWR_KEY);
     })
     .catch(() => {});
 }
