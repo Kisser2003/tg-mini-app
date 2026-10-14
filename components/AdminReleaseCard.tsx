@@ -3,7 +3,7 @@
 import { memo, useMemo } from "react";
 import Link from "next/link";
 import type { Variants } from "framer-motion";
-import { ChevronRight } from "lucide-react";
+import { Check, ChevronRight } from "lucide-react";
 import { ReleaseSleeve } from "@/components/ReleaseSleeve";
 import { AudioPlayerLazy } from "@/components/AudioPlayerLazy";
 import {
@@ -17,6 +17,7 @@ import { featuringNamesFromCollaboratorsJson } from "@/lib/collaborators";
 import { describeHistoryDecision, describePreviousRejection } from "@/lib/rejection-reasons";
 import { pluralRu } from "@/lib/release-next-step";
 import { describePayment, type PaymentTone } from "@/lib/release-payment";
+import { cn } from "@/lib/utils";
 
 const STATUS_LABEL: Record<CanonicalReleaseStatus, string> = {
   draft: "черновик",
@@ -88,6 +89,10 @@ type AdminReleaseCardProps = {
   showModerationActions?: boolean;
   /** Показать встроенный блок прослушивания на карточке списка. */
   showAudioPreview?: boolean;
+  /** Режим выбора в очереди: тап по карточке отмечает её, кнопки решения и переход скрыты. */
+  selectMode?: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
 };
 
 
@@ -102,7 +107,10 @@ function AdminReleaseCardInner({
   detailHref,
   artworkPriority = false,
   showModerationActions = true,
-  showAudioPreview = true
+  showAudioPreview = true,
+  selectMode = false,
+  selected = false,
+  onToggleSelect
 }: AdminReleaseCardProps) {
   const canonical = normalizeReleaseStatus(release.status);
   const displayTitle = getReleaseDisplayTitle(release);
@@ -135,7 +143,7 @@ function AdminReleaseCardInner({
 
   const header = (
     <>
-      <div className="w-[72px] shrink-0">
+      <div className="relative w-[72px] shrink-0">
         <ReleaseSleeve
           seed={release.id}
           title={displayTitle}
@@ -144,14 +152,25 @@ function AdminReleaseCardInner({
           size="thumb"
           priority={artworkPriority}
         />
+        {selectMode ? (
+          <span
+            className={cn(
+              "absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full border-2 transition-colors",
+              selected ? "border-omf-bg bg-omf-ultra text-white" : "border-white/80 bg-black/40"
+            )}
+            aria-hidden
+          >
+            {selected ? <Check className="h-3.5 w-3.5" strokeWidth={3} /> : null}
+          </span>
+        ) : null}
       </div>
       <div className="min-w-0 flex-1">
-        <p className={`truncate text-[17px] font-bold leading-tight tracking-[-0.02em] ${showModerationActions ? "pr-9" : ""}`}>
+        <p className="truncate text-[17px] font-bold leading-tight tracking-[-0.02em]">
           {displayTitle}
         </p>
-        <div className={`mt-0.5 flex items-baseline justify-between gap-2 ${showModerationActions ? "pr-9" : ""}`}>
+        <div className="mt-0.5 flex items-baseline justify-between gap-2">
           <p className="min-w-0 truncate text-[14px] text-omf-graphite">{release.artist_name}</p>
-          {detailHref ? (
+          {detailHref && !selectMode ? (
             <span className="inline-flex shrink-0 items-center gap-0.5 text-[13px] text-omf-ultra-text">
               Открыть
               <ChevronRight className="h-3.5 w-3.5" aria-hidden />
@@ -193,7 +212,23 @@ function AdminReleaseCardInner({
 
   return (
     <article className="border-b border-omf-line py-5">
-      {detailHref ? (
+      {selectMode ? (
+        <button
+          type="button"
+          role="checkbox"
+          aria-checked={selected}
+          onClick={() => {
+            triggerHaptic("light");
+            onToggleSelect?.();
+          }}
+          className={cn(
+            "omf-focus -mx-2 -my-2 flex w-[calc(100%+1rem)] gap-3.5 rounded-[14px] p-2 text-left transition-colors",
+            selected ? "bg-omf-surface" : "hover:bg-omf-surface"
+          )}
+        >
+          {header}
+        </button>
+      ) : detailHref ? (
         <Link
           href={detailHref}
           className="omf-focus -mx-1 flex gap-3.5 rounded-[12px] px-1 transition-colors hover:bg-omf-surface"
@@ -216,7 +251,7 @@ function AdminReleaseCardInner({
         </div>
       ) : null}
 
-      {showModerationActions ? (
+      {showModerationActions && !selectMode ? (
         <div className="mt-4 grid grid-cols-2 gap-2.5">
           <button
             type="button"
