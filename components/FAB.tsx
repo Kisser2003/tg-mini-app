@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
+import { prepareNewReleaseDraft } from "@/features/release/createRelease/store";
 import { useHaptics } from "@/lib/hooks/useHaptics";
 import { useHideOnScrollDown } from "@/lib/hooks/useHideOnScrollDown";
 import { useIsTelegramMiniApp } from "@/lib/hooks/useIsTelegramMiniApp";
@@ -69,6 +70,7 @@ export function FAB() {
           transition={{ type: "spring", stiffness: 400, damping: 30 }}
           onClick={() => {
             haptics.impactLight();
+            prepareNewReleaseDraft();
             router.push("/create/metadata");
           }}
           className="fixed z-[55] flex h-[56px] w-[56px] items-center justify-center rounded-full bg-omf-ultra text-white"
