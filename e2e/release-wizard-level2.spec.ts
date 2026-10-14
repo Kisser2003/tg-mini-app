@@ -1,7 +1,13 @@
 import { test, expect, type Page } from "@playwright/test";
+import { blockBackendWrites } from "./helpers/block-writes";
 
 const DEV_USER_ID = "1";
 const BASE_PARAMS = `?devUserId=${DEV_USER_ID}`;
+
+test.beforeEach(async ({ page }) => {
+  await blockBackendWrites(page);
+});
+
 const STORE_KEY = "omf_create_release_draft_v2";
 
 async function navigateTo(page: Page, path: string) {
@@ -37,12 +43,16 @@ function metadataFixture() {
   return {
     primaryArtist: "Regression Artist",
     releaseTitle: "Regression Release",
-    language: "ru",
+    language: "RU",
     explicit: false,
     genre: "Techno",
     releaseType: "single",
     releaseDate: "2099-12-31",
-    label: "OMF Records"
+    label: "OMF",
+    authorFullName: "Регрессов Тест Тестович",
+    musicAuthor: "Regression Beatmaker",
+    licenseType: "own",
+    tiktokStart: "0:45"
   };
 }
 
@@ -68,7 +78,7 @@ test.describe("@regression Create release wizard — level2 files regression", (
     });
 
     await expect(
-      page.getByText(/допустимы только jpg или png/i)
+      page.getByText(/обложка должна быть в формате jpg или png/i)
     ).toBeVisible({ timeout: 10_000 });
   });
 
@@ -93,7 +103,7 @@ test.describe("@regression Create release wizard — level2 files regression", (
     });
 
     await expect(
-      page.getByText(/минимальное разрешение обложки 3000x3000/i)
+      page.getByText(/обложка меньше 3000×3000 пикселей/i)
     ).toBeVisible({ timeout: 10_000 });
   });
 
@@ -101,7 +111,7 @@ test.describe("@regression Create release wizard — level2 files regression", (
     await seedDraftState(page, {
       metadata: metadataFixture(),
       releaseId: "test-release-id",
-      artworkUrl: "https://example.com/cover.png",
+      artworkUrl: "https://e2e.supabase.co/storage/v1/object/public/artwork/1/e2e/cover.png",
       tracks: [{ title: "Track 1", explicit: false, lyrics: "", featuringArtistNames: [] }],
       trackAudioUrlsFromDb: [null],
       releaseArtistLinks: {},
@@ -117,14 +127,14 @@ test.describe("@regression Create release wizard — level2 files regression", (
       buffer: Buffer.from("bad audio", "utf8")
     });
 
-    await expect(page.getByText(/допустим только формат \.wav/i)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/нужен файл в формате wav/i)).toBeVisible({ timeout: 10_000 });
   });
 
   test("tracks shows RIFF validation error for malformed wav", async ({ page }) => {
     await seedDraftState(page, {
       metadata: metadataFixture(),
       releaseId: "test-release-id",
-      artworkUrl: "https://example.com/cover.png",
+      artworkUrl: "https://e2e.supabase.co/storage/v1/object/public/artwork/1/e2e/cover.png",
       tracks: [{ title: "Track 1", explicit: false, lyrics: "", featuringArtistNames: [] }],
       trackAudioUrlsFromDb: [null],
       releaseArtistLinks: {},
@@ -149,7 +159,7 @@ test.describe("@regression Create release wizard — level2 files regression", (
     await seedDraftState(page, {
       metadata: metadataFixture(),
       releaseId: "test-release-id",
-      artworkUrl: "https://example.com/cover.png",
+      artworkUrl: "https://e2e.supabase.co/storage/v1/object/public/artwork/1/e2e/cover.png",
       tracks: [{ title: "Track 1", explicit: false, lyrics: "", featuringArtistNames: [] }],
       trackAudioUrlsFromDb: [null],
       releaseArtistLinks: {},
@@ -158,10 +168,10 @@ test.describe("@regression Create release wizard — level2 files regression", (
     });
 
     await navigateTo(page, "/create/review");
-    await expect(page.getByText(/для отправки нужны wav-файлы в этой сессии/i)).toBeVisible({
+    await expect(page.getByText(/выбери wav-файлы заново/i)).toBeVisible({
       timeout: 10_000
     });
-    await expect(page.getByRole("link", { name: /вернуться и загрузить треки/i })).toBeVisible();
+    await expect(page.getByRole("link", { name: /вернуться к трекам/i })).toBeVisible();
   });
 });
 

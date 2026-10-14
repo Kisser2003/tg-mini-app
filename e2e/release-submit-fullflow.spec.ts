@@ -1,7 +1,13 @@
 import { test, expect, type Page, type Route } from "@playwright/test";
+import { blockBackendWrites } from "./helpers/block-writes";
 
 const DEV_USER_ID = "1";
 const BASE_PARAMS = `?devUserId=${DEV_USER_ID}`;
+
+test.beforeEach(async ({ page }) => {
+  await blockBackendWrites(page);
+});
+
 const STORE_KEY = "omf_create_release_draft_v2";
 
 type ReleaseMock = {
@@ -31,14 +37,18 @@ async function seedReviewReadyState(page: Page) {
         metadata: {
           primaryArtist: "Regression Artist",
           releaseTitle: "Regression Release",
-          language: "ru",
+          language: "RU",
           explicit: false,
           genre: "Techno",
           releaseType: "single",
           releaseDate: "2099-12-31",
-          label: "OMF Records"
+          label: "OMF",
+          authorFullName: "Регрессов Тест Тестович",
+          musicAuthor: "Regression Beatmaker",
+          licenseType: "own",
+          tiktokStart: "0:45"
         },
-        artworkUrl: "https://example.com/cover.png",
+        artworkUrl: "https://e2e.supabase.co/storage/v1/object/public/artwork/1/e2e/cover.png",
         tracks: [{ title: "Regression Track", explicit: false, lyrics: "", featuringArtistNames: [] }],
         trackAudioUrlsFromDb: ["https://example.com/audio.wav"],
         releaseArtistLinks: {},
@@ -106,7 +116,7 @@ test.describe("@full-submit Create release submit full-flow with mocked backend"
       status: "draft",
       artist_name: "Regression Artist",
       track_name: "Regression Release",
-      artwork_url: "https://example.com/cover.png",
+      artwork_url: "https://e2e.supabase.co/storage/v1/object/public/artwork/1/e2e/cover.png",
       collaborators: null,
       error_message: null
     };
@@ -141,11 +151,11 @@ test.describe("@full-submit Create release submit full-flow with mocked backend"
 
     await navigateTo(page, "/create/review");
     await page.getByRole("checkbox", { name: /выпуск платный/i }).check();
-    await page.getByRole("button", { name: /отправить релиз/i }).click();
+    await page.getByRole("button", { name: /отправить на проверку/i }).click();
 
     await page.waitForURL(/\/create\/success/, { timeout: 15_000 });
-    await expect(page.getByText(/отправлено на модерацию/i)).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByRole("button", { name: /на главную/i })).toBeVisible();
+    await expect(page.getByText(/отправлено на проверку/i)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("button", { name: /к моим релизам/i })).toBeVisible();
   });
 
   test("shows precheck error and stays on review", async ({ page }) => {
@@ -154,7 +164,7 @@ test.describe("@full-submit Create release submit full-flow with mocked backend"
       status: "draft",
       artist_name: "Regression Artist",
       track_name: "Regression Release",
-      artwork_url: "https://example.com/cover.png",
+      artwork_url: "https://e2e.supabase.co/storage/v1/object/public/artwork/1/e2e/cover.png",
       collaborators: null,
       error_message: null
     };
@@ -187,7 +197,7 @@ test.describe("@full-submit Create release submit full-flow with mocked backend"
 
     await navigateTo(page, "/create/review");
     await page.getByRole("checkbox", { name: /выпуск платный/i }).check();
-    await page.getByRole("button", { name: /отправить релиз/i }).click();
+    await page.getByRole("button", { name: /отправить на проверку/i }).click();
 
     await expect(page).toHaveURL(/\/create\/review/, { timeout: 10_000 });
     await expect(page.getByText(/пре-чек не пройден/i).first()).toBeVisible({ timeout: 10_000 });
