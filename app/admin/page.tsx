@@ -544,7 +544,7 @@ export default function AdminPage() {
           onAddLink={(id) => setApproveModal({ id, mode: "link" })}
         />
       ) : null}
-      {stats ? <AdminStuckList stuck={stats.stuck} /> : null}
+      {stats ? <AdminStuckList stuck={stats.stuck} onDeleted={() => void mutateStats()} /> : null}
       {stats && !statsErrorMessage ? <AdminStatsPanel stats={stats} /> : null}
       {statsErrorMessage ? (
         <p className="mt-6 text-[14px] text-omf-yellow">Не удалось загрузить счётчики: {statsErrorMessage}</p>

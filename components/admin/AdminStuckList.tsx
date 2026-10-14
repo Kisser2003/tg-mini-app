@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Bell, BellRing, Send } from "lucide-react";
+import { Bell, BellRing, Send, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { remindArtist } from "@/features/admin/actions";
+import { deleteRelease, remindArtist } from "@/features/admin/actions";
+import { AdminDeleteReleaseSheet } from "@/components/admin/AdminDeleteReleaseSheet";
 import { ReleaseSleeve } from "@/components/ReleaseSleeve";
 import { hapticMap } from "@/lib/haptic-map";
 import { openTelegramChat } from "@/lib/open-smart-link";
@@ -13,13 +14,38 @@ import type { AdminStuckRelease } from "@/types/admin";
 
 const COLLAPSED_COUNT = 3;
 
-/** «Застряли до отправки»: начали релиз, но не нажали «Отправить». Показываем первые три. */
-export function AdminStuckList({ stuck }: { stuck: AdminStuckRelease[] }) {
+/**
+ * «Застряли до отправки»: начали релиз, но не нажали «Отправить». Показываем первые три.
+ * Тут же оседают тесты — их можно удалить корзиной.
+ */
+export function AdminStuckList({ stuck, onDeleted }: { stuck: AdminStuckRelease[]; onDeleted?: () => void }) {
   const [expanded, setExpanded] = useState(false);
   /** Кому уже напомнили в этой сессии (сервер дополнительно ограничивает раз в сутки). */
   const [reminded, setReminded] = useState<Record<string, true>>({});
   const [remindingId, setRemindingId] = useState<string | null>(null);
-  if (stuck.length === 0) return null;
+  const [deleteTarget, setDeleteTarget] = useState<AdminStuckRelease | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  /** Удалённые в этой сессии — прячем сразу, не дожидаясь обновления счётчиков. */
+  const [deleted, setDeleted] = useState<Record<string, true>>({});
+  const rows = stuck.filter((s) => !deleted[s.id]);
+  if (rows.length === 0) return null;
+
+  const onDelete = async () => {
+    if (!deleteTarget) return;
+    const id = deleteTarget.id;
+    setDeleting(true);
+    try {
+      await deleteRelease(id);
+      setDeleted((prev) => ({ ...prev, [id]: true }));
+      setDeleteTarget(null);
+      toast.success("Релиз удалён");
+      onDeleted?.();
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Не удалось удалить релиз.");
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const onRemind = async (id: string) => {
     hapticMap.impactLight();
@@ -37,17 +63,23 @@ export function AdminStuckList({ stuck }: { stuck: AdminStuckRelease[] }) {
       setRemindingId(null);
     }
   };
-  const visible = expanded ? stuck : stuck.slice(0, COLLAPSED_COUNT);
+  const visible = expanded ? rows : rows.slice(0, COLLAPSED_COUNT);
 
   return (
     <section className="mt-10" aria-labelledby="admin-stuck">
       <h2 id="admin-stuck" className="text-[15px] font-bold tracking-tight">
-        Застряли до отправки: {stuck.length}
+        Застряли до отправки: {rows.length}
       </h2>
       <p className="mt-0.5 text-[13px] text-omf-faint">
         Начали релиз, но не нажали «Отправить». В очередь не попадут, пока артист не закончит.
-        Колокольчик — напомнить в боте.
+        Колокольчик — напомнить в боте, корзина — удалить тест.
       </p>
+      <AdminDeleteReleaseSheet
+        target={deleteTarget ? { title: deleteTarget.title, artist: deleteTarget.artist_name, accepted: false } : null}
+        busy={deleting}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => void onDelete()}
+      />
       <ul className="mt-1">
         {visible.map((s) => (
           <li key={s.id} className="flex items-center gap-3 border-b border-omf-line py-3">
@@ -99,16 +131,28 @@ export function AdminStuckList({ stuck }: { stuck: AdminStuckRelease[] }) {
                 <Send className="h-[18px] w-[18px]" aria-hidden />
               </button>
             ) : null}
+            <button
+              type="button"
+              onClick={() => {
+                hapticMap.impactLight();
+                setDeleteTarget(s);
+              }}
+              aria-label={`Удалить: ${s.title}`}
+              title="Удалить"
+              className="omf-focus flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-omf-faint transition-colors hover:bg-omf-surface hover:text-omf-red"
+            >
+              <Trash2 className="h-[18px] w-[18px]" aria-hidden />
+            </button>
           </li>
         ))}
       </ul>
-      {stuck.length > COLLAPSED_COUNT ? (
+      {rows.length > COLLAPSED_COUNT ? (
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
           className="omf-focus mt-2 rounded-full py-1.5 text-[14px] text-omf-ultra-text hover:text-omf-ink"
         >
-          {expanded ? "Свернуть" : `Показать все (${stuck.length})`}
+          {expanded ? "Свернуть" : `Показать все (${rows.length})`}
         </button>
       ) : null}
     </section>

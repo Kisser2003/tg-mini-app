@@ -228,3 +228,24 @@ export async function remindArtistToPay(releaseId: string): Promise<void> {
     throw new Error(json?.error || "Не удалось написать клиенту.");
   }
 }
+
+/** Удалить релиз насовсем (тестовые, дубли): строка, треки и файлы. Артисту ничего не уходит. */
+export async function deleteRelease(releaseId: string): Promise<void> {
+  await assertAdminAsync();
+  const authHeaders = await getAdminApiAuthHeaders();
+  const res = await fetch(`/api/admin/releases/${encodeURIComponent(releaseId)}`, {
+    method: "DELETE",
+    credentials: "same-origin",
+    headers: { Accept: "application/json", ...authHeaders },
+    cache: "no-store"
+  });
+  let json: { ok?: boolean; error?: string } | null = null;
+  try {
+    json = (await res.json()) as { ok?: boolean; error?: string };
+  } catch {
+    json = null;
+  }
+  if (!res.ok || json?.ok !== true) {
+    throw new Error(json?.error || "Не удалось удалить релиз.");
+  }
+}
