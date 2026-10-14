@@ -5,6 +5,7 @@ import { ChevronRight, Plus, RefreshCw, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PullRefreshBrand } from "@/components/PullRefreshBrand";
 import { ReleaseCard } from "@/components/ReleaseCard";
+import { ReleaseSleeve } from "@/components/ReleaseSleeve";
 import { LibraryReleaseSkeletonGrid } from "@/components/ui/LibrarySkeleton";
 import { reopenRejectedRelease, resumeDraftFromRelease } from "@/features/release/createRelease/actions";
 import { useCreateReleaseDraftStore } from "@/features/release/createRelease/store";
@@ -21,6 +22,7 @@ import { cn } from "@/lib/utils";
 import { RejectionNotice } from "@/components/RejectionNotice";
 import {
   collectLibraryActions,
+  DSP_REVIEW_DAYS_TEXT,
   getReleaseNextStep,
   NEXT_STEP_TONE_CLASS,
   type LibraryAction
@@ -492,17 +494,25 @@ function LibraryPageInner() {
             </button>
           </div>
         ) : showEmptyState && isEmpty ? (
-          <div className="grid grid-cols-2 gap-x-4 gap-y-6">
-            {newReleaseTile}
-            <div className="col-span-2 -mt-1">
-              <p className="text-[18px] font-bold tracking-tight">Выпусти первый релиз</p>
-              <p className="mt-1.5 max-w-[34ch] text-[14px] leading-relaxed text-omf-graphite">
-                Заполни паспорт, добавь обложку и WAV. Модератор проверит релиз и отправит его на площадки.
-              </p>
-              <button type="button" onClick={handleCreate} className="omf-btn-primary mt-5 w-full sm:w-auto">
-                Создать релиз
-              </button>
-            </div>
+          /* Первый вход: вместо пустой сетки — конверт будущего релиза с именем артиста. */
+          <div className="mx-auto flex max-w-sm flex-col items-center text-center">
+            <button
+              type="button"
+              onClick={handleCreate}
+              aria-label="Создать первый релиз"
+              className="omf-focus w-[68%] max-w-[260px] rounded-sleeve text-left transition-transform duration-150 active:scale-[0.98]"
+            >
+              {/* seed выбран под индиго-конверт: не сливается с синей кнопкой ниже. */}
+              <ReleaseSleeve seed="first-single" title="Твой первый сингл" artist={heroArtistName} size="hero" />
+            </button>
+            <p className="mt-7 text-[22px] font-extrabold leading-tight tracking-[-0.02em]">Здесь будет твой релиз</p>
+            <p className="mt-2 max-w-[32ch] text-[14px] leading-relaxed text-omf-graphite">
+              Яндекс Музыка, VK Музыка, Spotify, Apple Music и другие площадки. После нашей проверки площадки
+              принимают релиз за {DSP_REVIEW_DAYS_TEXT}.
+            </p>
+            <button type="button" onClick={handleCreate} className="omf-btn-primary mt-6 w-full">
+              Создать релиз
+            </button>
           </div>
         ) : (
           <>
