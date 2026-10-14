@@ -52,6 +52,7 @@ describe("REJECT_REASONS", () => {
 
   it("findRejectReason", () => {
     expect(findRejectReason("artwork")?.label).toBe("Обложка");
+    expect(findRejectReason("unpaid")?.label).toBe("Не оплачен");
     expect(findRejectReason("nope")).toBeNull();
   });
 });
