@@ -8,7 +8,13 @@ export function escapeHtml(text: string): string {
 }
 
 /** Кнопки под сообщением (callback приходит в /api/telegram/webhook). */
-export type InlineKeyboardButton = { text: string; callback_data?: string; url?: string };
+export type InlineKeyboardButton = {
+  text: string;
+  callback_data?: string;
+  url?: string;
+  /** Открыть мини-приложение на этой странице (только в личке с ботом). */
+  web_app?: { url: string };
+};
 export type InlineKeyboard = { inline_keyboard: InlineKeyboardButton[][] };
 
 export type SendTelegramBotMessageOptions = {
