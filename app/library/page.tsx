@@ -515,6 +515,11 @@ function LibraryPageInner() {
             <button type="button" onClick={handleCreate} className="omf-btn-primary mt-6 w-full">
               Создать релиз
             </button>
+            {isTelegram ? (
+              <div className="mt-8 w-full text-left">
+                <ReferralInviteRow />
+              </div>
+            ) : null}
           </div>
         ) : (
           <>
@@ -548,9 +553,7 @@ function LibraryPageInner() {
               </section>
             ) : null}
 
-            {isTelegram && releases.length > 0 && selectedView === "all" && statusFilter === "all" ? (
-              <ReferralInviteRow />
-            ) : null}
+            {isTelegram && selectedView === "all" && statusFilter === "all" ? <ReferralInviteRow /> : null}
 
             {hasReleasesInView && error == null && selectedView === "all" && (
               <div
