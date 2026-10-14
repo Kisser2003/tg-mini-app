@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, ChevronDown, Send } from "lucide-react";
+import { ArrowLeft, ChevronDown, Send, Trash2 } from "lucide-react";
 import { createPortal } from "react-dom";
 import useSWR from "swr";
 import { toast } from "sonner";
@@ -12,10 +12,11 @@ import { AdminColleagueFormCopy } from "@/components/admin/AdminColleagueFormCop
 import { AdminReleaseDownloads } from "@/components/admin/AdminReleaseDownloads";
 import { AdminReleaseMetadataCard } from "@/components/admin/AdminReleaseMetadataCard";
 import { AdminPaymentPanel } from "@/components/admin/AdminPaymentPanel";
+import { AdminDeleteReleaseSheet } from "@/components/admin/AdminDeleteReleaseSheet";
 import { ReleaseSleeve } from "@/components/ReleaseSleeve";
 import { AdminApproveSmartLinkModal, type ApproveModalMode } from "@/components/AdminApproveSmartLinkModal";
 import { AdminRejectModal } from "@/components/AdminRejectModal";
-import { approveRelease, publishReleaseWithSmartLink, rejectRelease } from "@/features/admin/actions";
+import { approveRelease, deleteRelease, publishReleaseWithSmartLink, rejectRelease } from "@/features/admin/actions";
 import { fetchAdminReleaseDetail } from "@/features/admin/release-detail";
 import { fetchAdminModerationQueue } from "@/features/admin/moderation-queue";
 import {
@@ -76,6 +77,7 @@ export default function AdminReleaseDetailPage() {
   const [rejectOpen, setRejectOpen] = useState(false);
   const [approveModal, setApproveModal] = useState<{ id: string; mode: ApproveModalMode } | null>(null);
   const [metaOpen, setMetaOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   /** Широкая раскладка только в веб-версии: в Telegram Desktop окно бывает широким, а контент — 450px и без сайдбара. */
   const wide = !useIsTelegramMiniApp();
   /** Панель решения — в портале: у обёртки страницы transform, `fixed` внутри неё уезжает под навигацию. */
@@ -101,6 +103,7 @@ export default function AdminReleaseDetailPage() {
     setRejectOpen(false);
     setApproveModal(null);
     setMetaOpen(false);
+    setDeleteOpen(false);
     try {
       const { release: row, tracks: tr } = await fetchAdminReleaseDetail(releaseId);
       setRelease(row);
@@ -211,6 +214,22 @@ export default function AdminReleaseDetailPage() {
     }
   }, [release, goNext]);
 
+  const handleDelete = useCallback(async () => {
+    if (!release) return;
+    setBusy(true);
+    try {
+      await deleteRelease(release.id);
+      setDeleteOpen(false);
+      void mutateQueue((rows) => rows?.filter((row) => row.release.id !== release.id), { revalidate: true });
+      toast.success("Релиз удалён");
+      router.replace("/admin");
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Не удалось удалить релиз.");
+    } finally {
+      setBusy(false);
+    }
+  }, [release, mutateQueue, router]);
+
   const releaseCanModerate = release != null && normalizeReleaseStatus(release.status) === "processing";
   useAdminHotkeys(
     {
@@ -219,7 +238,7 @@ export default function AdminReleaseDetailPage() {
       next: () => openRelease(pickNextReleaseId(queueIds, releaseId)),
       prev: () => openRelease(pickPrevReleaseId(queueIds, releaseId))
     },
-    isAdmin && inQueue && !loading && !busy && !rejectOpen && approveModal == null
+    isAdmin && inQueue && !loading && !busy && !rejectOpen && !deleteOpen && approveModal == null
   );
 
   if (userId == null && !isAdmin && process.env.NODE_ENV === "production") {
@@ -294,6 +313,17 @@ export default function AdminReleaseDetailPage() {
         onClose={() => setApproveModal(null)}
         onAccept={(id) => void handleAccept(id)}
         onSubmitLink={(id, link, upc) => void handleSubmitLink(id, link, upc, approveModal?.mode !== "link")}
+      />
+
+      <AdminDeleteReleaseSheet
+        target={
+          deleteOpen
+            ? { title, artist: release.artist_name, accepted: canonical === "ready" }
+            : null
+        }
+        busy={busy}
+        onClose={() => setDeleteOpen(false)}
+        onConfirm={() => void handleDelete()}
       />
 
       <div className="mb-4 flex items-center justify-between gap-3">
@@ -440,6 +470,23 @@ export default function AdminReleaseDetailPage() {
               legacyAudioUrl={release.audio_url}
               releaseLyrics={release.lyrics ?? null}
             />
+          </section>
+
+          {/* Тестовые и дубли: удалить насовсем. Внизу и неярко — чтобы не нажать вместо «Вернуть». */}
+          <section className="mt-8 border-t border-omf-line pt-4" aria-label="Удаление">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                hapticMap.impactLight();
+                setDeleteOpen(true);
+              }}
+              className="omf-focus -ml-1 inline-flex items-center gap-1.5 rounded-full px-1 py-1.5 text-[14px] text-omf-red hover:text-omf-ink disabled:opacity-50"
+            >
+              <Trash2 className="h-4 w-4" aria-hidden />
+              Удалить релиз
+            </button>
+            <p className="mt-0.5 text-[13px] text-omf-faint">Для тестовых и дублей. Насовсем, артисту ничего не придёт.</p>
           </section>
         </div>
       </div>
