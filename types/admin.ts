@@ -49,3 +49,20 @@ export type AdminAwaitingLinkRelease = {
   /** Когда приняли (лог), для старых релизов — дата создания. */
   accepted_at: string;
 };
+
+/** Принятый (отгруженный) релиз для каталога: GET /api/admin/catalog. */
+export type AdminCatalogRelease = {
+  id: string;
+  title: string;
+  artist_name: string;
+  featuring: string[];
+  release_type: "single" | "ep" | "album";
+  genre: string | null;
+  artwork_url: string | null;
+  smart_link: string | null;
+  upc: string | null;
+  /** Когда приняли (лог), для старых релизов — дата создания. */
+  accepted_at: string;
+  /** Без строк в `tracks` (старые синглы) — один трек с названием релиза. */
+  tracks: { title: string; explicit: boolean; duration: number | null }[];
+};

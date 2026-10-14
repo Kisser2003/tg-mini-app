@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { History, RefreshCcw } from "lucide-react";
+import { History, ListMusic, RefreshCcw } from "lucide-react";
 import useSWR from "swr";
 import { toast } from "sonner";
 import { AdminApproveSmartLinkModal, type ApproveModalMode } from "@/components/AdminApproveSmartLinkModal";
@@ -332,9 +332,10 @@ export default function AdminPage() {
     <div className="mx-auto min-h-app max-w-lg px-1 pb-40 pt-6 text-omf-ink lg:max-w-3xl">
       <PullRefreshBrand />
 
-      <header className="mb-6 flex items-start justify-between gap-4">
-        <div>
-          <p className="text-[13px] text-omf-graphite">
+      {/* Иконки — в строке со счётчиком: рядом с крупным заголовком три не влезают на 375px. */}
+      <header className="mb-6">
+        <div className="-mr-2 flex items-center justify-between gap-3">
+          <p className="min-w-0 text-[13px] text-omf-graphite">
             В очереди: {moderationQueue.length}
             {stats?.oldest_wait_hours != null && moderationQueue.length > 0 ? (
               <span className={stats.oldest_wait_hours >= 24 ? "text-omf-red" : undefined}>
@@ -343,27 +344,35 @@ export default function AdminPage() {
               </span>
             ) : null}
           </p>
-          <h1 className="mt-1 text-[40px] font-extrabold leading-[0.92] tracking-[-0.045em]">Модерация</h1>
+          <div className="flex shrink-0 items-center gap-1">
+            <Link
+              href="/admin/catalog"
+              aria-label="Каталог: все отгруженные треки"
+              title="Каталог"
+              className="omf-focus flex h-10 w-10 items-center justify-center rounded-full text-omf-graphite transition-colors hover:bg-omf-surface hover:text-omf-ink"
+            >
+              <ListMusic className="h-[18px] w-[18px]" aria-hidden />
+            </Link>
+            <Link
+              href="/admin/history"
+              aria-label="История решений"
+              title="История решений"
+              className="omf-focus flex h-10 w-10 items-center justify-center rounded-full text-omf-graphite transition-colors hover:bg-omf-surface hover:text-omf-ink"
+            >
+              <History className="h-[18px] w-[18px]" aria-hidden />
+            </Link>
+            <button
+              type="button"
+              onClick={() => void refreshAll()}
+              disabled={isValidating}
+              aria-label="Обновить очередь"
+              className="omf-focus flex h-10 w-10 items-center justify-center rounded-full text-omf-graphite transition-colors hover:bg-omf-surface hover:text-omf-ink disabled:opacity-50"
+            >
+              <RefreshCcw className={`h-[18px] w-[18px] ${isValidating ? "animate-spin" : ""}`} aria-hidden />
+            </button>
+          </div>
         </div>
-        <div className="mt-1 flex shrink-0 items-center gap-1">
-          <Link
-            href="/admin/history"
-            aria-label="История решений"
-            title="История решений"
-            className="omf-focus flex h-10 w-10 items-center justify-center rounded-full text-omf-graphite transition-colors hover:bg-omf-surface hover:text-omf-ink"
-          >
-            <History className="h-[18px] w-[18px]" aria-hidden />
-          </Link>
-          <button
-            type="button"
-            onClick={() => void refreshAll()}
-            disabled={isValidating}
-            aria-label="Обновить очередь"
-            className="omf-focus flex h-10 w-10 items-center justify-center rounded-full text-omf-graphite transition-colors hover:bg-omf-surface hover:text-omf-ink disabled:opacity-50"
-          >
-            <RefreshCcw className={`h-[18px] w-[18px] ${isValidating ? "animate-spin" : ""}`} aria-hidden />
-          </button>
-        </div>
+        <h1 className="mt-1 text-[40px] font-extrabold leading-[0.92] tracking-[-0.045em]">Модерация</h1>
       </header>
 
       <AdminApproveSmartLinkModal
