@@ -18,6 +18,7 @@ import {
 import { getReleaseDisplayTitle, type ReleaseRecord } from "@/repositories/releases/types";
 import { artistTelegramId, notifyArtist } from "@/lib/server/artist-notify";
 import { notifyAdminPaymentAnswer } from "@/lib/admin-notify.server";
+import { applyReferralPaymentChange, referralPaymentLines } from "@/lib/server/referrals";
 
 /**
  * Подтверждение оплаты студией: на каждый отправленный релиз бот пишет Денису
@@ -106,8 +107,15 @@ function clientLine(release: PaymentRelease): string {
   return "веб-аккаунт, без Telegram";
 }
 
-/** Текст сообщения Денису; после ответа — с строкой «Ответ: … · время». */
-export function buildStudioPaymentText(release: PaymentRelease, trackCount: number | null): string {
+/**
+ * Текст сообщения Денису; после ответа — с строкой «Ответ: … · время».
+ * `referralLines` — скидки по реферальной программе (`referralPaymentLines`).
+ */
+export function buildStudioPaymentText(
+  release: PaymentRelease,
+  trackCount: number | null,
+  referralLines: string[] = []
+): string {
   const titleRaw = getReleaseDisplayTitle(release as ReleaseRecord);
   const title = escapeHtml(titleRaw.length > 0 ? titleRaw : "без названия");
   const artist = escapeHtml(release.artist_name?.trim() || "—");
@@ -118,6 +126,7 @@ export function buildStudioPaymentText(release: PaymentRelease, trackCount: numb
     `Клиент: ${clientLine(release)}`
   ];
   if (trackCount != null && trackCount > 0) lines.push(`Треков: ${trackCount}`);
+  if (referralLines.length > 0) lines.push("", ...referralLines);
 
   const status = parsePaymentStatus(release.payment_status);
   if (isStudioAnswer(status)) {
@@ -188,10 +197,13 @@ export async function askStudioAboutPayment(
 ): Promise<AskStudioResult> {
   const chatId = getStudioConfirmerTelegramId();
   if (!chatId) return { ok: false, reason: "not_configured" };
-  const trackCount = await countReleaseTracks(admin, release.id);
+  const [trackCount, referralLines] = await Promise.all([
+    countReleaseTracks(admin, release.id),
+    referralPaymentLines(admin, release)
+  ]);
   const sent = await sendTelegramBotMessage({
     chatId,
-    text: buildStudioPaymentText(release, trackCount),
+    text: buildStudioPaymentText(release, trackCount, referralLines),
     replyMarkup: buildStudioPaymentKeyboard(release)
   });
   if (!sent.ok) {
@@ -267,6 +279,7 @@ export async function setReleasePaymentStatus(
   const updated = (upd as PaymentRelease[] | null)?.[0];
   if (!updated) return { ok: false, status: 404, error: "Релиз не найден." };
   await logPayment(admin, releaseId, status);
+  await applyReferralPaymentChange(admin, updated, previous, status);
   return { ok: true, previous, release: updated };
 }
 
@@ -319,11 +332,14 @@ export async function handlePaymentCallback(admin: SupabaseClient, query: Telegr
   const chatId = query.message?.chat?.id;
   const messageId = query.message?.message_id;
   if (chatId != null && typeof messageId === "number") {
-    const trackCount = await countReleaseTracks(admin, parsed.releaseId);
+    const [trackCount, referralLines] = await Promise.all([
+      countReleaseTracks(admin, parsed.releaseId),
+      referralPaymentLines(admin, result.release)
+    ]);
     const edited = await editTelegramBotMessage({
       chatId,
       messageId,
-      text: buildStudioPaymentText(result.release, trackCount),
+      text: buildStudioPaymentText(result.release, trackCount, referralLines),
       replyMarkup: buildStudioPaymentKeyboard(result.release)
     });
     if (!edited.ok && !/not modified/i.test(edited.error)) {

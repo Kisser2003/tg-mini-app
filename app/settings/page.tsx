@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { useIsTelegramMiniApp } from "@/lib/hooks/useIsTelegramMiniApp";
 import { useLogout, useWebAuth } from "@/lib/hooks/useWebAuth";
 import type { UserPreferences } from "@/app/api/settings/preferences/route";
+import { ReferralCard } from "@/components/ReferralCard";
 
 // ─── Fetcher ──────────────────────────────────────────────────────────────────
 
@@ -142,6 +143,7 @@ export default function SettingsPage() {
             disabled={isSavingPush}
           />
         )}
+        {isTelegramContext ? <ReferralCard /> : null}
         <div className="border-b border-omf-line py-4">
           <p className="text-[16px] text-omf-ink">Оформление</p>
           <p className="mt-0.5 text-[14px] text-omf-graphite">Приложение всегда тёмное.</p>

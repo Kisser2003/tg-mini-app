@@ -31,6 +31,8 @@ import {
   type PerformanceLanguage
 } from "@/lib/performance-language";
 import { unionFeaturingNamesFromTracks } from "@/lib/collaborators";
+import { useReferral } from "@/lib/hooks/useReferral";
+import { REFEREE_DISCOUNT_RUB, formatRub } from "@/lib/referral";
 
 const UploadProgress = dynamic(
   () => import("@/components/UploadProgress").then((m) => m.UploadProgress),
@@ -81,6 +83,7 @@ export default function CreateReviewPage() {
   const tracksUploadInProgress = useCreateReleaseDraftStore((s) => s.tracksUploadInProgress);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const { data: referral } = useReferral();
   /** Нажали «Отправить» без галочки — подсвечиваем её вместо неактивной кнопки. */
   const [termsHint, setTermsHint] = useState(false);
   const [progressDismissed, setProgressDismissed] = useState(false);
@@ -404,6 +407,11 @@ export default function CreateReviewPage() {
                   том числе если площадки не пропустили релиз из-за содержания.
                 </span>
               </label>
+              {referral?.hasPendingDiscount ? (
+                <p className="mt-2 pl-8 text-[14px] text-omf-ink">
+                  🎁 Скидка {formatRub(REFEREE_DISCOUNT_RUB)} по приглашению друга — студия учтёт её при оплате.
+                </p>
+              ) : null}
               {termsHint && !termsAccepted ? (
                 <p role="alert" className="mt-2 pl-8 text-[14px] text-omf-red">
                   Отметь галочку, чтобы отправить релиз.
