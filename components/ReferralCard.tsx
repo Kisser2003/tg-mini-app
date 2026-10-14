@@ -7,7 +7,7 @@ import { REFEREE_DISCOUNT_RUB, REFERRER_REWARD_RUB, formatRub } from "@/lib/refe
 
 const SHARE_TEXT = `Выпускаю музыку через omf — по моей ссылке скидка ${formatRub(REFEREE_DISCOUNT_RUB)} на первый релиз.`;
 
-function shareLink(link: string): void {
+export function shareReferralLink(link: string): void {
   const url = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(SHARE_TEXT)}`;
   const webApp = getTelegramWebApp();
   if (webApp?.openTelegramLink) {
@@ -77,7 +77,7 @@ export function ReferralCard() {
             type="button"
             onClick={() => {
               triggerHaptic("light");
-              shareLink(data.link!);
+              shareReferralLink(data.link!);
             }}
             className="omf-btn-primary mt-3 h-12 w-full text-[16px]"
           >
@@ -96,6 +96,33 @@ export function ReferralCard() {
           {data.available > 0 ? ` · бонус: ${formatRub(data.available * REFERRER_REWARD_RUB)}` : ""}
         </p>
       ) : null}
+    </section>
+  );
+}
+
+/** Компактная строка на главном экране: ведёт к отправке ссылки другу. Только в Telegram, когда ссылка готова. */
+export function ReferralInviteRow() {
+  const { data } = useReferral();
+  if (!data?.link) return null;
+  const link = data.link;
+  return (
+    <section aria-label="Пригласи друга" className="mb-6 border-y border-omf-line">
+      <button
+        type="button"
+        onClick={() => {
+          triggerHaptic("light");
+          shareReferralLink(link);
+        }}
+        className="omf-focus flex w-full items-center gap-3 py-3.5 text-left transition-colors hover:bg-omf-surface"
+      >
+        <span className="text-[18px]" aria-hidden>
+          🎁
+        </span>
+        <span className="min-w-0 flex-1 text-[15px] font-medium text-omf-ink">
+          Пригласи друга: ему −{formatRub(REFEREE_DISCOUNT_RUB)}, тебе +{formatRub(REFERRER_REWARD_RUB)}
+        </span>
+        <span className="shrink-0 text-[14px] text-omf-ultra-text">Отправить</span>
+      </button>
     </section>
   );
 }
