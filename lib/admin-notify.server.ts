@@ -4,7 +4,7 @@
  */
 
 import { getExpectedAdminTelegramId } from "@/lib/admin";
-import { escapeHtml } from "@/lib/telegram-bot.server";
+import { escapeHtml, sendTelegramBotMessage, type InlineKeyboard } from "@/lib/telegram-bot.server";
 import { sendTelegramNotification } from "@/lib/telegram-notifications";
 
 let lastErrorNoticeAt = 0;
@@ -18,17 +18,49 @@ async function sendToAdmin(text: string): Promise<void> {
   }
 }
 
+/** Ссылка на релиз в админке мини-приложения; null — адрес приложения неизвестен или не https. */
+export function adminReleaseWebAppUrl(appOrigin: string | null | undefined, releaseId: string): string | null {
+  const origin = (appOrigin ?? "").trim().replace(/\/+$/, "");
+  if (!/^https:\/\/[^/]+$/.test(origin) || !releaseId) return null;
+  return `${origin}/admin/release/${encodeURIComponent(releaseId)}`;
+}
+
 export async function notifyAdminReleaseSubmitted(params: {
+  releaseId: string;
   title: string;
   artist: string;
   telegramId?: string | number | null;
+  /** Origin мини-приложения (из запроса артиста) — для кнопки «Открыть релиз». */
+  appOrigin?: string | null;
 }): Promise<void> {
   const who = params.telegramId ? ` (tg ${escapeHtml(String(params.telegramId))})` : "";
-  await sendToAdmin(
+  const releaseUrl = adminReleaseWebAppUrl(params.appOrigin, params.releaseId);
+  const text =
     `🆕 <b>Новый релиз на модерации</b>\n\n` +
-      `«${escapeHtml(params.title || "без названия")}» — ${escapeHtml(params.artist || "—")}${who}\n\n` +
-      `Открой админку в мини-приложении, чтобы проверить.`
-  );
+    `«${escapeHtml(params.title || "без названия")}» — ${escapeHtml(params.artist || "—")}${who}` +
+    (releaseUrl ? "" : `\n\nОткрой админку в мини-приложении, чтобы проверить.`);
+  if (!releaseUrl) {
+    await sendToAdmin(text);
+    return;
+  }
+  const replyMarkup: InlineKeyboard = {
+    inline_keyboard: [[{ text: "Открыть релиз", web_app: { url: releaseUrl } }]]
+  };
+  try {
+    if (!process.env.TELEGRAM_BOT_TOKEN?.trim()) return;
+    const result = await sendTelegramBotMessage({
+      chatId: String(getExpectedAdminTelegramId()),
+      text,
+      replyMarkup
+    });
+    // Кнопку не приняли (например, адрес не открывается как мини-приложение) — шлём без неё.
+    if (!result.ok) {
+      console.error("[admin-notify] with button:", result.error);
+      await sendToAdmin(`${text}\n\nОткрой админку в мини-приложении, чтобы проверить.`);
+    }
+  } catch (e) {
+    console.error("[admin-notify]", e);
+  }
 }
 
 /** Студия ответила по оплате кнопкой в боте. */

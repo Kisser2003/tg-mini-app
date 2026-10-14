@@ -19,12 +19,18 @@ import { requestPaymentConfirmationOnSubmit } from "@/lib/server/payment-confirm
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /** Уведомление в Telegram только если у релиза есть реальный `telegram_id` (не веб-only). */
-async function notifyReleaseSubmittedForModeration(admin: SupabaseClient, record: ReleaseRecord): Promise<void> {
+async function notifyReleaseSubmittedForModeration(
+  admin: SupabaseClient,
+  record: ReleaseRecord,
+  appOrigin: string
+): Promise<void> {
   await invalidateMyReleasesCache(record as Record<string, unknown>);
   await notifyAdminReleaseSubmitted({
+    releaseId: record.id,
     title: getReleaseDisplayTitle(record),
     artist: String(record.artist_name ?? ""),
-    telegramId: record.telegram_id
+    telegramId: record.telegram_id,
+    appOrigin
   });
   const rawTitle = getReleaseDisplayTitle(record);
   const title = escapeHtml(rawTitle.length > 0 ? rawTitle : "релиз");
@@ -176,7 +182,7 @@ async function handleFinalizeSubmit(request: NextRequest, actor: ReleaseActor): 
         }
       }
       if (rec != null && (rec.status === "processing" || rec.status === "ready")) {
-        await notifyReleaseSubmittedForModeration(admin, rec);
+        await notifyReleaseSubmittedForModeration(admin, rec, request.nextUrl.origin);
         return NextResponse.json({ ok: true, record: rec });
       }
     }
@@ -249,7 +255,7 @@ async function handleFinalizeSubmit(request: NextRequest, actor: ReleaseActor): 
     );
   }
 
-  await notifyReleaseSubmittedForModeration(admin, rows[0]);
+  await notifyReleaseSubmittedForModeration(admin, rows[0], request.nextUrl.origin);
   return NextResponse.json({ ok: true, record: rows[0] });
 }
 
