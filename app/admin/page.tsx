@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { History, RefreshCcw } from "lucide-react";
@@ -27,6 +28,8 @@ import { getTelegramUserId, initTelegramWebApp, triggerHaptic } from "@/lib/tele
 import { errorToUserString, USER_REQUEST_TIMEOUT_MESSAGE } from "@/lib/errors";
 import { SWR_LIST_OPTIONS } from "@/lib/swr-config";
 import { withRequestTimeout } from "@/lib/withRequestTimeout";
+import { useIsTelegramMiniApp } from "@/lib/hooks/useIsTelegramMiniApp";
+import { cn } from "@/lib/utils";
 
 type ModerationQueueRow = {
   release: ReleaseRecord;
@@ -49,13 +52,20 @@ export default function AdminPage() {
   const [adminResolved, setAdminResolved] = useState(false);
   const [activeFilter, setActiveFilter] = useState<QueueFilterKey>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  /** Режим выбора: по кнопке «Выбрать», тап по карточке отмечает её, решение — в нижней панели. */
+  const [selectMode, setSelectMode] = useState(false);
   const [selectedReleaseIds, setSelectedReleaseIds] = useState<string[]>([]);
   const [bulkRejectOpen, setBulkRejectOpen] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
   /** Среди выбранных есть без подтверждённой оплаты: первое нажатие «Принять» только предупреждает. */
   const [bulkAcceptArmed, setBulkAcceptArmed] = useState(false);
+  /** Нижняя панель — в портале: у обёртки страницы transform, `fixed` внутри неё уезжает под навигацию. */
+  const [portalReady, setPortalReady] = useState(false);
+  /** Сайдбар веб-версии: панель начинается справа от него (как на странице релиза). */
+  const wide = !useIsTelegramMiniApp();
 
   useEffect(() => {
+    setPortalReady(true);
     debugInit("admin", "init start");
     initTelegramWebApp();
     setUserId(getTelegramUserId());
@@ -245,6 +255,11 @@ export default function AdminPage() {
     setSelectedReleaseIds([]);
   }, []);
 
+  const exitSelectMode = useCallback(() => {
+    setSelectMode(false);
+    setSelectedReleaseIds([]);
+  }, []);
+
   const handleBulkReject = useCallback(
     async (reason: string, reasonKeys: string[]) => {
       if (selectedReleaseIds.length === 0) return;
@@ -263,7 +278,7 @@ export default function AdminPage() {
       await refreshAll();
       setBulkBusy(false);
       setBulkRejectOpen(false);
-      setSelectedReleaseIds([]);
+      exitSelectMode();
       if (failedCount === 0) {
         hapticMap.notificationWarning();
         toast.success(`Отклонено релизов: ${successCount}`);
@@ -271,7 +286,7 @@ export default function AdminPage() {
         toast.error(`Отклонено: ${successCount}, с ошибкой: ${failedCount}`);
       }
     },
-    [refreshAll, selectedReleaseIds]
+    [refreshAll, selectedReleaseIds, exitSelectMode]
   );
 
   const unpaidSelectedCount = useMemo(
@@ -303,14 +318,14 @@ export default function AdminPage() {
     }
     await refreshAll();
     setBulkBusy(false);
-    setSelectedReleaseIds([]);
+    exitSelectMode();
     if (failedCount === 0) {
       triggerHaptic("success");
       toast.success(`Принято релизов: ${successCount}`);
       return;
     }
     toast.error(`Принято: ${successCount}, с ошибкой: ${failedCount}`);
-  }, [refreshAll, selectedReleaseIds]);
+  }, [refreshAll, selectedReleaseIds, exitSelectMode]);
 
   if (adminResolved && !isAdmin) {
     return null;
@@ -393,34 +408,53 @@ export default function AdminPage() {
         onSubmit={(reason, keys) => void handleBulkReject(reason, keys)}
       />
 
-      <div
-        className="mb-4 flex gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-        role="tablist"
-        aria-label="Фильтр очереди"
-      >
-        {([
-          { key: "all", label: "Все" },
-          { key: "with_errors", label: "С ошибками" }
-        ] as const).map((filter) => {
-          const isActive = activeFilter === filter.key;
-          return (
-            <button
-              key={filter.key}
-              type="button"
-              role="tab"
-              aria-selected={isActive}
-              onClick={() => setActiveFilter(filter.key)}
-              className={`omf-focus shrink-0 rounded-full px-3.5 py-1.5 text-[13px] transition-colors ${
-                isActive ? "bg-omf-ink font-medium text-omf-bg" : "text-omf-graphite hover:text-omf-ink"
-              }`}
-            >
-              {filter.label}
-              <span className={`ml-1.5 tabular-nums ${isActive ? "text-omf-bg/70" : "text-omf-faint"}`}>
-                {filterCounts[filter.key]}
-              </span>
-            </button>
-          );
-        })}
+      <div className="mb-4 flex items-center gap-2">
+        <div
+          className="flex min-w-0 flex-1 gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          role="tablist"
+          aria-label="Фильтр очереди"
+        >
+          {([
+            { key: "all", label: "Все" },
+            { key: "with_errors", label: "С ошибками" }
+          ] as const).map((filter) => {
+            const isActive = activeFilter === filter.key;
+            return (
+              <button
+                key={filter.key}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                onClick={() => setActiveFilter(filter.key)}
+                className={`omf-focus shrink-0 rounded-full px-3.5 py-1.5 text-[13px] transition-colors ${
+                  isActive ? "bg-omf-ink font-medium text-omf-bg" : "text-omf-graphite hover:text-omf-ink"
+                }`}
+              >
+                {filter.label}
+                <span className={`ml-1.5 tabular-nums ${isActive ? "text-omf-bg/70" : "text-omf-faint"}`}>
+                  {filterCounts[filter.key]}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        {selectMode || moderationQueueFiltered.length > 1 ? (
+          <button
+            type="button"
+            onClick={() => {
+              triggerHaptic("light");
+              if (selectMode) exitSelectMode();
+              else setSelectMode(true);
+            }}
+            aria-pressed={selectMode}
+            className={cn(
+              "omf-focus shrink-0 rounded-full px-3 py-1.5 text-[13px] transition-colors hover:text-omf-ink",
+              selectMode ? "font-medium text-omf-ink" : "text-omf-ultra-text"
+            )}
+          >
+            {selectMode ? "Готово" : "Выбрать"}
+          </button>
+        ) : null}
       </div>
 
       <div className="mb-4">
@@ -434,55 +468,22 @@ export default function AdminPage() {
         />
       </div>
 
-      {moderationQueueFiltered.length > 0 && (
-        <div className="mb-2 flex flex-wrap items-center gap-x-1 gap-y-1 text-[13px]">
+      {selectMode && moderationQueueFiltered.length > 0 ? (
+        <div className="mb-1 flex items-center justify-between gap-3 text-[13px]">
+          <p className="tabular-nums text-omf-graphite" aria-live="polite">
+            Выбрано: {selectedReleaseIds.length} из {moderationQueueFiltered.length}
+          </p>
           <button
             type="button"
-            onClick={() => void selectAllFiltered()}
+            onClick={() =>
+              selectedReleaseIds.length === moderationQueueFiltered.length ? clearSelection() : selectAllFiltered()
+            }
             className="omf-focus rounded-full px-2.5 py-1.5 text-omf-ultra-text hover:text-omf-ink"
           >
-            Выбрать все ({moderationQueueFiltered.length})
+            {selectedReleaseIds.length === moderationQueueFiltered.length ? "Снять все" : "Выбрать все"}
           </button>
-          {selectedReleaseIds.length > 0 ? (
-            <>
-              <button
-                type="button"
-                onClick={() => void clearSelection()}
-                className="omf-focus rounded-full px-2.5 py-1.5 text-omf-graphite hover:text-omf-ink"
-              >
-                Сбросить
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (unpaidSelectedCount > 0 && !bulkAcceptArmed) {
-                    triggerHaptic("warning");
-                    setBulkAcceptArmed(true);
-                    return;
-                  }
-                  void handleBulkAccept();
-                }}
-                disabled={bulkBusy}
-                className={`omf-focus rounded-full px-2.5 py-1.5 font-medium hover:text-omf-ink disabled:opacity-40 ${
-                  bulkAcceptArmed ? "text-omf-yellow" : "text-omf-green"
-                }`}
-              >
-                {bulkAcceptArmed
-                  ? `Без оплаты: ${unpaidSelectedCount}. Всё равно принять?`
-                  : `Принять выбранные (${selectedReleaseIds.length})`}
-              </button>
-              <button
-                type="button"
-                onClick={() => setBulkRejectOpen(true)}
-                disabled={bulkBusy}
-                className="omf-focus rounded-full px-2.5 py-1.5 font-medium text-omf-red hover:text-omf-ink disabled:opacity-40"
-              >
-                Вернуть выбранные ({selectedReleaseIds.length})
-              </button>
-            </>
-          ) : null}
         </div>
-      )}
+      ) : null}
 
       {showQueueSkeleton && <AdminModerationQueueSkeleton rows={3} />}
       {errorMessage && (
@@ -507,34 +508,24 @@ export default function AdminPage() {
 
       {moderationQueueFiltered.length > 0 && (
         <div className="flex flex-col">
-          {moderationQueueFiltered.map((row, index) => {
-            const checked = selectedReleaseIds.includes(row.release.id);
-            return (
-              <div key={row.release.id} className="relative">
-                <label className="absolute right-0 top-5 z-20 inline-flex h-11 w-11 cursor-pointer items-center justify-center">
-                  <span className="sr-only">Выбрать «{row.release.artist_name}»</span>
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={() => toggleSelectRelease(row.release.id)}
-                    className="h-5 w-5 rounded-[6px] accent-[var(--omf-ultra)]"
-                  />
-                </label>
-                <AdminReleaseCard
-                  release={row.release}
-                  tracks={row.tracks}
-                  index={index}
-                  listVariants={undefined}
-                  busy={busyId === row.release.id}
-                  onOpenApprove={() => setApproveModal({ id: row.release.id, mode: "accept" })}
-                  onOpenReject={() => setRejectModalReleaseId(row.release.id)}
-                  showAudioPreview={false}
-                  detailHref={`/admin/release/${row.release.id}`}
-                  artworkPriority={index < 3}
-                />
-              </div>
-            );
-          })}
+          {moderationQueueFiltered.map((row, index) => (
+            <AdminReleaseCard
+              key={row.release.id}
+              release={row.release}
+              tracks={row.tracks}
+              index={index}
+              listVariants={undefined}
+              busy={busyId === row.release.id}
+              onOpenApprove={() => setApproveModal({ id: row.release.id, mode: "accept" })}
+              onOpenReject={() => setRejectModalReleaseId(row.release.id)}
+              showAudioPreview={false}
+              detailHref={`/admin/release/${row.release.id}`}
+              artworkPriority={index < 3}
+              selectMode={selectMode}
+              selected={selectedReleaseIds.includes(row.release.id)}
+              onToggleSelect={() => toggleSelectRelease(row.release.id)}
+            />
+          ))}
         </div>
       )}
 
@@ -549,6 +540,61 @@ export default function AdminPage() {
       {statsErrorMessage ? (
         <p className="mt-6 text-[14px] text-omf-yellow">Не удалось загрузить счётчики: {statsErrorMessage}</p>
       ) : null}
+
+      {selectMode && portalReady
+        ? createPortal(
+            <div
+              role="group"
+              aria-label="Решение по выбранным"
+              className={cn(
+                "fixed inset-x-0 bottom-0 z-[60] border-t border-omf-line bg-omf-bg pb-[env(safe-area-inset-bottom,0px)]",
+                wide && "lg:left-64"
+              )}
+            >
+              {bulkAcceptArmed ? (
+                <p className="mx-auto max-w-lg px-4 pt-3 text-[13px] text-omf-yellow lg:max-w-3xl">
+                  Без подтверждённой оплаты: {unpaidSelectedCount}. Нажми ещё раз, чтобы всё равно принять.
+                </p>
+              ) : null}
+              <div className="mx-auto flex max-w-lg items-center gap-2.5 px-4 py-3 lg:max-w-3xl">
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerHaptic("light");
+                    setBulkRejectOpen(true);
+                  }}
+                  disabled={bulkBusy || selectedReleaseIds.length === 0}
+                  className="omf-btn-secondary flex-1 disabled:opacity-40"
+                >
+                  Вернуть{selectedReleaseIds.length > 0 ? ` ${selectedReleaseIds.length}` : ""}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (unpaidSelectedCount > 0 && !bulkAcceptArmed) {
+                      triggerHaptic("warning");
+                      setBulkAcceptArmed(true);
+                      return;
+                    }
+                    void handleBulkAccept();
+                  }}
+                  disabled={bulkBusy || selectedReleaseIds.length === 0}
+                  className={cn(
+                    "omf-btn-ink flex-1 disabled:opacity-40",
+                    bulkAcceptArmed && "bg-omf-yellow text-black"
+                  )}
+                >
+                  {bulkBusy
+                    ? "Секунду…"
+                    : bulkAcceptArmed
+                      ? "Да, принять"
+                      : `Принять${selectedReleaseIds.length > 0 ? ` ${selectedReleaseIds.length}` : ""}`}
+                </button>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
     </div>
   );
 }
