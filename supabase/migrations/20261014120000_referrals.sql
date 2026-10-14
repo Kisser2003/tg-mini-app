@@ -15,9 +15,10 @@ CREATE TABLE IF NOT EXISTS public.referrals (
   referrer_telegram_id text NOT NULL REFERENCES public.referral_codes (telegram_id) ON DELETE CASCADE,
   created_at timestamptz NOT NULL DEFAULT now(),
   -- Первый оплаченный релиз друга: на нём скидка другу, с него же бонус пригласившему.
+  -- Признак «скидка использована / бонус открыт» — paid_at: id обнулится при удалении релиза, время — нет.
   paid_release_id uuid REFERENCES public.releases (id) ON DELETE SET NULL,
   paid_at timestamptz,
-  -- Релиз пригласившего, в оплате которого бонус учли.
+  -- Релиз пригласившего, в оплате которого бонус учли; признак «бонус потрачен» — reward_redeemed_at.
   reward_redeemed_release_id uuid REFERENCES public.releases (id) ON DELETE SET NULL,
   reward_redeemed_at timestamptz,
   CHECK (referee_telegram_id <> referrer_telegram_id)
@@ -30,7 +31,7 @@ CREATE INDEX IF NOT EXISTS referrals_redeemed_release_idx ON public.referrals (r
   WHERE reward_redeemed_release_id IS NOT NULL;
 
 COMMENT ON TABLE public.referrals IS
-  'Кто кого пригласил. paid_release_id — первый оплаченный релиз друга (бонус пригласившему доступен); reward_redeemed_release_id — где бонус учли.';
+  'Кто кого пригласил. paid_at — друг оплатил первый релиз (бонус пригласившему доступен); reward_redeemed_at — бонус учли в оплате.';
 
 ALTER TABLE public.referral_codes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.referrals ENABLE ROW LEVEL SECURITY;

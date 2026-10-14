@@ -19,11 +19,17 @@ import { artistTelegramId, notifyArtist } from "@/lib/server/artist-notify";
 
 type ReleaseRef = { id: string; telegram_id?: unknown; payment_status?: string | null };
 
+/**
+ * Состояние — по `paid_at` / `reward_redeemed_at`: id релизов обнуляются при удалении релиза
+ * (ON DELETE SET NULL), и тогда скидка или бонус «воскресли» бы второй раз.
+ */
 type ReferralRow = {
   referee_telegram_id: string;
   referrer_telegram_id: string;
   paid_release_id: string | null;
+  paid_at: string | null;
   reward_redeemed_release_id: string | null;
+  reward_redeemed_at: string | null;
 };
 
 /** Без 0/O/1/I — код читают глазами. */
@@ -106,10 +112,25 @@ export async function attributeReferral(
   }
   if (existing) return "already";
 
+  // Релизы с сайта до привязки Telegram лежат под user_uuid без telegram_id — их тоже считаем.
+  const { data: profile, error: profileErr } = await admin
+    .from("users")
+    .select("id")
+    .eq("telegram_id", refereeTelegramId)
+    .maybeSingle();
+  if (profileErr) {
+    console.error("[referrals] profile lookup:", profileErr.message);
+    return "error";
+  }
+  const uuid = (profile as { id?: string } | null)?.id;
+  const ownerFilter =
+    uuid && /^[0-9a-f-]{36}$/i.test(uuid)
+      ? `telegram_id.eq.${refereeTelegramId},user_id.eq.${refereeTelegramId},user_uuid.eq.${uuid}`
+      : `telegram_id.eq.${refereeTelegramId},user_id.eq.${refereeTelegramId}`;
   const { count, error: countErr } = await admin
     .from("releases")
     .select("id", { count: "exact", head: true })
-    .eq("telegram_id", refereeTelegramId);
+    .or(ownerFilter);
   if (countErr) {
     console.error("[referrals] releases count:", countErr.message);
     return "error";
@@ -137,21 +158,21 @@ export async function getReferralSummary(
   const [invitedRes, ownRes] = await Promise.all([
     admin
       .from("referrals")
-      .select("paid_release_id, reward_redeemed_release_id")
+      .select("paid_at, reward_redeemed_at")
       .eq("referrer_telegram_id", telegramId),
-    admin.from("referrals").select("paid_release_id").eq("referee_telegram_id", telegramId).maybeSingle()
+    admin.from("referrals").select("paid_at").eq("referee_telegram_id", telegramId).maybeSingle()
   ]);
   if (invitedRes.error) console.error("[referrals] summary:", invitedRes.error.message);
-  const invited = (invitedRes.data ?? []) as Pick<ReferralRow, "paid_release_id" | "reward_redeemed_release_id">[];
-  const own = ownRes.data as Pick<ReferralRow, "paid_release_id"> | null;
+  const invited = (invitedRes.data ?? []) as Pick<ReferralRow, "paid_at" | "reward_redeemed_at">[];
+  const own = ownRes.data as Pick<ReferralRow, "paid_at"> | null;
 
   return {
     code,
     link: referralLink(code),
     invited: invited.length,
-    paid: invited.filter((r) => r.paid_release_id).length,
-    available: invited.filter((r) => r.paid_release_id && !r.reward_redeemed_release_id).length,
-    hasPendingDiscount: Boolean(own && !own.paid_release_id)
+    paid: invited.filter((r) => r.paid_at).length,
+    available: invited.filter((r) => r.paid_at && !r.reward_redeemed_at).length,
+    hasPendingDiscount: Boolean(own && !own.paid_at)
   };
 }
 
@@ -166,34 +187,36 @@ export async function referralPaymentLines(admin: SupabaseClient, release: Relea
     const [asReferee, asReferrer] = await Promise.all([
       admin
         .from("referrals")
-        .select("paid_release_id")
+        .select("paid_release_id, paid_at")
         .eq("referee_telegram_id", tid)
         .maybeSingle(),
       admin
         .from("referrals")
-        .select("paid_release_id, reward_redeemed_release_id")
+        .select("reward_redeemed_release_id, reward_redeemed_at")
         .eq("referrer_telegram_id", tid)
-        .not("paid_release_id", "is", null)
+        .not("paid_at", "is", null)
     ]);
 
     let discount = 0;
     const lines: string[] = [];
 
-    const own = asReferee.data as Pick<ReferralRow, "paid_release_id"> | null;
-    if (own && (own.paid_release_id == null || own.paid_release_id === release.id)) {
+    const own = asReferee.data as Pick<ReferralRow, "paid_release_id" | "paid_at"> | null;
+    if (own && (own.paid_at == null || own.paid_release_id === release.id)) {
       discount += REFEREE_DISCOUNT_RUB;
       lines.push(`🎁 Пришёл по приглашению: скидка ${formatRub(REFEREE_DISCOUNT_RUB)} на первый релиз`);
     }
 
-    const rewards = (asReferrer.data ?? []) as Pick<ReferralRow, "reward_redeemed_release_id">[];
+    const rewards = (asReferrer.data ?? []) as Pick<ReferralRow, "reward_redeemed_release_id" | "reward_redeemed_at">[];
     const onThis = rewards.filter((r) => r.reward_redeemed_release_id === release.id).length;
-    const available = rewards.filter((r) => r.reward_redeemed_release_id == null).length;
+    const available = rewards.filter((r) => r.reward_redeemed_at == null).length;
     const count = release.payment_status === "paid" ? onThis : Math.min(onThis + available, MAX_REWARDS_PER_RELEASE);
     if (count > 0) {
       discount += count * REFERRER_REWARD_RUB;
       lines.push(
         `🎁 Бонус за приглашённых друзей: ${formatRub(count * REFERRER_REWARD_RUB)}` +
-          (count > 1 ? ` (${count} × ${formatRub(REFERRER_REWARD_RUB)})` : "")
+          (count > 1 ? ` (${count} × ${formatRub(REFERRER_REWARD_RUB)})` : "") +
+          // Если на оплате несколько релизов артиста, бонус уйдёт только в первый отмеченный «Оплатил».
+          (release.payment_status === "paid" ? "" : " — списывается на первый оплаченный релиз")
       );
     }
 
@@ -227,7 +250,7 @@ export async function applyReferralPaymentChange(
         .from("referrals")
         .update({ paid_release_id: release.id, paid_at: now })
         .eq("referee_telegram_id", tid)
-        .is("paid_release_id", null)
+        .is("paid_at", null)
         .select("referrer_telegram_id");
       if (openErr) console.error("[referrals] open reward:", openErr.message);
       const referrer = (opened as Pick<ReferralRow, "referrer_telegram_id">[] | null)?.[0]?.referrer_telegram_id;
@@ -243,8 +266,8 @@ export async function applyReferralPaymentChange(
         .from("referrals")
         .select("referee_telegram_id")
         .eq("referrer_telegram_id", tid)
-        .not("paid_release_id", "is", null)
-        .is("reward_redeemed_release_id", null)
+        .not("paid_at", "is", null)
+        .is("reward_redeemed_at", null)
         .order("paid_at", { ascending: true })
         .limit(MAX_REWARDS_PER_RELEASE);
       if (availErr) console.error("[referrals] available rewards:", availErr.message);
@@ -254,7 +277,7 @@ export async function applyReferralPaymentChange(
           .from("referrals")
           .update({ reward_redeemed_release_id: release.id, reward_redeemed_at: now })
           .in("referee_telegram_id", referees)
-          .is("reward_redeemed_release_id", null);
+          .is("reward_redeemed_at", null);
         if (error) console.error("[referrals] redeem:", error.message);
       }
       return;
@@ -265,7 +288,7 @@ export async function applyReferralPaymentChange(
         .from("referrals")
         .update({ paid_release_id: null, paid_at: null })
         .eq("paid_release_id", release.id)
-        .is("reward_redeemed_release_id", null);
+        .is("reward_redeemed_at", null);
       if (closeErr) console.error("[referrals] close reward:", closeErr.message);
 
       const { error: unredeemErr } = await admin

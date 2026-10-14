@@ -17,6 +17,7 @@ import {
 } from "@/lib/server/referrals";
 
 const RELEASE = "11111111-1111-4111-8111-111111111111";
+const T = "2026-10-14T10:00:00.000Z";
 const ok = (data: unknown): MockResult => ({ data, error: null });
 
 function mock(resolve: (call: MockCall) => MockResult) {
@@ -54,9 +55,10 @@ describe("referralLink", () => {
 
 describe("attributeReferral", () => {
   const resolver =
-    (opts: { owner?: string | null; existing?: boolean; releases?: number }) =>
+    (opts: { owner?: string | null; existing?: boolean; releases?: number; uuid?: string }) =>
     (call: MockCall): MockResult => {
       if (call.table === "referral_codes") return ok(opts.owner ? { telegram_id: opts.owner } : null);
+      if (call.table === "users") return ok(opts.uuid ? { id: opts.uuid } : null);
       if (call.table === "referrals" && call.op === "select") return ok(opts.existing ? { referee_telegram_id: "2" } : null);
       if (call.table === "releases") return { data: null, error: null, count: opts.releases ?? 0 } as MockResult;
       return ok(null);
@@ -75,13 +77,21 @@ describe("attributeReferral", () => {
     expect(await attributeReferral(mock(resolver({ owner: "1", releases: 1 })).admin, "2", "ABC234")).toBe("not_new");
     expect(await attributeReferral(mock(resolver({ owner: "1", existing: true })).admin, "2", "ABC234")).toBe("already");
   });
+
+  it("считает и релизы с сайта до привязки Telegram", async () => {
+    const uuid = "22222222-2222-4222-8222-222222222222";
+    const { admin, calls } = mock(resolver({ owner: "1", uuid }));
+    await attributeReferral(admin, "2", "ABC234");
+    const releases = calls.find((c) => c.table === "releases");
+    expect(filterValue(releases!, "or")).toBe(`telegram_id.eq.2,user_id.eq.2,user_uuid.eq.${uuid}`);
+  });
 });
 
 describe("referralPaymentLines", () => {
   function linesFor(
     release: { telegram_id: string; payment_status: string | null },
-    asReferee: { paid_release_id: string | null } | null,
-    rewards: Array<{ reward_redeemed_release_id: string | null }>
+    asReferee: { paid_release_id: string | null; paid_at: string | null } | null,
+    rewards: Array<{ reward_redeemed_release_id: string | null; reward_redeemed_at: string | null }>
   ) {
     const { admin } = mock((call) =>
       filterValue(call, "eq", "referee_telegram_id") !== undefined ? ok(asReferee) : ok(rewards)
@@ -90,25 +100,33 @@ describe("referralPaymentLines", () => {
   }
 
   it("друг по приглашению — скидка 500 ₽ на первый релиз", async () => {
-    const lines = await linesFor({ telegram_id: "2", payment_status: "awaiting" }, { paid_release_id: null }, []);
+    const lines = await linesFor({ telegram_id: "2", payment_status: "awaiting" }, { paid_release_id: null, paid_at: null }, []);
     expect(lines).toHaveLength(1);
     expect(lines[0]).toContain("скидка 500");
   });
 
   it("скидка друга не повторяется на следующем релизе", async () => {
-    const lines = await linesFor({ telegram_id: "2", payment_status: "awaiting" }, { paid_release_id: "other" }, []);
+    const lines = await linesFor({ telegram_id: "2", payment_status: "awaiting" }, { paid_release_id: "other", paid_at: T }, []);
+    expect(lines).toEqual([]);
+  });
+
+  it("удалённый оплаченный релиз друга не возвращает скидку", async () => {
+    const lines = await linesFor({ telegram_id: "2", payment_status: "awaiting" }, { paid_release_id: null, paid_at: T }, []);
     expect(lines).toEqual([]);
   });
 
   it("бонусы пригласившего — не больше трёх на релиз, плюс итог при двух скидках", async () => {
-    const rewards = Array.from({ length: 5 }, () => ({ reward_redeemed_release_id: null }));
-    const lines = await linesFor({ telegram_id: "1", payment_status: "awaiting" }, { paid_release_id: null }, rewards);
+    const rewards = Array.from({ length: 5 }, () => ({ reward_redeemed_release_id: null, reward_redeemed_at: null }));
+    const lines = await linesFor({ telegram_id: "1", payment_status: "awaiting" }, { paid_release_id: null, paid_at: null }, rewards);
     expect(lines[1]).toContain("3 × 500");
     expect(lines[2]).toContain(formatRub(2000));
   });
 
   it("после оплаты показывает только учтённые в этом релизе бонусы", async () => {
-    const rewards = [{ reward_redeemed_release_id: RELEASE }, { reward_redeemed_release_id: null }];
+    const rewards = [
+      { reward_redeemed_release_id: RELEASE, reward_redeemed_at: T },
+      { reward_redeemed_release_id: null, reward_redeemed_at: null }
+    ];
     const lines = await linesFor({ telegram_id: "1", payment_status: "paid" }, null, rewards);
     expect(lines).toHaveLength(1);
     expect(lines[0]).toContain("500");
