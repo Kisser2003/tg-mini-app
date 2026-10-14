@@ -8,6 +8,7 @@ import { PullRefreshBrand } from "@/components/PullRefreshBrand";
 import { LibraryReleaseSkeletonGrid } from "@/components/ui/LibrarySkeleton";
 import { getReleaseDisplayTitle } from "@/repositories/releases.repo";
 import { useReleases } from "@/lib/hooks/useReleases";
+import { prepareNewReleaseDraft } from "@/features/release/createRelease/store";
 import { shouldShowSmartLinkCta } from "@/lib/smart-link-cta";
 import { hapticMap } from "@/lib/haptic-map";
 import { cn } from "@/lib/utils";
@@ -136,7 +137,13 @@ function MultiLinksPageInner() {
               : "Попробуй другое название или имя артиста."}
           </p>
           {withLinks.length === 0 && (
-            <button onClick={() => router.push("/create/metadata")} className="omf-btn-primary mt-5 w-full">
+            <button
+              onClick={() => {
+                prepareNewReleaseDraft();
+                router.push("/create/metadata");
+              }}
+              className="omf-btn-primary mt-5 w-full"
+            >
               Создать релиз
             </button>
           )}

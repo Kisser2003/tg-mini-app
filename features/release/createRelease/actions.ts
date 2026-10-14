@@ -182,7 +182,8 @@ async function verifyStoredReleaseExistsOrClearReleaseId(): Promise<void> {
     await getReleaseById(rid);
   } catch (e: unknown) {
     if (isPostgrestNoSuchRowError(e)) {
-      useCreateReleaseDraftStore.getState().setReleaseId(null);
+      // Релиз удалили (модератор) или он чужой: замечания модератора к нему больше не относятся.
+      useCreateReleaseDraftStore.setState({ releaseId: null, moderatorNotes: null });
     }
   }
 }
