@@ -175,12 +175,12 @@ export async function remindArtist(releaseId: string): Promise<void> {
 }
 
 /**
- * Оплата из админки: отметить «оплачено» / «не оплачено» или ещё раз спросить Дениса в боте.
+ * Оплата из админки: отметить «оплачено» / «не оплачено» или ещё раз спросить админа в боте.
  * Возвращает обновлённые поля оплаты релиза.
  */
 export async function updateReleasePayment(
   releaseId: string,
-  action: "paid" | "unpaid" | "ask_studio"
+  action: "paid" | "unpaid" | "ask_bot"
 ): Promise<Pick<ReleaseRecord, "payment_status" | "payment_updated_at" | "payment_updated_by">> {
   await assertAdminAsync();
   const authHeaders = await getAdminApiAuthHeaders();
