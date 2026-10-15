@@ -22,6 +22,7 @@ import {
   triggerHaptic
 } from "@/lib/telegram";
 import { toast } from "sonner";
+import { AppOrb } from "@/components/AppOrb";
 
 const FileUploader = dynamic(
   () => import("@/components/FileUploader").then((m) => m.FileUploader),
@@ -157,7 +158,14 @@ export default function CreateAssetsPage() {
             onClick={handleNext}
             className="create-flow-submit-target omf-btn-primary h-14 w-full text-[16px]"
           >
-            {isUploading ? "Загружаем обложку…" : "Дальше: треки"}
+            {isUploading ? (
+              <>
+                <AppOrb state="working" size={20} />
+                Загружаем обложку…
+              </>
+            ) : (
+              "Дальше: треки"
+            )}
           </button>
 
           <FormFieldError message={submitError ?? undefined} messageClassName="text-center" />

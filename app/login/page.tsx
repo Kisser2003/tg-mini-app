@@ -8,6 +8,7 @@ import { appendCurrentTelegramHash, isTelegramClientShell } from "@/lib/telegram
 import { useIsTelegramMiniApp } from "@/lib/hooks/useIsTelegramMiniApp";
 import { mapAuthErrorMessage } from "@/lib/auth-errors";
 import { hapticMap } from "@/lib/haptic-map";
+import { AppOrb } from "@/components/AppOrb";
 
 type AuthMode = "login" | "signup";
 
@@ -261,7 +262,7 @@ export default function LoginPage() {
     <Suspense
       fallback={
         <div className="flex min-h-app items-center justify-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-omf-line border-t-omf-ultra" />
+          <AppOrb state="connecting" label="Загружаем" />
         </div>
       }
     >

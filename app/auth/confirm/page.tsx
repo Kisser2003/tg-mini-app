@@ -4,6 +4,7 @@ import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AuthShell } from "@/components/AuthShell";
 import { createSupabaseBrowser } from "@/lib/supabase";
+import { AppOrb } from "@/components/AppOrb";
 
 type ConfirmStatus = "loading" | "success" | "error";
 
@@ -61,10 +62,9 @@ function ConfirmEmailContent() {
           Ко входу
         </button>
       ) : (
-        <div
-          className="h-8 w-8 animate-spin rounded-full border-2 border-omf-line border-t-omf-ultra"
-          role="status"
-          aria-label={status === "loading" ? "Подтверждаем" : "Открываем приложение"}
+        <AppOrb
+          state="connecting"
+          label={status === "loading" ? "Подтверждаем" : "Открываем приложение"}
         />
       )}
     </AuthShell>
@@ -76,7 +76,7 @@ export default function ConfirmEmailPage() {
     <Suspense
       fallback={
         <div className="flex min-h-app items-center justify-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-omf-line border-t-omf-ultra" />
+          <AppOrb state="connecting" label="Загружаем" />
         </div>
       }
     >

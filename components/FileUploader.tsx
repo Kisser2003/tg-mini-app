@@ -1,10 +1,38 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import dynamic from "next/dynamic";
+import { ErrorBoundary } from "react-error-boundary";
 import { Check, ImagePlus, Music2 } from "lucide-react";
 import { FormFieldError } from "@/components/FormFieldError";
 import { ALLOWED_AUDIO_MIME } from "@/repositories/releases.repo";
 import { triggerHaptic } from "@/lib/telegram";
+import { AppOrb } from "@/components/AppOrb";
+
+/** WebGL-мозаика (three.js) грузится только когда пользователь выбрал обложку. */
+const CoverMosaic = dynamic(() => import("@/components/CoverMosaic"), { ssr: false });
+
+const MOSAIC_MS = 2600;
+const MOSAIC_THUMB_PX = 512;
+
+/** Миниатюра для WebGL; null — если canvas недоступен или включено «меньше движения». */
+function makeMosaicThumb(img: HTMLImageElement): Promise<string | null> {
+  if (typeof window === "undefined") return Promise.resolve(null);
+  if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return Promise.resolve(null);
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = MOSAIC_THUMB_PX;
+    canvas.height = MOSAIC_THUMB_PX;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return Promise.resolve(null);
+    ctx.drawImage(img, 0, 0, MOSAIC_THUMB_PX, MOSAIC_THUMB_PX);
+    return new Promise((resolve) => {
+      canvas.toBlob((blob) => resolve(blob ? URL.createObjectURL(blob) : null), "image/jpeg", 0.85);
+    });
+  } catch {
+    return Promise.resolve(null);
+  }
+}
 
 type Props = {
   label: string;
@@ -52,6 +80,8 @@ export function FileUploader({
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const successFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [mosaicSrc, setMosaicSrc] = useState<string | null>(null);
+  const mosaicTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Blob URL created by this component for `initialFile` (cover); revoked on replace/unmount. */
   const ownedBlobUrlRef = useRef<string | null>(null);
 
@@ -101,6 +131,29 @@ export function FileUploader({
       }
     };
   }, []);
+
+  useEffect(() => {
+    return () => {
+      if (mosaicTimerRef.current != null) clearTimeout(mosaicTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      revokeIfBlobUrl(mosaicSrc);
+    };
+  }, [mosaicSrc]);
+
+  const playMosaic = async (img: HTMLImageElement) => {
+    const thumb = await makeMosaicThumb(img);
+    if (!thumb) return;
+    if (mosaicTimerRef.current != null) clearTimeout(mosaicTimerRef.current);
+    setMosaicSrc(thumb);
+    mosaicTimerRef.current = setTimeout(() => {
+      mosaicTimerRef.current = null;
+      setMosaicSrc(null);
+    }, MOSAIC_MS);
+  };
 
   const scheduleSuccessFlash = () => {
     if (successFlashTimerRef.current != null) {
@@ -207,10 +260,10 @@ export function FileUploader({
           setError("Обложка меньше 3000×3000 пикселей. Выбери изображение побольше.");
           URL.revokeObjectURL(objectUrl);
         } else {
-          URL.revokeObjectURL(objectUrl);
           // Parent updates `initialFile` → sync effect sets file + owned blob preview.
           onFileChange(selected);
           scheduleSuccessFlash();
+          void playMosaic(img).finally(() => URL.revokeObjectURL(objectUrl));
         }
       };
       img.onerror = () => {
@@ -257,6 +310,13 @@ export function FileUploader({
             <>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={previewUrl} alt="Предпросмотр обложки" className="absolute inset-0 h-full w-full object-cover" />
+              {mosaicSrc ? (
+                <div className="pointer-events-none absolute inset-0 z-10" aria-hidden>
+                  <ErrorBoundary fallback={null}>
+                    <CoverMosaic src={mosaicSrc} />
+                  </ErrorBoundary>
+                </div>
+              ) : null}
               <span className="absolute inset-x-0 bottom-0 bg-omf-bg/85 px-3 py-2.5 text-center text-[14px] text-omf-ink">
                 {isUploading ? "Обложка выбрана" : "Нажми, чтобы заменить"}
               </span>
@@ -280,8 +340,9 @@ export function FileUploader({
           <input type="file" accept={accept} className="sr-only" onChange={handleChange} />
           {isWavUploading ? (
             <div aria-live="polite">
-              <div className="flex items-baseline justify-between gap-3 text-[14px]">
-                <span className="min-w-0 truncate">{file?.name ?? "Загружаем WAV"}</span>
+              <div className="flex items-center justify-between gap-3 text-[14px]">
+                <AppOrb state="listening" size={20} />
+                <span className="min-w-0 flex-1 truncate">{file?.name ?? "Загружаем WAV"}</span>
                 <span className="shrink-0 tabular-nums text-omf-ultra-text">{clampedProgress}%</span>
               </div>
               <div

@@ -2,6 +2,7 @@
 
 import { useLayoutEffect } from "react";
 import { useRouter } from "next/navigation";
+import { AppOrb } from "@/components/AppOrb";
 
 // The /create route is a pure entry-point that immediately sends the user to
 // the first step of the wizard.  Using a client-side useLayoutEffect redirect
@@ -20,10 +21,7 @@ export default function CreateEntryPage() {
 
   return (
     <div className="bg-background flex min-h-app items-center justify-center">
-      <div
-        className="h-9 w-9 animate-spin rounded-full border-2 border-omf-line border-t-omf-ultra"
-        aria-label="Загрузка…"
-      />
+      <AppOrb state="working" label="Загрузка…" />
     </div>
   );
 }

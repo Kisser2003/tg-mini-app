@@ -33,6 +33,8 @@ import {
 import { unionFeaturingNamesFromTracks } from "@/lib/collaborators";
 import { useReferral } from "@/lib/hooks/useReferral";
 import { REFEREE_DISCOUNT_RUB, formatRub } from "@/lib/referral";
+import { AppOrb } from "@/components/AppOrb";
+import { cn } from "@/lib/utils";
 
 const UploadProgress = dynamic(
   () => import("@/components/UploadProgress").then((m) => m.UploadProgress),
@@ -241,7 +243,7 @@ export default function CreateReviewPage() {
   if (submitStatus === "success" && successSummary) {
     return (
       <CreateShell title="Проверка">
-        <FullScreenLoader label="Готово — переходим…" />
+        <FullScreenLoader state="composing" label="Готово — переходим…" />
       </CreateShell>
     );
   }
@@ -257,7 +259,7 @@ export default function CreateReviewPage() {
     if (isSubmitting || submitStatus === "submitting") {
       return (
         <CreateShell title="Проверка">
-          <FullScreenLoader label="Отправляем релиз…" />
+          <FullScreenLoader state="weaving" label="Отправляем релиз…" />
         </CreateShell>
       );
     }
@@ -424,9 +426,19 @@ export default function CreateReviewPage() {
               type="button"
               disabled={submitBlocked}
               onClick={() => void handleSubmit()}
-              className="create-flow-submit-target omf-btn-primary h-14 w-full text-[16px]"
+              className={cn(
+                "create-flow-submit-target omf-btn-primary h-14 w-full text-[16px]",
+                termsAccepted && !submitBlocked && !tracksUploadInProgress && "omf-btn-shine"
+              )}
             >
-              {tracksUploadInProgress ? "Загружаем WAV…" : "Отправить на проверку"}
+              {tracksUploadInProgress ? (
+                <>
+                  <AppOrb state="working" size={20} />
+                  Загружаем WAV…
+                </>
+              ) : (
+                "Отправить на проверку"
+              )}
             </button>
           ) : null}
 
