@@ -7,6 +7,7 @@ import { getAdminTelegramIdForUi, telegramIdsEqual } from "@/lib/admin";
 import {
   acquireTelegramClosingConfirmation,
   getTelegramStartParam,
+  getTelegramWebApp,
   getTelegramUserId,
   initTelegramWebApp,
   isTelegramClientShell,
@@ -16,23 +17,51 @@ import { releaseApiRequest } from "@/lib/api/release-client";
 import { parseReferralStartParam } from "@/lib/referral";
 import { REFERRAL_SWR_KEY } from "@/lib/hooks/useReferral";
 
-const REFERRAL_ATTEMPT_KEY = "omf:referral-attempted";
+const REFERRAL_DONE_KEY = "omf:referral-attributed";
+/** telegram-web-app.js подключается позже первого эффекта — ждём WebApp до ~10 с. */
+const REFERRAL_POLL_MS = 250;
+const REFERRAL_POLL_MAX = 40;
 
-/** Открыли по ссылке друга (`startapp=ref_…`) — один раз за запуск просим сервер привязать приглашение. */
-function attributeReferralOnce(): void {
-  if (!parseReferralStartParam(getTelegramStartParam())) return;
-  try {
-    if (sessionStorage.getItem(REFERRAL_ATTEMPT_KEY)) return;
-    sessionStorage.setItem(REFERRAL_ATTEMPT_KEY, "1");
-  } catch {
-    /* без sessionStorage сервер всё равно идемпотентен */
-  }
-  void releaseApiRequest<{ ok: boolean; result: string }>("/api/referral/attribute", { method: "POST", body: {} })
-    .then((res) => {
-      // Экран-приветствие (ReferralWelcome) покажется сам, когда обновлённая сводка скажет, что скидка ждёт.
-      if (res.result === "attributed") void mutate(REFERRAL_SWR_KEY);
-    })
-    .catch(() => {});
+/**
+ * Открыли по ссылке друга (`startapp=ref_…`) — просим сервер привязать приглашение.
+ * Код сервер берёт сам из подписанного initData; здесь только решаем, стоит ли звать.
+ * Флаг «готово» ставим после ответа, чтобы сбой сети не потерял приглашение.
+ */
+function attributeReferralOnce(): () => void {
+  let timer: number | undefined;
+  let tries = 0;
+
+  const send = () => {
+    void releaseApiRequest<{ ok: boolean; result: string }>("/api/referral/attribute", { method: "POST", body: {} })
+      .then((res) => {
+        try {
+          sessionStorage.setItem(REFERRAL_DONE_KEY, "1");
+        } catch {
+          /* сервер идемпотентен */
+        }
+        // Экран-приветствие (ReferralWelcome) покажется сам, когда обновлённая сводка скажет, что скидка ждёт.
+        if (res.result === "attributed") void mutate(REFERRAL_SWR_KEY);
+      })
+      .catch(() => {});
+  };
+
+  const tick = () => {
+    if (getTelegramWebApp()) {
+      if (parseReferralStartParam(getTelegramStartParam())) {
+        try {
+          if (sessionStorage.getItem(REFERRAL_DONE_KEY)) return;
+        } catch {
+          /* ignore */
+        }
+        send();
+      }
+      return;
+    }
+    if (++tries < REFERRAL_POLL_MAX) timer = window.setTimeout(tick, REFERRAL_POLL_MS);
+  };
+
+  tick();
+  return () => window.clearTimeout(timer);
 }
 
 export function TelegramBootstrap() {
@@ -42,8 +71,11 @@ export function TelegramBootstrap() {
   useEffect(() => {
     initTelegramWebApp();
     acquireTelegramClosingConfirmation();
-    attributeReferralOnce();
-    return () => releaseTelegramClosingConfirmation();
+    const stopReferral = attributeReferralOnce();
+    return () => {
+      stopReferral();
+      releaseTelegramClosingConfirmation();
+    };
   }, []);
 
   useEffect(() => {
