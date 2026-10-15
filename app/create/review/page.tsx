@@ -33,7 +33,7 @@ import {
 import { unionFeaturingNamesFromTracks } from "@/lib/collaborators";
 import { useReferral } from "@/lib/hooks/useReferral";
 import { REFEREE_DISCOUNT_RUB, formatRub } from "@/lib/referral";
-import { AppOrb } from "@/components/AppOrb";
+import { BusyLabel } from "@/components/BusyLabel";
 import { cn } from "@/lib/utils";
 
 const UploadProgress = dynamic(
@@ -431,14 +431,7 @@ export default function CreateReviewPage() {
                 termsAccepted && !submitBlocked && !tracksUploadInProgress && "omf-btn-shine"
               )}
             >
-              {tracksUploadInProgress ? (
-                <>
-                  <AppOrb state="working" size={20} />
-                  Загружаем WAV…
-                </>
-              ) : (
-                "Отправить на проверку"
-              )}
+              <BusyLabel busy={tracksUploadInProgress} busyText="Загружаем WAV…">Отправить на проверку</BusyLabel>
             </button>
           ) : null}
 

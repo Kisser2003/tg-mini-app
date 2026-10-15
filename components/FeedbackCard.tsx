@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { hapticMap } from "@/lib/haptic-map";
 import { getTelegramApiAuthHeaders } from "@/lib/telegram";
-import { AppOrb } from "@/components/AppOrb";
+import { BusyLabel } from "@/components/BusyLabel";
 
 export function FeedbackCard() {
   const [message, setMessage] = useState("");
@@ -81,14 +81,7 @@ export function FeedbackCard() {
         onClick={submitFeedback}
         className="omf-btn-primary mt-4 w-full"
       >
-        {sending ? (
-          <>
-            <AppOrb state="working" size={20} />
-            Отправляем…
-          </>
-        ) : (
-          "Отправить"
-        )}
+        <BusyLabel busy={sending} busyText="Отправляем…">Отправить</BusyLabel>
       </button>
       {statusText ? (
         <p className={`mt-3 text-[14px] ${statusError ? "text-omf-red" : "text-omf-green"}`} role="status">

@@ -33,6 +33,7 @@ import {
 import { describeRejection, type RejectionSummary } from "@/lib/rejection-reasons";
 import { getTelegramInitDataForApiHeader, getTelegramUserIdForSupabaseRequests } from "@/lib/telegram";
 import { AppOrb } from "@/components/AppOrb";
+import { RefreshIcon } from "@/components/RefreshIcon";
 
 
 type LibraryStatusFilter = "all" | "processing" | "ready" | "failed";
@@ -471,7 +472,7 @@ function LibraryPageInner() {
             aria-label="Обновить список"
             className="omf-focus mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-omf-graphite transition-colors hover:bg-omf-surface hover:text-omf-ink disabled:opacity-40"
           >
-            {isValidating ? <AppOrb state="searching" size={20} label="Обновляем" /> : <RefreshCw className="h-[18px] w-[18px]" aria-hidden />}
+            <RefreshIcon icon={RefreshCw} spinning={isValidating} />
           </button>
         </header>
 

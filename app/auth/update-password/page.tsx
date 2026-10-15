@@ -7,6 +7,7 @@ import { mapAuthErrorMessage } from "@/lib/auth-errors";
 import { hapticMap } from "@/lib/haptic-map";
 import { createSupabaseBrowser } from "@/lib/supabase";
 import { AppOrb } from "@/components/AppOrb";
+import { BusyLabel } from "@/components/BusyLabel";
 
 function UpdatePasswordContent() {
   const router = useRouter();
@@ -103,14 +104,7 @@ function UpdatePasswordContent() {
         {error && <AuthMessage kind="error">{error}</AuthMessage>}
 
         <button type="submit" disabled={loading} className="omf-btn-primary h-14 w-full text-[16px]">
-          {loading ? (
-            <>
-              <AppOrb state="working" size={20} />
-              Сохраняем…
-            </>
-          ) : (
-            "Сохранить пароль"
-          )}
+          <BusyLabel busy={loading} busyText="Сохраняем…">Сохранить пароль</BusyLabel>
         </button>
       </form>
     </AuthShell>

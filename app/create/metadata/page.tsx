@@ -48,7 +48,7 @@ import {
   WIZARD_INPUT_CLASS
 } from "@/lib/glass-form-classes";
 import type { ReleaseType } from "@/lib/db-enums";
-import { AppOrb } from "@/components/AppOrb";
+import { BusyLabel } from "@/components/BusyLabel";
 import {
   GENRE_OPTIONS,
   LICENSE_TYPE_LABELS,
@@ -823,14 +823,7 @@ function CreateMetadataPageInner() {
               disabled={!canProceed || isSubmitting}
               className="create-flow-submit-target omf-btn-primary mt-1 h-14 w-full text-[16px]"
             >
-              {isSubmitting ? (
-                <>
-                  <AppOrb state="working" size={20} />
-                  Сохраняем…
-                </>
-              ) : (
-                "Дальше: обложка"
-              )}
+              <BusyLabel busy={isSubmitting} busyText="Сохраняем…">Дальше: обложка</BusyLabel>
             </button>
           </form>
         )}

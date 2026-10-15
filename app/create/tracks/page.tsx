@@ -32,7 +32,7 @@ import {
 } from "@/lib/telegram";
 import { validateWavFile } from "@/lib/wav-validator";
 import { toast } from "sonner";
-import { AppOrb } from "@/components/AppOrb";
+import { BusyLabel } from "@/components/BusyLabel";
 
 const FileUploader = dynamic(
   () => import("@/components/FileUploader").then((m) => m.FileUploader),
@@ -742,19 +742,12 @@ export default function CreateTracksPage() {
             disabled={!isValid || isSubmitting || isUploadingWav || isWavTransferActive}
             className="create-flow-submit-target omf-btn-primary h-14 w-full text-[16px]"
           >
-            {isUploadingWav || isWavTransferActive ? (
-              <>
-                <AppOrb state="working" size={20} />
-                Загружаем WAV…
-              </>
-            ) : isSubmitting ? (
-              <>
-                <AppOrb state="working" size={20} />
-                Сохраняем…
-              </>
-            ) : (
-              "Дальше: проверка"
-            )}
+            <BusyLabel
+              busy={isUploadingWav || isWavTransferActive || isSubmitting}
+              busyText={isUploadingWav || isWavTransferActive ? "Загружаем WAV…" : "Сохраняем…"}
+            >
+              Дальше: проверка
+            </BusyLabel>
           </button>
 
           <FormFieldError message={submitError ?? undefined} messageClassName="text-center" />
