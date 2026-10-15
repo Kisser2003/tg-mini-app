@@ -5,7 +5,7 @@ import { requireAdminSupabaseClient } from "@/lib/admin-release-api-guard";
 import { getTelegramAuthContextFromRequest } from "@/lib/api/with-telegram-auth";
 import {
   PAYMENT_RELEASE_SELECT,
-  askStudioAboutPayment,
+  askAdminAboutPayment,
   remindArtistToPay,
   setReleasePaymentStatus,
   type PaymentRelease
@@ -18,10 +18,10 @@ export const runtime = "nodejs";
 const bodySchema = z.object({
   releaseId: z.string().uuid(),
   /**
-   * paid / unpaid — админ ставит сам; ask_studio — ещё раз спросить Дениса в боте;
+   * paid / unpaid — админ ставит сам; ask_bot — ещё раз спросить админа в боте;
    * remind_artist — бот просит клиента оплатить (только при «не оплачено»).
    */
-  action: z.enum(["paid", "unpaid", "ask_studio", "remind_artist"])
+  action: z.enum(["paid", "unpaid", "ask_bot", "remind_artist"])
 });
 
 /** Не чаще раза в сутки на релиз (Redis; без него — защита только в интерфейсе). */
@@ -55,7 +55,7 @@ async function handleReleasePayment(request: NextRequest): Promise<Response> {
     return NextResponse.json({ ok: true });
   }
 
-  if (action === "ask_studio") {
+  if (action === "ask_bot") {
     const { data: row, error } = await guard.supabase
       .from("releases")
       .select(PAYMENT_RELEASE_SELECT)
@@ -73,12 +73,12 @@ async function handleReleasePayment(request: NextRequest): Promise<Response> {
       if (!set.ok) return NextResponse.json({ ok: false, error: set.error }, { status: set.status });
       release = set.release;
     }
-    const asked = await askStudioAboutPayment(guard.supabase, release);
+    const asked = await askAdminAboutPayment(guard.supabase, release);
     if (!asked.ok) {
       const error =
         asked.reason === "not_configured"
-          ? "Не задан Telegram id студии (PAYMENT_CONFIRMER_TELEGRAM_ID)."
-          : "Бот не смог написать студии. Проверь, что Денис нажал /start у бота.";
+          ? "Не задан ADMIN_TELEGRAM_ID."
+          : "Бот не смог написать тебе. Проверь, что ты нажимал /start у бота.";
       return NextResponse.json({ ok: false, error }, { status: asked.reason === "not_configured" ? 503 : 502 });
     }
     return NextResponse.json({ ok: true, release });

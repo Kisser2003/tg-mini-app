@@ -1,21 +1,18 @@
 /**
- * Оплата релиза. Деньги принимает студия (Денис); подтверждает он кнопкой в боте
- * (см. lib/server/payment-confirm.ts), админ может поправить статус в админке.
+ * Оплата релиза. Деньги принимает админ; на каждый отправленный релиз бот спрашивает его «Оплатил?»
+ * кнопками (см. lib/server/payment-confirm.ts), статус можно поправить и в админке.
  * Клиент статус не меняет: колонки защищены триггером в БД.
  */
 
 export const PAYMENT_STATUSES = ["awaiting", "paid", "unpaid", "not_client"] as const;
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 
-/** Ответы студии кнопками в боте. */
-export const STUDIO_ANSWERS = ["paid", "unpaid", "not_client"] as const;
-export type StudioAnswer = (typeof STUDIO_ANSWERS)[number];
+/** Ответы кнопками в боте. */
+export const PAYMENT_ANSWERS = ["paid", "unpaid", "not_client"] as const;
+export type PaymentAnswer = (typeof PAYMENT_ANSWERS)[number];
 
-/** Кто поменял статус: студия кнопкой в боте или админ. */
+/** Кто поменял статус. `studio` — только старые записи, когда отвечал Денис; сейчас всегда `admin`. */
 export type PaymentActor = "studio" | "admin";
-
-/** Как называем подтверждающего в интерфейсе админки. */
-export const STUDIO_CONFIRMER_NAME = "Денис";
 
 export function parsePaymentStatus(raw: unknown): PaymentStatus | null {
   return typeof raw === "string" && (PAYMENT_STATUSES as readonly string[]).includes(raw)
@@ -39,13 +36,13 @@ export function describePayment(raw: unknown): { label: string; tone: PaymentTon
     case "not_client":
       return { label: "не клиент студии", tone: "problem" };
     case "awaiting":
-      return { label: `оплата: ждём ответ ${STUDIO_CONFIRMER_NAME}а`, tone: "wait" };
+      return { label: "оплата: ждём подтверждения", tone: "wait" };
     default:
       return { label: "оплата не отмечена", tone: "muted" };
   }
 }
 
-/** «Денис · 14 окт, 12:30» — кто и когда последним менял статус. */
+/** «админ · 14 окт, 12:30» — кто и когда последним менял статус. */
 export function describePaymentUpdate(
   by: string | null | undefined,
   at: string | null | undefined
@@ -60,6 +57,6 @@ export function describePaymentUpdate(
     minute: "2-digit",
     timeZone: "Europe/Moscow"
   });
-  const who = by === "studio" ? STUDIO_CONFIRMER_NAME : by === "admin" ? "админ" : null;
+  const who = by === "studio" ? "студия" : by === "admin" ? "админ" : null;
   return who ? `${who} · ${when}` : when;
 }

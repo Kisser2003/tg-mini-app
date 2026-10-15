@@ -6,7 +6,6 @@ const sendMessage = vi.fn();
 const editMessage = vi.fn();
 const answerCallback = vi.fn();
 const notifyArtist = vi.fn();
-const notifyAdminPaymentAnswer = vi.fn();
 const guard = vi.fn();
 
 vi.mock("../lib/telegram-bot.server", async () => {
@@ -22,9 +21,6 @@ vi.mock("../lib/server/artist-notify", async () => {
   const actual = await vi.importActual<typeof import("../lib/server/artist-notify")>("../lib/server/artist-notify");
   return { artistTelegramId: actual.artistTelegramId, notifyArtist: (...a: unknown[]) => notifyArtist(...a) };
 });
-vi.mock("../lib/admin-notify.server", () => ({
-  notifyAdminPaymentAnswer: (...a: unknown[]) => notifyAdminPaymentAnswer(...a)
-}));
 vi.mock("../lib/admin-release-api-guard", () => ({
   requireAdminSupabaseClient: (...a: unknown[]) => guard(...a)
 }));
@@ -40,15 +36,14 @@ vi.mock("../lib/server/redis-cache", () => ({
 }));
 
 import {
-  buildStudioPaymentKeyboard,
-  buildStudioPaymentText,
+  buildPaymentKeyboard,
+  buildPaymentText,
   handlePaymentCallback,
   parsePaymentCallbackData,
   requestPaymentConfirmationOnSubmit
 } from "@/lib/server/payment-confirm";
 
 const ID = "11111111-1111-4111-8111-111111111111";
-const STUDIO = "555";
 const ADMIN = "777";
 
 const baseRow = {
@@ -87,13 +82,12 @@ function query(answer: string, fromId: string) {
 
 beforeEach(() => {
   cache.clear();
-  for (const m of [sendMessage, editMessage, answerCallback, notifyArtist, notifyAdminPaymentAnswer, guard]) m.mockReset();
+  for (const m of [sendMessage, editMessage, answerCallback, notifyArtist, guard]) m.mockReset();
   sendMessage.mockResolvedValue({ ok: true });
   editMessage.mockResolvedValue({ ok: true });
   answerCallback.mockResolvedValue({ ok: true });
   notifyArtist.mockResolvedValue(true);
-  vi.stubEnv("PAYMENT_CONFIRMER_TELEGRAM_ID", STUDIO);
-  vi.stubEnv("PAYMENT_CONFIRMER_USERNAME", "denis");
+  vi.stubEnv("PAYMENT_CONFIRMER_USERNAME", "owner");
   vi.stubEnv("ADMIN_TELEGRAM_ID", ADMIN);
 });
 
@@ -110,18 +104,18 @@ describe("кнопки оплаты", () => {
   });
 
   it("до ответа — три кнопки, после — две оставшиеся и строка «Ответ»", () => {
-    const before = buildStudioPaymentKeyboard({ ...baseRow, payment_status: "awaiting" });
+    const before = buildPaymentKeyboard({ ...baseRow, payment_status: "awaiting" });
     expect(before.inline_keyboard.flat().map((b) => b.callback_data)).toEqual([
       `pay:paid:${ID}`,
       `pay:unpaid:${ID}`,
       `pay:not_client:${ID}`
     ]);
     const answered = { ...baseRow, payment_status: "paid", payment_updated_at: "2026-10-14T09:30:00Z" };
-    expect(buildStudioPaymentKeyboard(answered).inline_keyboard.flat().map((b) => b.callback_data)).toEqual([
+    expect(buildPaymentKeyboard(answered).inline_keyboard.flat().map((b) => b.callback_data)).toEqual([
       `pay:unpaid:${ID}`,
       `pay:not_client:${ID}`
     ]);
-    const text = buildStudioPaymentText(answered, 2);
+    const text = buildPaymentText(answered, 2);
     expect(text).toContain("«Лето» — Ваня");
     expect(text).toContain("@vanya");
     expect(text).toContain("Треков: 2");
@@ -129,7 +123,7 @@ describe("кнопки оплаты", () => {
   });
 
   it("экранирует HTML в названии и нике", () => {
-    const text = buildStudioPaymentText({ ...baseRow, title: "<b>x</b>", artist_name: "a&b" }, null);
+    const text = buildPaymentText({ ...baseRow, title: "<b>x</b>", artist_name: "a&b" }, null);
     expect(text).toContain("&lt;b&gt;x&lt;/b&gt;");
     expect(text).toContain("a&amp;b");
   });
@@ -143,69 +137,59 @@ describe("handlePaymentCallback", () => {
     expect(answerCallback).toHaveBeenCalledWith("cb1", "Эта кнопка не для тебя.");
   });
 
-  it("Денис: «Не оплатил» → статус, лог, сообщение админу, правка сообщения; клиенту — ничего", async () => {
+  it("админ: «Не оплатил» → статус, лог, правка сообщения; клиенту — ничего", async () => {
     const mock = db(baseRow);
-    await handlePaymentCallback(mock.client as never, query("unpaid", STUDIO));
+    await handlePaymentCallback(mock.client as never, query("unpaid", ADMIN));
 
     const update = mock.calls.find((c) => c.table === "releases" && c.op === "update");
-    expect(update?.payload).toMatchObject({ payment_status: "unpaid", payment_updated_by: "studio" });
+    expect(update?.payload).toMatchObject({ payment_status: "unpaid", payment_updated_by: "admin" });
     expect(filterValue(update!, "eq", "id")).toBe(ID);
     const log = mock.calls.find((c) => c.table === "release_logs");
     expect(log?.payload).toMatchObject({ release_id: ID, stage: "payment", status: "unpaid" });
 
     expect(notifyArtist).not.toHaveBeenCalled();
-    expect(notifyAdminPaymentAnswer).toHaveBeenCalledWith(
-      expect.objectContaining({
-        answer: "⏳ Не оплатил",
-        who: "Денис",
-        hint: expect.stringContaining("Клиенту бот ничего не писал")
-      })
-    );
-    expect(editMessage).toHaveBeenCalledWith(expect.objectContaining({ chatId: Number(STUDIO), messageId: 42 }));
+    expect(editMessage).toHaveBeenCalledWith(expect.objectContaining({ chatId: Number(ADMIN), messageId: 42 }));
     expect(answerCallback).toHaveBeenCalledWith("cb1", "Записал: ⏳ Не оплатил");
   });
 
   it("повторное нажатие того же ответа — без записи и без сообщений", async () => {
-    const mock = db({ ...baseRow, payment_status: "unpaid", payment_updated_by: "studio" });
-    await handlePaymentCallback(mock.client as never, query("unpaid", STUDIO));
+    const mock = db({ ...baseRow, payment_status: "unpaid", payment_updated_by: "admin" });
+    await handlePaymentCallback(mock.client as never, query("unpaid", ADMIN));
     expect(mock.calls.some((c) => c.op === "update")).toBe(false);
     expect(notifyArtist).not.toHaveBeenCalled();
-    expect(notifyAdminPaymentAnswer).not.toHaveBeenCalled();
     expect(answerCallback).toHaveBeenCalledWith("cb1", "Уже отмечено.");
   });
 
-  it("Денис ошибся и сразу исправил — клиент ничего не получает", async () => {
-    const mock = db({ ...baseRow, payment_status: "unpaid", payment_updated_by: "studio" });
-    await handlePaymentCallback(mock.client as never, query("paid", STUDIO));
+  it("ошибся и сразу исправил — клиент ничего не получает", async () => {
+    const mock = db({ ...baseRow, payment_status: "unpaid", payment_updated_by: "admin" });
+    await handlePaymentCallback(mock.client as never, query("paid", ADMIN));
     expect(mock.calls.find((c) => c.op === "update")?.payload).toMatchObject({ payment_status: "paid" });
     expect(notifyArtist).not.toHaveBeenCalled();
   });
 
-  it("Денис «Оплатил» — артисту не пишем", async () => {
+  it("«Оплатил» — артисту не пишем", async () => {
     const mock = db(baseRow);
-    await handlePaymentCallback(mock.client as never, query("paid", STUDIO));
+    await handlePaymentCallback(mock.client as never, query("paid", ADMIN));
     expect(notifyArtist).not.toHaveBeenCalled();
-    expect(notifyAdminPaymentAnswer).toHaveBeenCalledTimes(1);
   });
 
-  it("админ тоже может нажать — отмечается как admin, без уведомлений", async () => {
+  it("студия (старый PAYMENT_CONFIRMER_TELEGRAM_ID) больше не может нажимать кнопки", async () => {
+    vi.stubEnv("PAYMENT_CONFIRMER_TELEGRAM_ID", "555");
     const mock = db(baseRow);
-    await handlePaymentCallback(mock.client as never, query("unpaid", ADMIN));
-    const update = mock.calls.find((c) => c.op === "update");
-    expect(update?.payload).toMatchObject({ payment_status: "unpaid", payment_updated_by: "admin" });
-    expect(notifyArtist).not.toHaveBeenCalled();
-    expect(notifyAdminPaymentAnswer).not.toHaveBeenCalled();
+    await handlePaymentCallback(mock.client as never, query("paid", "555"));
+    expect(mock.calls).toHaveLength(0);
+    expect(answerCallback).toHaveBeenCalledWith("cb1", "Эта кнопка не для тебя.");
   });
 
   it("релиз удалён — понятный ответ", async () => {
     const mock = db(null);
-    await handlePaymentCallback(mock.client as never, query("paid", STUDIO));
+    await handlePaymentCallback(mock.client as never, query("paid", ADMIN));
     expect(answerCallback).toHaveBeenCalledWith("cb1", "Релиз не найден — возможно, его удалили.");
   });
 });
 
 describe("requestPaymentConfirmationOnSubmit", () => {
-  it("первая отправка: статус awaiting только если не спрашивали, и вопрос Денису с кнопками", async () => {
+  it("первая отправка: статус awaiting только если не спрашивали, и вопрос админу с кнопками", async () => {
     const mock = db({ ...baseRow, payment_status: null });
     await requestPaymentConfirmationOnSubmit(mock.client as never, { ...baseRow, payment_status: null });
     const update = mock.calls.find((c) => c.op === "update");
@@ -213,18 +197,19 @@ describe("requestPaymentConfirmationOnSubmit", () => {
     expect(filterValue(update!, "is", "payment_status")).toBeNull();
     expect(sendMessage).toHaveBeenCalledTimes(1);
     const sent = sendMessage.mock.calls[0][0] as { chatId: string; replyMarkup: { inline_keyboard: unknown[][] } };
-    expect(sent.chatId).toBe(STUDIO);
+    expect(sent.chatId).toBe(ADMIN);
     expect(sent.replyMarkup.inline_keyboard.flat()).toHaveLength(3);
   });
 
-  it("повторная отправка после «Вернуть» — Денису не пишем", async () => {
+  it("повторная отправка после «Вернуть» — админу не пишем", async () => {
     const mock = db(baseRow, { updateReturnsEmpty: true });
     await requestPaymentConfirmationOnSubmit(mock.client as never, baseRow);
     expect(sendMessage).not.toHaveBeenCalled();
   });
 
-  it("без PAYMENT_CONFIRMER_TELEGRAM_ID — статус ставим, но никому не пишем", async () => {
-    vi.stubEnv("PAYMENT_CONFIRMER_TELEGRAM_ID", "");
+  it("без ADMIN_TELEGRAM_ID — статус ставим, но никому не пишем", async () => {
+    vi.stubEnv("ADMIN_TELEGRAM_ID", "");
+    vi.stubEnv("NEXT_PUBLIC_ADMIN_TELEGRAM_ID", "");
     const mock = db({ ...baseRow, payment_status: null });
     await requestPaymentConfirmationOnSubmit(mock.client as never, { ...baseRow, payment_status: null });
     expect(mock.calls.some((c) => c.op === "update")).toBe(true);
@@ -290,11 +275,11 @@ describe("POST /api/admin/release-payment", () => {
     expect(notifyArtist).not.toHaveBeenCalled();
   });
 
-  it("«Спросить Дениса» по старому релизу — ставит awaiting и пишет ему", async () => {
+  it("«Напомнить мне в боте» по старому релизу — ставит awaiting и пишет админу", async () => {
     const mock = db({ ...baseRow, payment_status: null });
     guard.mockResolvedValue({ ok: true, supabase: mock.client });
     const { POST } = await import("@/app/api/admin/release-payment/route");
-    const res = await POST(post({ releaseId: ID, action: "ask_studio" }));
+    const res = await POST(post({ releaseId: ID, action: "ask_bot" }));
     expect(res.status).toBe(200);
     expect(mock.calls.find((c) => c.op === "update")?.payload).toMatchObject({ payment_status: "awaiting" });
     expect(sendMessage).toHaveBeenCalledTimes(1);
@@ -306,7 +291,7 @@ describe("POST /api/admin/release-payment", () => {
     const { POST } = await import("@/app/api/admin/release-payment/route");
     expect((await POST(post({ releaseId: ID, action: "remind_artist" }))).status).toBe(200);
     expect(notifyArtist).toHaveBeenCalledTimes(1);
-    expect(String(notifyArtist.mock.calls[0][1])).toContain("скинь чек @denis");
+    expect(String(notifyArtist.mock.calls[0][1])).toContain("скинь чек @owner");
     expect((await POST(post({ releaseId: ID, action: "remind_artist" }))).status).toBe(429);
     expect(notifyArtist).toHaveBeenCalledTimes(1);
   });
@@ -319,13 +304,14 @@ describe("POST /api/admin/release-payment", () => {
     expect(notifyArtist).not.toHaveBeenCalled();
   });
 
-  it("«Спросить Дениса» без его id в env — 503 с понятной ошибкой", async () => {
-    vi.stubEnv("PAYMENT_CONFIRMER_TELEGRAM_ID", "");
+  it("«Напомнить мне в боте» без ADMIN_TELEGRAM_ID в env — 503 с понятной ошибкой", async () => {
+    vi.stubEnv("ADMIN_TELEGRAM_ID", "");
+    vi.stubEnv("NEXT_PUBLIC_ADMIN_TELEGRAM_ID", "");
     const mock = db(baseRow);
     guard.mockResolvedValue({ ok: true, supabase: mock.client });
     const { POST } = await import("@/app/api/admin/release-payment/route");
-    const res = await POST(post({ releaseId: ID, action: "ask_studio" }));
+    const res = await POST(post({ releaseId: ID, action: "ask_bot" }));
     expect(res.status).toBe(503);
-    expect(((await res.json()) as { error: string }).error).toContain("PAYMENT_CONFIRMER_TELEGRAM_ID");
+    expect(((await res.json()) as { error: string }).error).toContain("ADMIN_TELEGRAM_ID");
   });
 });

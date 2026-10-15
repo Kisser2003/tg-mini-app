@@ -63,21 +63,6 @@ export async function notifyAdminReleaseSubmitted(params: {
   }
 }
 
-/** Студия ответила по оплате кнопкой в боте. */
-export async function notifyAdminPaymentAnswer(params: {
-  title: string;
-  artist: string;
-  answer: string;
-  who: string;
-  hint?: string | null;
-}): Promise<void> {
-  await sendToAdmin(
-    `💳 <b>${escapeHtml(params.who)}: ${escapeHtml(params.answer)}</b>\n\n` +
-      `«${escapeHtml(params.title || "без названия")}» — ${escapeHtml(params.artist || "—")}` +
-      (params.hint ? `\n\n${escapeHtml(params.hint)}` : "")
-  );
-}
-
 /** Друг по приглашению оплатил первый релиз — админу выплатить бонус пригласившему (кнопка «Выплатил»). */
 export async function notifyAdminReferralPayout(params: {
   refereeTelegramId: string;

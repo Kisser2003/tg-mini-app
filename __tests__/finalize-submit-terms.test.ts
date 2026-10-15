@@ -61,7 +61,7 @@ describe("finalize-submit: условия выпуска и оплата не б
     expect(requestPayment).toHaveBeenCalledTimes(1);
   });
 
-  it("сбой вопроса Денису не ломает отправку", async () => {
+  it("сбой вопроса про оплату не ломает отправку", async () => {
     requestPayment.mockRejectedValueOnce(new Error("telegram down"));
     const { POST } = await import("@/app/api/releases/finalize-submit/route");
     const res = await POST(post({ termsAccepted: true }));

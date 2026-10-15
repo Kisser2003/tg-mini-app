@@ -4,7 +4,6 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { remindArtistToPay, setReleaseReferralPayout, updateReleasePayment } from "@/features/admin/actions";
 import {
-  STUDIO_CONFIRMER_NAME,
   describePayment,
   describePaymentUpdate,
   parsePaymentStatus,
@@ -27,11 +26,11 @@ const TONE_CLASS: Record<PaymentTone, string> = {
 function hintFor(release: PaymentFields): string | null {
   switch (parsePaymentStatus(release.payment_status)) {
     case "awaiting":
-      return `Бот спросил ${STUDIO_CONFIRMER_NAME}а. Ответ появится здесь.`;
+      return "Бот спросил тебя в Telegram. Нажми кнопку там или отметь оплату здесь.";
     case "unpaid":
       return "Клиенту бот сам ничего не пишет. Попроси оплатить кнопкой ниже или напиши ему сам.";
     case "not_client":
-      return `Клиент не от ${STUDIO_CONFIRMER_NAME}а: напиши ему сам — откуда узнал о нас и сколько стоит выпуск.`;
+      return "Клиент не от студии: напиши ему сам — откуда узнал о нас и сколько стоит выпуск.";
     case "paid":
       return null;
     default:
@@ -61,15 +60,15 @@ export function AdminPaymentPanel({
   const updated = describePaymentUpdate(release.payment_updated_by, release.payment_updated_at);
   const hint = hintFor(release);
 
-  const run = async (action: "paid" | "unpaid" | "ask_studio") => {
+  const run = async (action: "paid" | "unpaid" | "ask_bot") => {
     setBusy(true);
     try {
       const fields = await updateReleasePayment(release.id, action);
       onChange(fields);
       triggerHaptic("success");
       toast.success(
-        action === "ask_studio"
-          ? `Спросили ${STUDIO_CONFIRMER_NAME}а в боте`
+        action === "ask_bot"
+          ? "Вопрос про оплату отправил тебе в бот"
           : action === "paid"
             ? "Отметили оплату"
             : "Отметили: не оплачено"
@@ -157,8 +156,8 @@ export function AdminPaymentPanel({
           </button>
         ) : null}
         {status == null || status === "awaiting" ? (
-          <button type="button" disabled={busy} onClick={() => void run("ask_studio")} className={pillClass}>
-            {status === "awaiting" ? `Спросить ${STUDIO_CONFIRMER_NAME}а ещё раз` : `Спросить ${STUDIO_CONFIRMER_NAME}а`}
+          <button type="button" disabled={busy} onClick={() => void run("ask_bot")} className={pillClass}>
+            {status === "awaiting" ? "Напомнить мне в боте ещё раз" : "Напомнить мне в боте"}
           </button>
         ) : null}
       </div>

@@ -1,11 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
-  STUDIO_ANSWERS,
-  STUDIO_CONFIRMER_NAME,
+  PAYMENT_ANSWERS,
   parsePaymentStatus,
   type PaymentActor,
   type PaymentStatus,
-  type StudioAnswer
+  type PaymentAnswer
 } from "@/lib/release-payment";
 import { getExpectedAdminTelegramId } from "@/lib/admin";
 import {
@@ -17,13 +16,12 @@ import {
 } from "@/lib/telegram-bot.server";
 import { getReleaseDisplayTitle, type ReleaseRecord } from "@/repositories/releases/types";
 import { artistTelegramId, notifyArtist } from "@/lib/server/artist-notify";
-import { notifyAdminPaymentAnswer } from "@/lib/admin-notify.server";
 import { applyReferralPaymentChange, referralPaymentLines } from "@/lib/server/referrals";
 
 /**
- * Подтверждение оплаты студией: на каждый отправленный релиз бот пишет Денису
+ * Подтверждение оплаты админом: на каждый отправленный релиз бот пишет админу
  * «Оплатил? [Оплатил] [Не оплатил] [Не мой клиент]», ответ пишется в releases.payment_*.
- * Кто такой Денис — PAYMENT_CONFIRMER_TELEGRAM_ID; без него бот никому не пишет, статус ставит админ.
+ * Спрашиваем только админа (ADMIN_TELEGRAM_ID); он же единственный, кто может нажать кнопки.
  */
 
 export const PAYMENT_RELEASE_SELECT =
@@ -42,17 +40,10 @@ export type PaymentRelease = Pick<ReleaseRecord, "id" | "artist_name"> &
     | "payment_updated_by"
   >;
 
-const ANSWER_BUTTON: Record<StudioAnswer, string> = {
+const ANSWER_BUTTON: Record<PaymentAnswer, string> = {
   paid: "✅ Оплатил",
   unpaid: "⏳ Не оплатил",
   not_client: "❓ Не мой клиент"
-};
-
-/** Подсказка админу к ответу студии: клиенту бот сам ничего не пишет. */
-const ADMIN_HINT: Record<StudioAnswer, string | null> = {
-  paid: null,
-  unpaid: "Клиенту бот ничего не писал. Попросить оплатить — кнопкой в админке или сам в личке.",
-  not_client: "Клиент не от студии: напиши ему сам — откуда узнал и сколько стоит выпуск."
 };
 
 const CALLBACK_RE = /^pay:(paid|unpaid|not_client):([0-9a-f-]{36})$/i;
@@ -62,29 +53,34 @@ function digitsOrNull(raw: string | undefined): string | null {
   return /^\d+$/.test(v) && v !== "0" ? v : null;
 }
 
-export function getStudioConfirmerTelegramId(): string | null {
-  return digitsOrNull(process.env.PAYMENT_CONFIRMER_TELEGRAM_ID);
+/** Кому бот задаёт вопрос «Оплатил?» — админу. */
+export function getPaymentConfirmerTelegramId(): string | null {
+  try {
+    return digitsOrNull(String(getExpectedAdminTelegramId()));
+  } catch {
+    return null;
+  }
 }
 
-/** Ник Дениса без @ — в сообщении артисту «скинь чек @…». */
-export function getStudioConfirmerUsername(): string | null {
+/** Ник, куда артисту скидывать чек (без @) — в сообщении «скинь чек @…». Задаётся PAYMENT_CONFIRMER_USERNAME. */
+export function getReceiptContactUsername(): string | null {
   const v = process.env.PAYMENT_CONFIRMER_USERNAME?.trim().replace(/^@/, "") ?? "";
   return /^[A-Za-z0-9_]{4,32}$/.test(v) ? v : null;
 }
 
-export function paymentCallbackData(answer: StudioAnswer, releaseId: string): string {
+export function paymentCallbackData(answer: PaymentAnswer, releaseId: string): string {
   return `pay:${answer}:${releaseId}`;
 }
 
-export function parsePaymentCallbackData(data: unknown): { answer: StudioAnswer; releaseId: string } | null {
+export function parsePaymentCallbackData(data: unknown): { answer: PaymentAnswer; releaseId: string } | null {
   if (typeof data !== "string") return null;
   const m = CALLBACK_RE.exec(data);
   if (!m) return null;
-  return { answer: m[1] as StudioAnswer, releaseId: m[2].toLowerCase() };
+  return { answer: m[1] as PaymentAnswer, releaseId: m[2].toLowerCase() };
 }
 
-function isStudioAnswer(status: PaymentStatus | null): status is StudioAnswer {
-  return status != null && (STUDIO_ANSWERS as readonly string[]).includes(status);
+function isPaymentAnswer(status: PaymentStatus | null): status is PaymentAnswer {
+  return status != null && (PAYMENT_ANSWERS as readonly string[]).includes(status);
 }
 
 function formatMoscowTime(iso: string | null | undefined): string {
@@ -108,10 +104,10 @@ function clientLine(release: PaymentRelease): string {
 }
 
 /**
- * Текст сообщения Денису; после ответа — с строкой «Ответ: … · время».
+ * Текст сообщения админу; после ответа — с строкой «Ответ: … · время».
  * `referralLines` — скидки по реферальной программе (`referralPaymentLines`).
  */
-export function buildStudioPaymentText(
+export function buildPaymentText(
   release: PaymentRelease,
   trackCount: number | null,
   referralLines: string[] = []
@@ -129,7 +125,7 @@ export function buildStudioPaymentText(
   if (referralLines.length > 0) lines.push("", ...referralLines);
 
   const status = parsePaymentStatus(release.payment_status);
-  if (isStudioAnswer(status)) {
+  if (isPaymentAnswer(status)) {
     lines.push(
       "",
       `Ответ: <b>${ANSWER_BUTTON[status]}</b> · ${escapeHtml(formatMoscowTime(release.payment_updated_at))}`,
@@ -142,14 +138,14 @@ export function buildStudioPaymentText(
 }
 
 /** До ответа — все три кнопки; после — две оставшиеся, чтобы можно было исправить. */
-export function buildStudioPaymentKeyboard(release: PaymentRelease): InlineKeyboard {
+export function buildPaymentKeyboard(release: PaymentRelease): InlineKeyboard {
   const status = parsePaymentStatus(release.payment_status);
-  const button = (answer: StudioAnswer) => ({
+  const button = (answer: PaymentAnswer) => ({
     text: ANSWER_BUTTON[answer],
     callback_data: paymentCallbackData(answer, release.id)
   });
-  if (isStudioAnswer(status)) {
-    return { inline_keyboard: [STUDIO_ANSWERS.filter((a) => a !== status).map(button)] };
+  if (isPaymentAnswer(status)) {
+    return { inline_keyboard: [PAYMENT_ANSWERS.filter((a) => a !== status).map(button)] };
   }
   return { inline_keyboard: [[button("paid")], [button("unpaid"), button("not_client")]] };
 }
@@ -158,7 +154,7 @@ export function buildStudioPaymentKeyboard(release: PaymentRelease): InlineKeybo
 export function buildPaymentNeededArtistText(release: PaymentRelease): string {
   const titleRaw = getReleaseDisplayTitle(release as ReleaseRecord);
   const title = escapeHtml(titleRaw.length > 0 ? titleRaw : "релиз");
-  const username = getStudioConfirmerUsername();
+  const username = getReceiptContactUsername();
   const receipt = username ? `скинь чек @${username}` : "скинь чек в студию";
   return (
     `💳 <b>Релиз «${title}» получили.</b>\n\n` +
@@ -188,14 +184,14 @@ async function logPayment(admin: SupabaseClient, releaseId: string, status: Paym
   if (error) console.warn("[payment-confirm] log:", error.message);
 }
 
-export type AskStudioResult = { ok: true } | { ok: false; reason: "not_configured" | "send_failed"; error?: string };
+export type AskAdminResult = { ok: true } | { ok: false; reason: "not_configured" | "send_failed"; error?: string };
 
-/** Отправить Денису вопрос «Оплатил?» с кнопками. */
-export async function askStudioAboutPayment(
+/** Отправить админу вопрос «Оплатил?» с кнопками. */
+export async function askAdminAboutPayment(
   admin: SupabaseClient,
   release: PaymentRelease
-): Promise<AskStudioResult> {
-  const chatId = getStudioConfirmerTelegramId();
+): Promise<AskAdminResult> {
+  const chatId = getPaymentConfirmerTelegramId();
   if (!chatId) return { ok: false, reason: "not_configured" };
   const [trackCount, referralLines] = await Promise.all([
     countReleaseTracks(admin, release.id),
@@ -203,18 +199,18 @@ export async function askStudioAboutPayment(
   ]);
   const sent = await sendTelegramBotMessage({
     chatId,
-    text: buildStudioPaymentText(release, trackCount, referralLines),
-    replyMarkup: buildStudioPaymentKeyboard(release)
+    text: buildPaymentText(release, trackCount, referralLines),
+    replyMarkup: buildPaymentKeyboard(release)
   });
   if (!sent.ok) {
-    console.error("[payment-confirm] send to studio:", sent.error);
+    console.error("[payment-confirm] send to admin:", sent.error);
     return { ok: false, reason: "send_failed", error: sent.error };
   }
   return { ok: true };
 }
 
 /**
- * После отправки на модерацию: если оплату ещё не спрашивали — статус `awaiting` и вопрос Денису.
+ * После отправки на модерацию: если оплату ещё не спрашивали — статус `awaiting` и вопрос админу.
  * Повторная отправка (после «Вернуть») не спрашивает заново. Ошибки не пробрасываются.
  */
 export async function requestPaymentConfirmationOnSubmit(
@@ -235,7 +231,7 @@ export async function requestPaymentConfirmationOnSubmit(
     const updated = (data as PaymentRelease[] | null)?.[0];
     if (!updated) return;
     await logPayment(admin, release.id, "awaiting");
-    await askStudioAboutPayment(admin, updated);
+    await askAdminAboutPayment(admin, updated);
   } catch (e) {
     console.error("[payment-confirm] on submit:", e);
   }
@@ -291,21 +287,13 @@ export type TelegramCallbackQuery = {
 };
 
 function callbackActor(fromId: unknown): PaymentActor | null {
-  if (fromId == null) return null;
-  const studio = getStudioConfirmerTelegramId();
-  if (studio && String(fromId) === studio) return "studio";
-  try {
-    if (String(fromId) === String(getExpectedAdminTelegramId())) return "admin";
-  } catch {
-    /* админ не настроен */
-  }
-  return null;
+  const admin = getPaymentConfirmerTelegramId();
+  return fromId != null && admin && String(fromId) === admin ? "admin" : null;
 }
 
 /**
- * Нажатие кнопки в сообщении «Оплатил?». Принимаем только от Дениса и админа.
- * Клиенту бот ничего не пишет: ответ Дениса видит только админ (ошибочное нажатие не дойдёт
- * до клиента). Попросить клиента оплатить — кнопкой в админке (`remindArtistToPay`).
+ * Нажатие кнопки в сообщении «Оплатил?». Принимаем только от админа.
+ * Клиенту бот ничего не пишет (ошибочное нажатие не дойдёт до клиента). Попросить клиента оплатить — кнопкой в админке (`remindArtistToPay`).
  */
 export async function handlePaymentCallback(admin: SupabaseClient, query: TelegramCallbackQuery): Promise<void> {
   const parsed = parsePaymentCallbackData(query.data);
@@ -339,22 +327,12 @@ export async function handlePaymentCallback(admin: SupabaseClient, query: Telegr
     const edited = await editTelegramBotMessage({
       chatId,
       messageId,
-      text: buildStudioPaymentText(result.release, trackCount, referralLines),
-      replyMarkup: buildStudioPaymentKeyboard(result.release)
+      text: buildPaymentText(result.release, trackCount, referralLines),
+      replyMarkup: buildPaymentKeyboard(result.release)
     });
     if (!edited.ok && !/not modified/i.test(edited.error)) {
       console.warn("[payment-confirm] edit:", edited.error);
     }
-  }
-
-  if (changed && actor === "studio") {
-    await notifyAdminPaymentAnswer({
-      title: getReleaseDisplayTitle(result.release as ReleaseRecord),
-      artist: result.release.artist_name ?? "",
-      answer: ANSWER_BUTTON[parsed.answer],
-      who: STUDIO_CONFIRMER_NAME,
-      hint: ADMIN_HINT[parsed.answer]
-    });
   }
 
   await answerTelegramCallbackQuery(query.id, changed ? `Записал: ${ANSWER_BUTTON[parsed.answer]}` : "Уже отмечено.");
@@ -362,7 +340,7 @@ export async function handlePaymentCallback(admin: SupabaseClient, query: Telegr
 
 export type RemindToPayResult = { ok: true } | { ok: false; status: 404 | 409 | 422 | 500; error: string };
 
-/** Админ просит клиента оплатить: бот пишет артисту, только если студия ответила «Не оплатил». */
+/** Админ просит клиента оплатить: бот пишет артисту, только если оплата отмечена как «Не оплатил». */
 export async function remindArtistToPay(admin: SupabaseClient, releaseId: string): Promise<RemindToPayResult> {
   const { data: row, error } = await admin
     .from("releases")
