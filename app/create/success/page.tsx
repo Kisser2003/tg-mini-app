@@ -7,6 +7,7 @@ import { StepGate } from "@/features/release/createRelease/components/StepGate";
 import { useCreateReleaseDraftStore } from "@/features/release/createRelease/store";
 import { SuccessReleaseModal } from "@/components/SuccessReleaseModal";
 import { getTelegramUserId, isTelegramMiniApp, triggerHaptic } from "@/lib/telegram";
+import { AppOrb } from "@/components/AppOrb";
 
 type LeavingIntent = "home" | "create" | null;
 
@@ -38,10 +39,7 @@ export default function CreateSuccessPage() {
     return (
       <CreateShell>
         <div className="flex min-h-[40vh] flex-col items-center justify-center gap-4 px-4">
-          <div
-            className="h-9 w-9 animate-spin rounded-full border-2 border-omf-line border-t-omf-ultra"
-            aria-hidden="true"
-          />
+          <AppOrb state="composing" />
           <p className="text-center text-[14px] text-omf-graphite">
             {leaving === "home" ? "Переход на главную…" : "Открываем новый релиз…"}
           </p>

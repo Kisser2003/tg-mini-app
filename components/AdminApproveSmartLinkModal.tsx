@@ -8,6 +8,7 @@ import { SPRING_UI } from "@/lib/motion-spring";
 import { normalizeUpc } from "@/lib/admin-release-publish";
 import { DSP_REVIEW_DAYS_TEXT } from "@/lib/release-next-step";
 import { describePayment, isPaymentConfirmed } from "@/lib/release-payment";
+import { AppOrb } from "@/components/AppOrb";
 
 export type ApproveModalMode = "accept" | "link";
 
@@ -90,7 +91,12 @@ export function AdminApproveSmartLinkModal({
   };
 
   const primaryLabel = busy
-    ? "Сохраняем…"
+    ? (
+        <>
+          <AppOrb state="composing" size={20} />
+          Сохраняем…
+        </>
+      )
     : isLinkMode
       ? "Отправить"
       : unpaidWarning

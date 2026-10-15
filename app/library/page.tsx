@@ -32,6 +32,7 @@ import {
 } from "@/lib/release-next-step";
 import { describeRejection, type RejectionSummary } from "@/lib/rejection-reasons";
 import { getTelegramInitDataForApiHeader, getTelegramUserIdForSupabaseRequests } from "@/lib/telegram";
+import { AppOrb } from "@/components/AppOrb";
 
 
 type LibraryStatusFilter = "all" | "processing" | "ready" | "failed";
@@ -470,13 +471,14 @@ function LibraryPageInner() {
             aria-label="Обновить список"
             className="omf-focus mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-omf-graphite transition-colors hover:bg-omf-surface hover:text-omf-ink disabled:opacity-40"
           >
-            <RefreshCw className={cn("h-[18px] w-[18px]", isValidating && "animate-spin")} aria-hidden />
+            {isValidating ? <AppOrb state="searching" size={20} label="Обновляем" /> : <RefreshCw className="h-[18px] w-[18px]" aria-hidden />}
           </button>
         </header>
 
         {!hasReleases && (showAuthWait || showListSkeleton) ? (
           <div aria-busy="true">
-            <p className="mb-4 text-[13px] text-omf-graphite">
+            <p className="mb-4 flex items-center gap-2.5 text-[13px] text-omf-graphite">
+              <AppOrb state="searching" size={20} />
               {!authReady
                 ? "Загрузка…"
                 : userId === null || authMode === null

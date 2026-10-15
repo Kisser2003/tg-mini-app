@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { mapAuthErrorMessage } from "@/lib/auth-errors";
 import { hapticMap } from "@/lib/haptic-map";
 import { createSupabaseBrowser } from "@/lib/supabase";
+import { AppOrb } from "@/components/AppOrb";
 
 function UpdatePasswordContent() {
   const router = useRouter();
@@ -102,7 +103,14 @@ function UpdatePasswordContent() {
         {error && <AuthMessage kind="error">{error}</AuthMessage>}
 
         <button type="submit" disabled={loading} className="omf-btn-primary h-14 w-full text-[16px]">
-          {loading ? "Сохраняем…" : "Сохранить пароль"}
+          {loading ? (
+            <>
+              <AppOrb state="working" size={20} />
+              Сохраняем…
+            </>
+          ) : (
+            "Сохранить пароль"
+          )}
         </button>
       </form>
     </AuthShell>
@@ -114,7 +122,7 @@ export default function UpdatePasswordPage() {
     <Suspense
       fallback={
         <div className="flex min-h-app items-center justify-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-omf-line border-t-omf-ultra" />
+          <AppOrb state="connecting" label="Загружаем" />
         </div>
       }
     >

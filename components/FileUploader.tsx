@@ -5,6 +5,7 @@ import { Check, ImagePlus, Music2 } from "lucide-react";
 import { FormFieldError } from "@/components/FormFieldError";
 import { ALLOWED_AUDIO_MIME } from "@/repositories/releases.repo";
 import { triggerHaptic } from "@/lib/telegram";
+import { AppOrb } from "@/components/AppOrb";
 
 type Props = {
   label: string;
@@ -280,8 +281,9 @@ export function FileUploader({
           <input type="file" accept={accept} className="sr-only" onChange={handleChange} />
           {isWavUploading ? (
             <div aria-live="polite">
-              <div className="flex items-baseline justify-between gap-3 text-[14px]">
-                <span className="min-w-0 truncate">{file?.name ?? "Загружаем WAV"}</span>
+              <div className="flex items-center justify-between gap-3 text-[14px]">
+                <AppOrb state="listening" size={20} />
+                <span className="min-w-0 flex-1 truncate">{file?.name ?? "Загружаем WAV"}</span>
                 <span className="shrink-0 tabular-nums text-omf-ultra-text">{clampedProgress}%</span>
               </div>
               <div

@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { mapAuthErrorMessage } from "@/lib/auth-errors";
 import { hapticMap } from "@/lib/haptic-map";
 import { createSupabaseBrowser } from "@/lib/supabase";
+import { AppOrb } from "@/components/AppOrb";
 
 function ResetPasswordContent() {
   const router = useRouter();
@@ -89,7 +90,14 @@ function ResetPasswordContent() {
         {error && <AuthMessage kind="error">{error}</AuthMessage>}
 
         <button type="submit" disabled={loading} className="omf-btn-primary h-14 w-full text-[16px]">
-          {loading ? "Отправляем…" : "Отправить ссылку"}
+          {loading ? (
+            <>
+              <AppOrb state="working" size={20} />
+              Отправляем…
+            </>
+          ) : (
+            "Отправить ссылку"
+          )}
         </button>
       </form>
     </AuthShell>
@@ -101,7 +109,7 @@ export default function ResetPasswordPage() {
     <Suspense
       fallback={
         <div className="flex min-h-app items-center justify-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-omf-line border-t-omf-ultra" />
+          <AppOrb state="connecting" label="Загружаем" />
         </div>
       }
     >

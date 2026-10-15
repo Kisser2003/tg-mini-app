@@ -1,6 +1,7 @@
 "use client";
 
 import { useCreateReleaseDraftStore } from "@/features/release/createRelease/store";
+import { AppOrb } from "@/components/AppOrb";
 
 /**
  * Гидратор persist для черновика. Слайд между шагами — в `CreateShell` +
@@ -12,7 +13,7 @@ export default function CreateLayout({ children }: { children: React.ReactNode }
   if (!hasHydrated) {
     return (
       <div className="flex min-h-[100svh] flex-col items-center justify-center gap-4" role="status">
-        <div className="h-9 w-9 animate-spin rounded-full border-2 border-omf-line border-t-omf-ultra" aria-hidden="true" />
+        <AppOrb state="working" />
         <p className="text-[15px] text-omf-graphite">Открываем черновик…</p>
       </div>
     );

@@ -13,6 +13,7 @@ import {
   buildRejection
 } from "@/lib/rejection-reasons";
 import { cn } from "@/lib/utils";
+import { AppOrb } from "@/components/AppOrb";
 
 /** Пресеты причин возврата; общий список с экраном артиста (`lib/rejection-reasons`). */
 export const ADMIN_REJECT_PRESETS = REJECT_REASONS;
@@ -175,7 +176,12 @@ export function AdminRejectModal({ open, busy, count = 1, onClose, onSubmit }: P
                 className="omf-btn-primary w-full disabled:opacity-50"
               >
                 {busy
-                  ? "Отправляем артисту…"
+                  ? (
+                    <>
+                      <AppOrb state="composing" size={20} />
+                      Отправляем артисту…
+                    </>
+                  )
                   : rejection == null
                     ? "Выбери причину"
                     : count > 1
