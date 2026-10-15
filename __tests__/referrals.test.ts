@@ -131,6 +131,7 @@ describe("getReleaseReferral / referralPaymentLines", () => {
     );
     expect(await getReleaseReferral(admin, friend)).toEqual({
       referrerLabel: "@vanya",
+      referrerTelegramId: "1",
       discountRub: 500,
       payout: null
     });
@@ -140,9 +141,11 @@ describe("getReleaseReferral / referralPaymentLines", () => {
     expect(lines[1]).toContain("меньше");
   });
 
-  it("без ника — tg id", async () => {
+  it("без ника — tg id, в сообщении бота ссылкой на профиль", async () => {
     const { admin } = referralMock({ referrer_telegram_id: "1", paid_release_id: null, paid_at: null, reward_redeemed_at: null });
     expect((await getReleaseReferral(admin, friend))?.referrerLabel).toBe("tg id 1");
+    const lines = await referralPaymentLines(admin, friend);
+    expect(lines[0]).toContain('<a href="tg://user?id=1">tg id 1</a>');
   });
 
   it("оплаченный первый релиз: скидка остаётся, выплата — к выплате, потом выплачено", async () => {
@@ -182,8 +185,8 @@ describe("applyReferralPaymentChange", () => {
     expect(notifyArtist.mock.calls[0][0]).toEqual({ telegram_id: "1" });
     expect(notifyAdminReferralPayout).toHaveBeenCalledWith({
       refereeTelegramId: "2",
-      referrerLabel: "@vanya",
-      refereeLabel: "@vanya",
+      referrerLabelHtml: "@vanya",
+      refereeLabelHtml: "@vanya",
       amountRub: 500
     });
   });

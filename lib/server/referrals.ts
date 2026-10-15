@@ -195,9 +195,17 @@ export async function telegramLabel(admin: SupabaseClient, tid: string): Promise
   return username ? `@${username}` : `tg id ${tid}`;
 }
 
+/** Для сообщений бота (HTML): @ник как есть, а «tg id N» — ссылкой на профиль. */
+export function telegramLabelHtml(label: string, tid: string): string {
+  return label.startsWith("@")
+    ? escapeHtml(label)
+    : `<a href="tg://user?id=${escapeHtml(tid)}">${escapeHtml(label)}</a>`;
+}
+
 /** Реферальные сведения по релизу для админки (релиз друга, пришедшего по приглашению). */
 export type ReleaseReferral = {
   referrerLabel: string;
+  referrerTelegramId: string;
   /** Скидка клиенту на этот релиз; null — уже не первый релиз, скидки нет. */
   discountRub: number | null;
   /** Выплата пригласившему: появляется, когда этот релиз отмечен «Оплачено». */
@@ -224,6 +232,7 @@ export async function getReleaseReferral(admin: SupabaseClient, release: Release
   const isPaidOne = row.paid_at != null && row.paid_release_id === release.id;
   return {
     referrerLabel: await telegramLabel(admin, row.referrer_telegram_id),
+    referrerTelegramId: row.referrer_telegram_id,
     discountRub: row.paid_at == null || isPaidOne ? REFEREE_DISCOUNT_RUB : null,
     payout: isPaidOne
       ? { amountRub: REFERRER_REWARD_RUB, status: row.reward_redeemed_at ? "done" : "due" }
@@ -240,7 +249,7 @@ export async function referralPaymentLines(admin: SupabaseClient, release: Relea
     const info = await getReleaseReferral(admin, release);
     if (info?.discountRub == null) return [];
     return [
-      `🎁 Пришёл по приглашению от ${escapeHtml(info.referrerLabel)}: скидка ${formatRub(info.discountRub)} на первый релиз`,
+      `🎁 Пришёл по приглашению от ${telegramLabelHtml(info.referrerLabel, info.referrerTelegramId)}: скидка ${formatRub(info.discountRub)} на первый релиз`,
       `К оплате на ${formatRub(info.discountRub)} меньше`
     ];
   } catch (e) {
@@ -250,7 +259,14 @@ export async function referralPaymentLines(admin: SupabaseClient, release: Relea
 }
 
 export type PayoutResult =
-  | { ok: true; referrerLabel: string; refereeLabel: string; amountRub: number }
+  | {
+      ok: true;
+      referrerLabel: string;
+      refereeLabel: string;
+      referrerHtml: string;
+      refereeHtml: string;
+      amountRub: number;
+    }
   | { ok: false; status: 404 | 409 | 500; error: string };
 
 /** Отметить, что админ выплатил (или вернуть в «к выплате») бонус за приглашённого друга. */
@@ -275,7 +291,14 @@ export async function setReferralPayout(
     telegramLabel(admin, row.referrer_telegram_id),
     telegramLabel(admin, refereeTelegramId)
   ]);
-  return { ok: true, referrerLabel, refereeLabel, amountRub: REFERRER_REWARD_RUB };
+  return {
+    ok: true,
+    referrerLabel,
+    refereeLabel,
+    referrerHtml: telegramLabelHtml(referrerLabel, row.referrer_telegram_id),
+    refereeHtml: telegramLabelHtml(refereeLabel, refereeTelegramId),
+    amountRub: REFERRER_REWARD_RUB
+  };
 }
 
 /**
@@ -312,7 +335,12 @@ export async function applyReferralPaymentChange(
         telegramLabel(admin, referrer),
         telegramLabel(admin, tid)
       ]);
-      await notifyAdminReferralPayout({ refereeTelegramId: tid, referrerLabel, refereeLabel, amountRub: REFERRER_REWARD_RUB });
+      await notifyAdminReferralPayout({
+        refereeTelegramId: tid,
+        referrerLabelHtml: telegramLabelHtml(referrerLabel, referrer),
+        refereeLabelHtml: telegramLabelHtml(refereeLabel, tid),
+        amountRub: REFERRER_REWARD_RUB
+      });
       return;
     }
 
@@ -368,7 +396,7 @@ export async function handleReferralCallback(
       messageId,
       text:
         `✅ <b>Выплачено ${formatRub(result.amountRub)}</b>\n\n` +
-        `${escapeHtml(result.referrerLabel)} — за приглашённого ${escapeHtml(result.refereeLabel)}`
+        `${result.referrerHtml} — за приглашённого ${result.refereeHtml}`
     });
   }
   await answerTelegramCallbackQuery(query.id, "Записал: выплачено");

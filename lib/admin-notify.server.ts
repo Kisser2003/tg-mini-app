@@ -66,14 +66,15 @@ export async function notifyAdminReleaseSubmitted(params: {
 /** Друг по приглашению оплатил первый релиз — админу выплатить бонус пригласившему (кнопка «Выплатил»). */
 export async function notifyAdminReferralPayout(params: {
   refereeTelegramId: string;
-  referrerLabel: string;
-  refereeLabel: string;
+  /** Уже готовый HTML (ник или ссылка на профиль): экранирование — на стороне вызывающего. */
+  referrerLabelHtml: string;
+  refereeLabelHtml: string;
   amountRub: number;
 }): Promise<void> {
   const text =
     `🎁 <b>Выплати ${escapeHtml(params.amountRub.toLocaleString("ru-RU"))} ₽ за приглашение</b>\n\n` +
-    `Кому: ${escapeHtml(params.referrerLabel)}\n` +
-    `За друга: ${escapeHtml(params.refereeLabel)} — оплатил первый релиз`;
+    `Кому: ${params.referrerLabelHtml}\n` +
+    `За друга: ${params.refereeLabelHtml} — оплатил первый релиз`;
   const replyMarkup: InlineKeyboard = {
     inline_keyboard: [[{ text: "✅ Выплатил", callback_data: `ref:out:${params.refereeTelegramId}` }]]
   };
