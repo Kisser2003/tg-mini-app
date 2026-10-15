@@ -2,10 +2,8 @@
 
 /** Скидка другу на первый релиз. */
 export const REFEREE_DISCOUNT_RUB = 500;
-/** Бонус пригласившему за каждого друга, оплатившего первый релиз. */
+/** Бонус пригласившему за каждого друга, оплатившего первый релиз: админ переводит вручную. */
 export const REFERRER_REWARD_RUB = 500;
-/** Сколько бонусов можно учесть в оплате одного релиза (остальные — на следующие). */
-export const MAX_REWARDS_PER_RELEASE = 3;
 
 const START_PARAM_PREFIX = "ref_";
 const CODE_RE = /^[A-Z0-9]{6,12}$/;
@@ -33,7 +31,7 @@ export type ReferralSummary = {
   link: string | null;
   invited: number;
   paid: number;
-  /** Бонусы, которые ещё не учли в оплате. */
+  /** Бонусы, которые ещё не выплатили. */
   available: number;
   /** Пришёл по приглашению и ещё не оплатил первый релиз — скидка ждёт. */
   hasPendingDiscount: boolean;

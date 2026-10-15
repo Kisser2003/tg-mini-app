@@ -3,6 +3,20 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createSupabaseMock, filterValue, type MockCall, type MockResult } from "./helpers/supabase-mock";
 
 const notifyArtist = vi.fn();
+const notifyAdminReferralPayout = vi.fn();
+const editMessage = vi.fn();
+const answerCallback = vi.fn();
+vi.mock("../lib/telegram-bot.server", async () => {
+  const actual = await vi.importActual<typeof import("../lib/telegram-bot.server")>("../lib/telegram-bot.server");
+  return {
+    escapeHtml: actual.escapeHtml,
+    editTelegramBotMessage: (...a: unknown[]) => editMessage(...a),
+    answerTelegramCallbackQuery: (...a: unknown[]) => answerCallback(...a)
+  };
+});
+vi.mock("../lib/admin-notify.server", () => ({
+  notifyAdminReferralPayout: (...a: unknown[]) => notifyAdminReferralPayout(...a)
+}));
 vi.mock("../lib/server/artist-notify", async () => {
   const actual = await vi.importActual<typeof import("../lib/server/artist-notify")>("../lib/server/artist-notify");
   return { artistTelegramId: actual.artistTelegramId, notifyArtist: (...a: unknown[]) => notifyArtist(...a) };
@@ -12,8 +26,11 @@ import { formatRub, parseReferralStartParam } from "@/lib/referral";
 import {
   applyReferralPaymentChange,
   attributeReferral,
+  getReleaseReferral,
+  handleReferralCallback,
   referralLink,
-  referralPaymentLines
+  referralPaymentLines,
+  setReferralPayout
 } from "@/lib/server/referrals";
 
 const RELEASE = "11111111-1111-4111-8111-111111111111";
@@ -27,6 +44,10 @@ function mock(resolve: (call: MockCall) => MockResult) {
 
 beforeEach(() => {
   notifyArtist.mockReset().mockResolvedValue(true);
+  notifyAdminReferralPayout.mockReset().mockResolvedValue(undefined);
+  editMessage.mockReset().mockResolvedValue({ ok: true });
+  answerCallback.mockReset().mockResolvedValue({ ok: true });
+  vi.stubEnv("ADMIN_TELEGRAM_ID", "777");
 });
 
 describe("parseReferralStartParam", () => {
@@ -87,53 +108,61 @@ describe("attributeReferral", () => {
   });
 });
 
-describe("referralPaymentLines", () => {
-  function linesFor(
-    release: { telegram_id: string; payment_status: string | null },
-    asReferee: { paid_release_id: string | null; paid_at: string | null } | null,
-    rewards: Array<{ reward_redeemed_release_id: string | null; reward_redeemed_at: string | null }>
-  ) {
-    const { admin } = mock((call) =>
-      filterValue(call, "eq", "referee_telegram_id") !== undefined ? ok(asReferee) : ok(rewards)
+/** Мок: referrals (строка друга), releases (ник пригласившего/друга). */
+function referralMock(row: Record<string, unknown> | null, usernames: Record<string, string> = {}) {
+  return mock((call) => {
+    if (call.table === "referrals" && call.op === "select") return ok(row);
+    if (call.table === "releases") {
+      const tid = String(filterValue(call, "eq", "telegram_id"));
+      return ok(usernames[tid] ? [{ telegram_username: usernames[tid] }] : []);
+    }
+    return ok(null);
+  });
+}
+
+describe("getReleaseReferral / referralPaymentLines", () => {
+  const friend = { id: RELEASE, telegram_id: "2" };
+  const usernames = { "1": "vanya" };
+
+  it("друг по приглашению: скидка 500 ₽ и подпись от кого", async () => {
+    const { admin } = referralMock(
+      { referrer_telegram_id: "1", paid_release_id: null, paid_at: null, reward_redeemed_at: null },
+      usernames
     );
-    return referralPaymentLines(admin, { id: RELEASE, ...release });
-  }
-
-  it("друг по приглашению — скидка 500 ₽ на первый релиз", async () => {
-    const lines = await linesFor({ telegram_id: "2", payment_status: "awaiting" }, { paid_release_id: null, paid_at: null }, []);
-    expect(lines).toHaveLength(1);
+    expect(await getReleaseReferral(admin, friend)).toEqual({
+      referrerLabel: "@vanya",
+      discountRub: 500,
+      payout: null
+    });
+    const lines = await referralPaymentLines(admin, friend);
+    expect(lines[0]).toContain("@vanya");
     expect(lines[0]).toContain("скидка 500");
+    expect(lines[1]).toContain("меньше");
   });
 
-  it("скидка друга не повторяется на следующем релизе", async () => {
-    const lines = await linesFor({ telegram_id: "2", payment_status: "awaiting" }, { paid_release_id: "other", paid_at: T }, []);
-    expect(lines).toEqual([]);
+  it("без ника — tg id", async () => {
+    const { admin } = referralMock({ referrer_telegram_id: "1", paid_release_id: null, paid_at: null, reward_redeemed_at: null });
+    expect((await getReleaseReferral(admin, friend))?.referrerLabel).toBe("tg id 1");
   });
 
-  it("удалённый оплаченный релиз друга не возвращает скидку", async () => {
-    const lines = await linesFor({ telegram_id: "2", payment_status: "awaiting" }, { paid_release_id: null, paid_at: T }, []);
-    expect(lines).toEqual([]);
+  it("оплаченный первый релиз: скидка остаётся, выплата — к выплате, потом выплачено", async () => {
+    const due = referralMock({ referrer_telegram_id: "1", paid_release_id: RELEASE, paid_at: T, reward_redeemed_at: null });
+    expect((await getReleaseReferral(due.admin, friend))?.payout).toEqual({ amountRub: 500, status: "due" });
+    const done = referralMock({ referrer_telegram_id: "1", paid_release_id: RELEASE, paid_at: T, reward_redeemed_at: T });
+    const info = await getReleaseReferral(done.admin, friend);
+    expect(info?.payout).toEqual({ amountRub: 500, status: "done" });
+    expect(info?.discountRub).toBe(500);
   });
 
-  it("бонусы пригласившего — не больше трёх на релиз, плюс итог при двух скидках", async () => {
-    const rewards = Array.from({ length: 5 }, () => ({ reward_redeemed_release_id: null, reward_redeemed_at: null }));
-    const lines = await linesFor({ telegram_id: "1", payment_status: "awaiting" }, { paid_release_id: null, paid_at: null }, rewards);
-    expect(lines[1]).toContain("3 × 500");
-    expect(lines[2]).toContain(formatRub(2000));
+  it("следующий релиз друга и релиз после удаления первого — без скидки и выплаты", async () => {
+    const other = referralMock({ referrer_telegram_id: "1", paid_release_id: "other", paid_at: T, reward_redeemed_at: null });
+    expect(await getReleaseReferral(other.admin, friend)).toMatchObject({ discountRub: null, payout: null });
+    const deleted = referralMock({ referrer_telegram_id: "1", paid_release_id: null, paid_at: T, reward_redeemed_at: null });
+    expect(await referralPaymentLines(deleted.admin, friend)).toEqual([]);
   });
 
-  it("после оплаты показывает только учтённые в этом релизе бонусы", async () => {
-    const rewards = [
-      { reward_redeemed_release_id: RELEASE, reward_redeemed_at: T },
-      { reward_redeemed_release_id: null, reward_redeemed_at: null }
-    ];
-    const lines = await linesFor({ telegram_id: "1", payment_status: "paid" }, null, rewards);
-    expect(lines).toHaveLength(1);
-    expect(lines[0]).toContain("500");
-    expect(lines[0]).not.toContain("×");
-  });
-
-  it("веб-аккаунт без Telegram — ничего", async () => {
+  it("не приглашённый и веб-аккаунт без Telegram — ничего", async () => {
+    expect(await getReleaseReferral(referralMock(null).admin, friend)).toBeNull();
     const { admin, calls } = mock(() => ok(null));
     expect(await referralPaymentLines(admin, { id: RELEASE, telegram_id: null })).toEqual([]);
     expect(calls).toHaveLength(0);
@@ -141,45 +170,99 @@ describe("referralPaymentLines", () => {
 });
 
 describe("applyReferralPaymentChange", () => {
-  it("оплата первого релиза друга открывает бонус и пишет пригласившему; свои бонусы списываются", async () => {
-    const { admin, calls } = mock((call) => {
-      if (call.op === "update" && filterValue(call, "eq", "referee_telegram_id") === "2") {
-        return ok([{ referrer_telegram_id: "1" }]);
-      }
-      if (call.op === "select") return ok([{ referee_telegram_id: "9" }]);
+  it("оплата первого релиза друга: сообщение пригласившему и админу с кнопкой выплаты", async () => {
+    const { admin } = mock((call) => {
+      if (call.table === "referrals" && call.op === "update") return ok([{ referrer_telegram_id: "1" }]);
+      if (call.table === "releases") return ok([{ telegram_username: "vanya" }]);
       return ok(null);
     });
     await applyReferralPaymentChange(admin, { id: RELEASE, telegram_id: "2" }, "awaiting", "paid");
 
     expect(notifyArtist).toHaveBeenCalledTimes(1);
     expect(notifyArtist.mock.calls[0][0]).toEqual({ telegram_id: "1" });
-    const redeem = calls.find(
-      (c) => c.op === "update" && (c.payload as Record<string, unknown>).reward_redeemed_release_id === RELEASE
-    );
-    expect(filterValue(redeem!, "in", "referee_telegram_id")).toEqual(["9"]);
+    expect(notifyAdminReferralPayout).toHaveBeenCalledWith({
+      refereeTelegramId: "2",
+      referrerLabel: "@vanya",
+      refereeLabel: "@vanya",
+      amountRub: 500
+    });
   });
 
-  it("повторная оплата не шлёт второе сообщение пригласившему", async () => {
+  it("повторная оплата не шлёт ничего второй раз", async () => {
     const { admin } = mock(() => ok([]));
     await applyReferralPaymentChange(admin, { id: RELEASE, telegram_id: "2" }, "unpaid", "paid");
     expect(notifyArtist).not.toHaveBeenCalled();
+    expect(notifyAdminReferralPayout).not.toHaveBeenCalled();
   });
 
-  it("откат оплаты снимает бонус и возвращает списанные", async () => {
+  it("откат оплаты закрывает выплату, только если ещё не выплачено", async () => {
     const { admin, calls } = mock(() => ok(null));
     await applyReferralPaymentChange(admin, { id: RELEASE, telegram_id: "2" }, "paid", "unpaid");
-    const updates = calls.filter((c) => c.op === "update");
-    expect(updates.map((c) => c.payload)).toEqual([
-      { paid_release_id: null, paid_at: null },
-      { reward_redeemed_release_id: null, reward_redeemed_at: null }
-    ]);
-    expect(filterValue(updates[0], "eq", "paid_release_id")).toBe(RELEASE);
-    expect(filterValue(updates[1], "eq", "reward_redeemed_release_id")).toBe(RELEASE);
+    const update = calls.find((c) => c.op === "update")!;
+    expect(update.payload).toEqual({ paid_release_id: null, paid_at: null });
+    expect(filterValue(update, "eq", "paid_release_id")).toBe(RELEASE);
+    expect(update.filters).toContainEqual(["is", "reward_redeemed_at", null]);
   });
 
   it("другие переходы ничего не трогают", async () => {
     const { admin, calls } = mock(() => ok(null));
     await applyReferralPaymentChange(admin, { id: RELEASE, telegram_id: "2" }, null, "awaiting");
+    expect(calls).toHaveLength(0);
+  });
+});
+
+describe("setReferralPayout", () => {
+  it("«Выплатил» ставит время и возвращает подписи; повтор «Отменить» обнуляет", async () => {
+    const { admin, calls } = mock((call) => {
+      if (call.table === "referrals") return ok([{ referrer_telegram_id: "1" }]);
+      return ok([{ telegram_username: "vanya" }]);
+    });
+    const res = await setReferralPayout(admin, "2", true);
+    expect(res).toMatchObject({ ok: true, referrerLabel: "@vanya", amountRub: 500 });
+    const update = calls.find((c) => c.table === "referrals")!;
+    expect((update.payload as { reward_redeemed_at: string | null }).reward_redeemed_at).toEqual(expect.any(String));
+    expect(update.filters).toContainEqual(["not", "paid_at", "is", null]);
+
+    const undo = mock(() => ok([{ referrer_telegram_id: "1" }]));
+    await setReferralPayout(undo.admin, "2", false);
+    expect((undo.calls[0].payload as { reward_redeemed_at: string | null }).reward_redeemed_at).toBeNull();
+  });
+
+  it("друг ещё не оплатил — 404", async () => {
+    const { admin } = mock(() => ok([]));
+    expect(await setReferralPayout(admin, "2", true)).toMatchObject({ ok: false, status: 404 });
+  });
+});
+
+describe("handleReferralCallback", () => {
+  const query = (from: number, data = "ref:out:2") => ({
+    id: "cb1",
+    from: { id: from },
+    data,
+    message: { message_id: 10, chat: { id: 777 } }
+  });
+
+  it("админ жмёт «Выплатил»: записано, сообщение заменено на «Выплачено»", async () => {
+    const { admin, calls } = mock((call) => {
+      if (call.table === "referrals") return ok([{ referrer_telegram_id: "1" }]);
+      return ok([{ telegram_username: "vanya" }]);
+    });
+    await handleReferralCallback(admin, query(777));
+    expect(calls.find((c) => c.table === "referrals")?.payload).toMatchObject({ reward_redeemed_at: expect.any(String) });
+    expect(editMessage.mock.calls[0][0].text).toContain("Выплачено");
+    expect(answerCallback).toHaveBeenCalledWith("cb1", "Записал: выплачено");
+  });
+
+  it("не админ — отказ, ничего не пишется", async () => {
+    const { admin, calls } = mock(() => ok([{ referrer_telegram_id: "1" }]));
+    await handleReferralCallback(admin, query(555));
+    expect(calls).toHaveLength(0);
+    expect(answerCallback).toHaveBeenCalledWith("cb1", "Эта кнопка не для тебя.");
+  });
+
+  it("чужие данные кнопки игнорируются", async () => {
+    const { admin, calls } = mock(() => ok(null));
+    await handleReferralCallback(admin, query(777, "ref:out:abc"));
     expect(calls).toHaveLength(0);
   });
 });

@@ -18,6 +18,7 @@ import { AdminApproveSmartLinkModal, type ApproveModalMode } from "@/components/
 import { AdminRejectModal } from "@/components/AdminRejectModal";
 import { approveRelease, deleteRelease, publishReleaseWithSmartLink, rejectRelease } from "@/features/admin/actions";
 import { fetchAdminReleaseDetail } from "@/features/admin/release-detail";
+import type { ReleaseReferral } from "@/lib/server/referrals";
 import { fetchAdminModerationQueue } from "@/features/admin/moderation-queue";
 import {
   buildAdminReleaseSummary,
@@ -70,6 +71,7 @@ export default function AdminReleaseDetailPage() {
 
   const [userId, setUserId] = useState<number | null>(null);
   const [release, setRelease] = useState<ReleaseRecord | null>(null);
+  const [referral, setReferral] = useState<ReleaseReferral | null>(null);
   const [tracks, setTracks] = useState<ReleaseTrackRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -105,8 +107,9 @@ export default function AdminReleaseDetailPage() {
     setMetaOpen(false);
     setDeleteOpen(false);
     try {
-      const { release: row, tracks: tr } = await fetchAdminReleaseDetail(releaseId);
+      const { release: row, tracks: tr, referral: ref } = await fetchAdminReleaseDetail(releaseId);
       setRelease(row);
+      setReferral(ref);
       setTracks(tr);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Не удалось загрузить релиз.";
@@ -407,7 +410,15 @@ export default function AdminReleaseDetailPage() {
 
           <AdminPaymentPanel
             release={release}
-            onChange={(fields) => setRelease((prev) => (prev ? { ...prev, ...fields } : prev))}
+            referral={referral}
+            onReferralChange={setReferral}
+            onChange={(fields) => {
+              setRelease((prev) => (prev ? { ...prev, ...fields } : prev));
+              // «Оплачено» открывает выплату пригласившему — подтянуть свежие сведения.
+              void fetchAdminReleaseDetail(release.id)
+                .then((d) => setReferral(d.referral))
+                .catch(() => {});
+            }}
           />
 
           <section className="mt-6" aria-labelledby="admin-listen">
