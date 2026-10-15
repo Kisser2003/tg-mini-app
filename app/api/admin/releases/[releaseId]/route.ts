@@ -5,6 +5,7 @@ import { requireAdminSupabaseClient } from "@/lib/admin-release-api-guard";
 import { getTelegramAuthContextFromRequest } from "@/lib/api/with-telegram-auth";
 import { deleteAllReleaseFiles } from "@/lib/release-audio-cleanup.server";
 import { invalidateMyReleasesCache } from "@/lib/server/release-list-cache";
+import { getReleaseReferral, type ReleaseReferral } from "@/lib/server/referrals";
 import type { ReleaseRecord, ReleaseTrackRow } from "@/repositories/releases.repo";
 
 export const dynamic = "force-dynamic";
@@ -56,14 +57,21 @@ async function handleGetAdminRelease(
     return NextResponse.json({ ok: false, error: "Не удалось загрузить треки." }, { status: 500 });
   }
 
+  const referral = await getReleaseReferral(guard.supabase, {
+    id: releaseId,
+    telegram_id: (release as ReleaseRecord).telegram_id
+  });
+
   const body: {
     ok: true;
     release: ReleaseRecord;
     tracks: ReleaseTrackRow[];
+    referral: ReleaseReferral | null;
   } = {
     ok: true,
     release: release as ReleaseRecord,
-    tracks: (tracks ?? []) as ReleaseTrackRow[]
+    tracks: (tracks ?? []) as ReleaseTrackRow[],
+    referral
   };
 
   return NextResponse.json(body);

@@ -78,6 +78,33 @@ export async function notifyAdminPaymentAnswer(params: {
   );
 }
 
+/** Друг по приглашению оплатил первый релиз — админу выплатить бонус пригласившему (кнопка «Выплатил»). */
+export async function notifyAdminReferralPayout(params: {
+  refereeTelegramId: string;
+  referrerLabel: string;
+  refereeLabel: string;
+  amountRub: number;
+}): Promise<void> {
+  const text =
+    `🎁 <b>Выплати ${escapeHtml(params.amountRub.toLocaleString("ru-RU"))} ₽ за приглашение</b>\n\n` +
+    `Кому: ${escapeHtml(params.referrerLabel)}\n` +
+    `За друга: ${escapeHtml(params.refereeLabel)} — оплатил первый релиз`;
+  const replyMarkup: InlineKeyboard = {
+    inline_keyboard: [[{ text: "✅ Выплатил", callback_data: `ref:out:${params.refereeTelegramId}` }]]
+  };
+  try {
+    if (!process.env.TELEGRAM_BOT_TOKEN?.trim()) return;
+    const result = await sendTelegramBotMessage({
+      chatId: String(getExpectedAdminTelegramId()),
+      text,
+      replyMarkup
+    });
+    if (!result.ok) console.error("[admin-notify] referral payout:", result.error);
+  } catch (e) {
+    console.error("[admin-notify] referral payout:", e);
+  }
+}
+
 /** Не чаще одного сообщения об ошибке в 2 минуты (защита от спама и циклов ошибок). */
 export async function notifyAdminError(where: string, message: string): Promise<void> {
   const now = Date.now();

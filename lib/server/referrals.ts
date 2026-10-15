@@ -1,7 +1,6 @@
 import crypto from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
-  MAX_REWARDS_PER_RELEASE,
   REFEREE_DISCOUNT_RUB,
   REFERRER_REWARD_RUB,
   formatRub,
@@ -10,11 +9,16 @@ import {
 } from "@/lib/referral";
 import type { PaymentStatus } from "@/lib/release-payment";
 import { artistTelegramId, notifyArtist } from "@/lib/server/artist-notify";
+import { getExpectedAdminTelegramId } from "@/lib/admin";
+import { notifyAdminReferralPayout } from "@/lib/admin-notify.server";
+import { answerTelegramCallbackQuery, editTelegramBotMessage, escapeHtml } from "@/lib/telegram-bot.server";
 
 /**
  * Реферальная программа. Друг открывает мини-приложение по ссылке `…?startapp=ref_<code>`,
  * его telegram_id привязывается к пригласившему (только если у него ещё нет релизов).
- * Скидку другу и бонус пригласившему видит Денис в сообщении «Оплатил?»; учёт — по кнопке «Оплатил».
+ * Скидку другу видят Денис (сообщение «Оплатил?») и админ (страница релиза): клиент платит на 500 ₽ меньше.
+ * Когда студия отметит первый релиз друга оплаченным, админу приходит «Выплати 500 ₽ …» с кнопкой «Выплатил»:
+ * деньги пригласившему админ переводит вручную, приложение только напоминает и помнит, кому уже заплатили.
  */
 
 type ReleaseRef = { id: string; telegram_id?: unknown; payment_status?: string | null };
@@ -176,63 +180,109 @@ export async function getReferralSummary(
   };
 }
 
+/** «@ник» или «tg id N» — по последнему релизу этого пользователя. */
+export async function telegramLabel(admin: SupabaseClient, tid: string): Promise<string> {
+  const { data } = await admin
+    .from("releases")
+    .select("telegram_username")
+    .eq("telegram_id", tid)
+    .not("telegram_username", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(1);
+  const username = (data as { telegram_username?: string | null }[] | null)?.[0]?.telegram_username
+    ?.trim()
+    .replace(/^@/, "");
+  return username ? `@${username}` : `tg id ${tid}`;
+}
+
+/** Реферальные сведения по релизу для админки (релиз друга, пришедшего по приглашению). */
+export type ReleaseReferral = {
+  referrerLabel: string;
+  /** Скидка клиенту на этот релиз; null — уже не первый релиз, скидки нет. */
+  discountRub: number | null;
+  /** Выплата пригласившему: появляется, когда этот релиз отмечен «Оплачено». */
+  payout: { amountRub: number; status: "due" | "done" } | null;
+};
+
+export async function getReleaseReferral(admin: SupabaseClient, release: ReleaseRef): Promise<ReleaseReferral | null> {
+  const tid = artistTelegramId(release);
+  if (!tid) return null;
+  const { data, error } = await admin
+    .from("referrals")
+    .select("referrer_telegram_id, paid_release_id, paid_at, reward_redeemed_at")
+    .eq("referee_telegram_id", tid)
+    .maybeSingle();
+  if (error) {
+    console.error("[referrals] release referral:", error.message);
+    return null;
+  }
+  const row = data as Pick<
+    ReferralRow,
+    "referrer_telegram_id" | "paid_release_id" | "paid_at" | "reward_redeemed_at"
+  > | null;
+  if (!row) return null;
+  const isPaidOne = row.paid_at != null && row.paid_release_id === release.id;
+  return {
+    referrerLabel: await telegramLabel(admin, row.referrer_telegram_id),
+    discountRub: row.paid_at == null || isPaidOne ? REFEREE_DISCOUNT_RUB : null,
+    payout: isPaidOne
+      ? { amountRub: REFERRER_REWARD_RUB, status: row.reward_redeemed_at ? "done" : "due" }
+      : null
+  };
+}
+
 /**
- * Строки для сообщения Денису «Оплатил?»: скидка другу и/или бонус пригласившему.
- * После «Оплатил» показывает то, что учли в этом релизе. Ошибки → пустой список.
+ * Строки для сообщения Денису «Оплатил?»: скидка другу, пришедшему по приглашению.
+ * Бонус пригласившему сюда не попадает — его выплачивает админ отдельно. Ошибки → пустой список.
  */
 export async function referralPaymentLines(admin: SupabaseClient, release: ReleaseRef): Promise<string[]> {
-  const tid = artistTelegramId(release);
-  if (!tid) return [];
   try {
-    const [asReferee, asReferrer] = await Promise.all([
-      admin
-        .from("referrals")
-        .select("paid_release_id, paid_at")
-        .eq("referee_telegram_id", tid)
-        .maybeSingle(),
-      admin
-        .from("referrals")
-        .select("reward_redeemed_release_id, reward_redeemed_at")
-        .eq("referrer_telegram_id", tid)
-        .not("paid_at", "is", null)
-    ]);
-
-    let discount = 0;
-    const lines: string[] = [];
-
-    const own = asReferee.data as Pick<ReferralRow, "paid_release_id" | "paid_at"> | null;
-    if (own && (own.paid_at == null || own.paid_release_id === release.id)) {
-      discount += REFEREE_DISCOUNT_RUB;
-      lines.push(`🎁 Пришёл по приглашению: скидка ${formatRub(REFEREE_DISCOUNT_RUB)} на первый релиз`);
-    }
-
-    const rewards = (asReferrer.data ?? []) as Pick<ReferralRow, "reward_redeemed_release_id" | "reward_redeemed_at">[];
-    const onThis = rewards.filter((r) => r.reward_redeemed_release_id === release.id).length;
-    const available = rewards.filter((r) => r.reward_redeemed_at == null).length;
-    const count = release.payment_status === "paid" ? onThis : Math.min(onThis + available, MAX_REWARDS_PER_RELEASE);
-    if (count > 0) {
-      discount += count * REFERRER_REWARD_RUB;
-      lines.push(
-        `🎁 Бонус за приглашённых друзей: ${formatRub(count * REFERRER_REWARD_RUB)}` +
-          (count > 1 ? ` (${count} × ${formatRub(REFERRER_REWARD_RUB)})` : "") +
-          // Если на оплате несколько релизов артиста, бонус уйдёт только в первый отмеченный «Оплатил».
-          (release.payment_status === "paid" ? "" : " — списывается на первый оплаченный релиз")
-      );
-    }
-
-    if (lines.length > 1) lines.push(`Итого скидка: <b>${formatRub(discount)}</b>`);
-    return lines;
+    const info = await getReleaseReferral(admin, release);
+    if (info?.discountRub == null) return [];
+    return [
+      `🎁 Пришёл по приглашению от ${escapeHtml(info.referrerLabel)}: скидка ${formatRub(info.discountRub)} на первый релиз`,
+      `К оплате на ${formatRub(info.discountRub)} меньше`
+    ];
   } catch (e) {
     console.error("[referrals] payment lines:", e);
     return [];
   }
 }
 
+export type PayoutResult =
+  | { ok: true; referrerLabel: string; refereeLabel: string; amountRub: number }
+  | { ok: false; status: 404 | 409 | 500; error: string };
+
+/** Отметить, что админ выплатил (или вернуть в «к выплате») бонус за приглашённого друга. */
+export async function setReferralPayout(
+  admin: SupabaseClient,
+  refereeTelegramId: string,
+  done: boolean
+): Promise<PayoutResult> {
+  const { data, error } = await admin
+    .from("referrals")
+    .update({ reward_redeemed_at: done ? new Date().toISOString() : null })
+    .eq("referee_telegram_id", refereeTelegramId)
+    .not("paid_at", "is", null)
+    .select("referrer_telegram_id");
+  if (error) {
+    console.error("[referrals] payout:", error.message);
+    return { ok: false, status: 500, error: "Не удалось сохранить выплату." };
+  }
+  const row = (data as Pick<ReferralRow, "referrer_telegram_id">[] | null)?.[0];
+  if (!row) return { ok: false, status: 404, error: "Выплата не найдена: друг ещё не оплатил первый релиз." };
+  const [referrerLabel, refereeLabel] = await Promise.all([
+    telegramLabel(admin, row.referrer_telegram_id),
+    telegramLabel(admin, refereeTelegramId)
+  ]);
+  return { ok: true, referrerLabel, refereeLabel, amountRub: REFERRER_REWARD_RUB };
+}
+
 /**
  * После смены статуса оплаты релиза.
- * → paid: первый оплаченный релиз друга открывает бонус пригласившему (+ сообщение ему);
- *         доступные бонусы самого артиста списываются на этот релиз (не больше MAX_REWARDS_PER_RELEASE).
- * paid → другое: откатываем то же самое, если бонус ещё не потрачен. Ошибки не пробрасываются.
+ * → paid: первый оплаченный релиз друга открывает выплату пригласившему: сообщение админу с кнопкой
+ *         «Выплатил» и уведомление пригласившему.
+ * paid → другое: закрываем выплату, если её ещё не выплатили. Ошибки не пробрасываются.
  */
 export async function applyReferralPaymentChange(
   admin: SupabaseClient,
@@ -243,61 +293,83 @@ export async function applyReferralPaymentChange(
   const tid = artistTelegramId(release);
   if (!tid) return;
   try {
-    const now = new Date().toISOString();
-
     if (next === "paid") {
       const { data: opened, error: openErr } = await admin
         .from("referrals")
-        .update({ paid_release_id: release.id, paid_at: now })
+        .update({ paid_release_id: release.id, paid_at: new Date().toISOString() })
         .eq("referee_telegram_id", tid)
         .is("paid_at", null)
         .select("referrer_telegram_id");
       if (openErr) console.error("[referrals] open reward:", openErr.message);
       const referrer = (opened as Pick<ReferralRow, "referrer_telegram_id">[] | null)?.[0]?.referrer_telegram_id;
-      if (referrer) {
-        await notifyArtist(
-          { telegram_id: referrer },
-          `🎁 <b>Друг оплатил первый релиз</b>\n\n` +
-            `Тебе бонус ${formatRub(REFERRER_REWARD_RUB)} — студия учтёт его при оплате твоего следующего выпуска.`
-        );
-      }
-
-      const { data: avail, error: availErr } = await admin
-        .from("referrals")
-        .select("referee_telegram_id")
-        .eq("referrer_telegram_id", tid)
-        .not("paid_at", "is", null)
-        .is("reward_redeemed_at", null)
-        .order("paid_at", { ascending: true })
-        .limit(MAX_REWARDS_PER_RELEASE);
-      if (availErr) console.error("[referrals] available rewards:", availErr.message);
-      const referees = ((avail ?? []) as Pick<ReferralRow, "referee_telegram_id">[]).map((r) => r.referee_telegram_id);
-      if (referees.length > 0) {
-        const { error } = await admin
-          .from("referrals")
-          .update({ reward_redeemed_release_id: release.id, reward_redeemed_at: now })
-          .in("referee_telegram_id", referees)
-          .is("reward_redeemed_at", null);
-        if (error) console.error("[referrals] redeem:", error.message);
-      }
+      if (!referrer) return;
+      await notifyArtist(
+        { telegram_id: referrer },
+        `🎁 <b>Друг оплатил первый релиз</b>\n\nТебе ${formatRub(REFERRER_REWARD_RUB)} — переведём в ближайшее время, ` +
+          `если понадобятся реквизиты, напишем.`
+      );
+      const [referrerLabel, refereeLabel] = await Promise.all([
+        telegramLabel(admin, referrer),
+        telegramLabel(admin, tid)
+      ]);
+      await notifyAdminReferralPayout({ refereeTelegramId: tid, referrerLabel, refereeLabel, amountRub: REFERRER_REWARD_RUB });
       return;
     }
 
     if (previous === "paid") {
-      const { error: closeErr } = await admin
+      const { error } = await admin
         .from("referrals")
         .update({ paid_release_id: null, paid_at: null })
         .eq("paid_release_id", release.id)
         .is("reward_redeemed_at", null);
-      if (closeErr) console.error("[referrals] close reward:", closeErr.message);
-
-      const { error: unredeemErr } = await admin
-        .from("referrals")
-        .update({ reward_redeemed_release_id: null, reward_redeemed_at: null })
-        .eq("reward_redeemed_release_id", release.id);
-      if (unredeemErr) console.error("[referrals] unredeem:", unredeemErr.message);
+      if (error) console.error("[referrals] close reward:", error.message);
     }
   } catch (e) {
     console.error("[referrals] payment change:", e);
   }
+}
+
+const PAYOUT_CALLBACK_RE = /^ref:out:(\d{1,20})$/;
+
+export function referralPayoutCallbackData(refereeTelegramId: string): string {
+  return `ref:out:${refereeTelegramId}`;
+}
+
+/** Нажатие «Выплатил» в сообщении админу. Принимаем только от админа. */
+export async function handleReferralCallback(
+  admin: SupabaseClient,
+  query: { id: string; from?: { id?: number | string }; data?: string; message?: { message_id?: number; chat?: { id?: number | string } } }
+): Promise<void> {
+  const m = PAYOUT_CALLBACK_RE.exec(query.data ?? "");
+  if (!m) {
+    await answerTelegramCallbackQuery(query.id);
+    return;
+  }
+  let isAdmin = false;
+  try {
+    isAdmin = query.from?.id != null && String(query.from.id) === String(getExpectedAdminTelegramId());
+  } catch {
+    /* админ не настроен */
+  }
+  if (!isAdmin) {
+    await answerTelegramCallbackQuery(query.id, "Эта кнопка не для тебя.");
+    return;
+  }
+  const result = await setReferralPayout(admin, m[1], true);
+  if (!result.ok) {
+    await answerTelegramCallbackQuery(query.id, result.error);
+    return;
+  }
+  const chatId = query.message?.chat?.id;
+  const messageId = query.message?.message_id;
+  if (chatId != null && typeof messageId === "number") {
+    await editTelegramBotMessage({
+      chatId,
+      messageId,
+      text:
+        `✅ <b>Выплачено ${formatRub(result.amountRub)}</b>\n\n` +
+        `${escapeHtml(result.referrerLabel)} — за приглашённого ${escapeHtml(result.refereeLabel)}`
+    });
+  }
+  await answerTelegramCallbackQuery(query.id, "Записал: выплачено");
 }

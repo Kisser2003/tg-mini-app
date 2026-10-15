@@ -2,10 +2,11 @@
 
 import { getAdminApiAuthHeaders } from "@/lib/admin";
 import type { ReleaseRecord, ReleaseTrackRow } from "@/repositories/releases.repo";
+import type { ReleaseReferral } from "@/lib/server/referrals";
 
 export async function fetchAdminReleaseDetail(
   releaseId: string
-): Promise<{ release: ReleaseRecord; tracks: ReleaseTrackRow[] }> {
+): Promise<{ release: ReleaseRecord; tracks: ReleaseTrackRow[]; referral: ReleaseReferral | null }> {
   const authHeaders = await getAdminApiAuthHeaders();
   const res = await fetch(`/api/admin/releases/${encodeURIComponent(releaseId)}`, {
     method: "GET",
@@ -36,10 +37,11 @@ export async function fetchAdminReleaseDetail(
     ok?: boolean;
     release?: ReleaseRecord;
     tracks?: ReleaseTrackRow[];
+    referral?: ReleaseReferral | null;
   };
   if (parsed.ok !== true || !parsed.release || !Array.isArray(parsed.tracks)) {
     throw new Error("Некорректный ответ сервера.");
   }
 
-  return { release: parsed.release, tracks: parsed.tracks };
+  return { release: parsed.release, tracks: parsed.tracks, referral: parsed.referral ?? null };
 }

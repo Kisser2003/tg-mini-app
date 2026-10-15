@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReleaseRecord } from "@/repositories/releases.repo";
+import type { ReleaseReferral } from "@/lib/server/referrals";
 import {
   getAdminTelegramIdForUi,
   getAdminApiAuthHeaders,
@@ -248,4 +249,28 @@ export async function deleteRelease(releaseId: string): Promise<void> {
   if (!res.ok || json?.ok !== true) {
     throw new Error(json?.error || "Не удалось удалить релиз.");
   }
+}
+
+/** «Выплатил» / «Вернуть в к выплате» бонуса за приглашение на странице релиза друга. */
+export async function setReleaseReferralPayout(releaseId: string, paid: boolean): Promise<ReleaseReferral | null> {
+  await assertAdminAsync();
+  const authHeaders = await getAdminApiAuthHeaders();
+  const res = await fetch("/api/admin/release-referral", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { Accept: "application/json", "Content-Type": "application/json", ...authHeaders },
+    body: JSON.stringify({ releaseId, paid }),
+    cache: "no-store"
+  });
+  type PayoutResponse = { ok?: boolean; error?: string; referral?: ReleaseReferral | null };
+  let json: PayoutResponse | null = null;
+  try {
+    json = (await res.json()) as PayoutResponse;
+  } catch {
+    json = null;
+  }
+  if (!res.ok || json?.ok !== true) {
+    throw new Error(json?.error || "Не удалось сохранить выплату.");
+  }
+  return json.referral ?? null;
 }

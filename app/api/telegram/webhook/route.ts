@@ -1,12 +1,13 @@
 /**
  * Входящие обновления бота (setWebhook, см. scripts/telegram-webhook.mjs).
- * Сейчас обрабатываем только нажатия кнопок «Оплатил / Не оплатил / Не мой клиент».
+ * Обрабатываем нажатия кнопок «Оплатил / Не оплатил / Не мой клиент» и «Выплатил» (бонус за приглашение).
  * Telegram ставит заголовок X-Telegram-Bot-Api-Secret-Token = secret_token из setWebhook.
  */
 import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
 import { handlePaymentCallback, type TelegramCallbackQuery } from "@/lib/server/payment-confirm";
+import { handleReferralCallback } from "@/lib/server/referrals";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,6 +38,17 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const query = update.callback_query;
+  if (query && typeof query.id === "string" && typeof query.data === "string" && query.data.startsWith("ref:")) {
+    const admin = createSupabaseAdmin();
+    if (admin) {
+      try {
+        await handleReferralCallback(admin, query);
+      } catch (e) {
+        console.error("[telegram/webhook] referral callback:", e);
+      }
+    }
+    return NextResponse.json({ ok: true });
+  }
   if (query && typeof query.id === "string" && typeof query.data === "string" && query.data.startsWith("pay:")) {
     const admin = createSupabaseAdmin();
     if (!admin) {

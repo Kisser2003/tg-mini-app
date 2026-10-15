@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { remindArtistToPay, updateReleasePayment } from "@/features/admin/actions";
+import { remindArtistToPay, setReleaseReferralPayout, updateReleasePayment } from "@/features/admin/actions";
 import {
   STUDIO_CONFIRMER_NAME,
   describePayment,
@@ -10,6 +10,8 @@ import {
   parsePaymentStatus,
   type PaymentTone
 } from "@/lib/release-payment";
+import { formatRub } from "@/lib/referral";
+import type { ReleaseReferral } from "@/lib/server/referrals";
 import { triggerHaptic } from "@/lib/telegram";
 import type { ReleaseRecord } from "@/repositories/releases.repo";
 
@@ -43,10 +45,14 @@ const pillClass =
 /** Блок «Оплата» на странице релиза в админке. */
 export function AdminPaymentPanel({
   release,
-  onChange
+  referral,
+  onChange,
+  onReferralChange
 }: {
   release: Pick<ReleaseRecord, "id"> & PaymentFields;
+  referral?: ReleaseReferral | null;
   onChange: (fields: PaymentFields) => void;
+  onReferralChange?: (referral: ReleaseReferral | null) => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [reminded, setReminded] = useState(false);
@@ -70,6 +76,19 @@ export function AdminPaymentPanel({
       );
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Не удалось сохранить оплату.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const setPayout = async (paid: boolean) => {
+    setBusy(true);
+    try {
+      onReferralChange?.(await setReleaseReferralPayout(release.id, paid));
+      triggerHaptic("success");
+      toast.success(paid ? "Записал: выплачено" : "Вернул в «к выплате»");
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Не удалось сохранить выплату.");
     } finally {
       setBusy(false);
     }
@@ -99,6 +118,28 @@ export function AdminPaymentPanel({
       </div>
       <p className={`mt-1 text-[16px] font-bold first-letter:uppercase ${TONE_CLASS[tone]}`}>{label}</p>
       {hint ? <p className="mt-1 text-[13px] leading-snug text-omf-graphite">{hint}</p> : null}
+      {referral?.discountRub != null ? (
+        <p className="mt-3 rounded-control bg-omf-yellow px-3 py-2 text-[14px] font-bold text-omf-yellow-ink">
+          🎁 Пришёл по приглашению от {referral.referrerLabel}: возьми с клиента на {formatRub(referral.discountRub)}{" "}
+          меньше
+        </p>
+      ) : null}
+      {referral?.payout ? (
+        <div className="mt-3 flex items-center justify-between gap-3 border-t border-omf-line pt-3">
+          <p className="min-w-0 text-[14px] leading-snug text-omf-ink">
+            {referral.payout.status === "done" ? "✅ Выплачено" : "Выплати"} {formatRub(referral.payout.amountRub)}{" "}
+            {referral.referrerLabel} за приглашение
+          </p>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void setPayout(referral.payout?.status !== "done")}
+            className={pillClass + " shrink-0"}
+          >
+            {referral.payout.status === "done" ? "Отменить" : "Выплатил"}
+          </button>
+        </div>
+      ) : null}
       <div className="mt-3 flex flex-wrap gap-2">
         {status !== "paid" ? (
           <button type="button" disabled={busy} onClick={() => void run("paid")} className={pillClass}>

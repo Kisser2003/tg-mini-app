@@ -50,8 +50,8 @@ export function ReferralCard() {
         Пригласи друга
       </p>
       <p className="mt-0.5 text-[14px] text-omf-graphite">
-        Другу — скидка {formatRub(REFEREE_DISCOUNT_RUB)} на первый релиз. Тебе — {formatRub(REFERRER_REWARD_RUB)} на
-        следующий выпуск, когда он оплатит.
+        Другу — скидка {formatRub(REFEREE_DISCOUNT_RUB)} на первый релиз. Тебе — {formatRub(REFERRER_REWARD_RUB)}, когда он
+        оплатит.
       </p>
 
       {data.hasPendingDiscount ? (
@@ -93,7 +93,7 @@ export function ReferralCard() {
       {data.invited > 0 ? (
         <p className="mt-3 text-[14px] text-omf-graphite">
           Пришли: {data.invited} · оплатили: {data.paid}
-          {data.available > 0 ? ` · бонус: ${formatRub(data.available * REFERRER_REWARD_RUB)}` : ""}
+          {data.available > 0 ? ` · ждут выплаты: ${formatRub(data.available * REFERRER_REWARD_RUB)}` : ""}
         </p>
       ) : null}
     </section>
