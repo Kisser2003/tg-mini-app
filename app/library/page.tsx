@@ -32,8 +32,8 @@ import {
 } from "@/lib/release-next-step";
 import { describeRejection, type RejectionSummary } from "@/lib/rejection-reasons";
 import { getTelegramInitDataForApiHeader, getTelegramUserIdForSupabaseRequests } from "@/lib/telegram";
-import { AppOrb } from "@/components/AppOrb";
 import { RefreshIcon } from "@/components/RefreshIcon";
+import { FullScreenLoader } from "@/components/FullScreenLoader";
 
 
 type LibraryStatusFilter = "all" | "processing" | "ready" | "failed";
@@ -477,17 +477,16 @@ function LibraryPageInner() {
         </header>
 
         {!hasReleases && (showAuthWait || showListSkeleton) ? (
-          <div aria-busy="true">
-            <p className="mb-4 flex items-center gap-2.5 text-[13px] text-omf-graphite">
-              <AppOrb state="searching" size={20} />
-              {!authReady
+          <FullScreenLoader
+            state="connecting"
+            label={
+              !authReady
                 ? "Загрузка…"
                 : userId === null || authMode === null
                   ? "Подключаем Telegram…"
-                  : "Загружаем релизы…"}
-            </p>
-            <LibraryReleaseSkeletonGrid count={4} />
-          </div>
+                  : "Загружаем релизы…"
+            }
+          />
         ) : !showListSkeleton && error != null ? (
           <div className="border-t border-omf-line pt-6">
             <p className="text-[18px] font-bold tracking-tight">Не удалось загрузить релизы</p>
