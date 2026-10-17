@@ -43,7 +43,7 @@ export function FAB() {
     return null;
   }
   /* FAQ / мультиссылки: на телефоне FAB перекрывает контент и нижнюю навигацию */
-  if (pathname === "/requirements" || pathname === "/multi-links") {
+  if (pathname === "/requirements" || pathname === "/multi-links" || pathname === "/pitching") {
     return null;
   }
   /* Настройки: создать релиз можно с главного экрана */

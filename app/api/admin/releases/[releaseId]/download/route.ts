@@ -12,6 +12,10 @@ import {
   downloadStorageObjectBytes,
   guessFilenameFromUrl
 } from "@/lib/supabase-storage-download";
+import { loadPressKitRows } from "@/lib/server/press-kit";
+import { buildPressPhotoFilename } from "@/lib/press-kit";
+import { STORAGE_BUCKET_PRESS_PHOTOS } from "@/lib/storage-buckets";
+import { getReleaseDisplayTitle, type ReleaseRecord } from "@/repositories/releases.repo";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -39,9 +43,9 @@ async function handleDownload(
   const url = new URL(request.url);
   const kind = url.searchParams.get("kind");
 
-  if (kind !== "artwork" && kind !== "audio" && kind !== "lyrics") {
+  if (kind !== "artwork" && kind !== "audio" && kind !== "lyrics" && kind !== "press_photo") {
     return NextResponse.json(
-      { ok: false, error: "Укажите kind=artwork, kind=audio или kind=lyrics." },
+      { ok: false, error: "Укажите kind=artwork, kind=audio, kind=lyrics или kind=press_photo." },
       { status: 400 }
     );
   }
@@ -126,6 +130,28 @@ async function handleDownload(
         headers: {
           "Content-Type": "text/plain; charset=utf-8",
           "Content-Disposition": contentDispositionAttachment(filename),
+          "Cache-Control": "no-store"
+        }
+      });
+    }
+
+    if (kind === "press_photo") {
+      const [kit] = await loadPressKitRows(guard.supabase, [releaseId]);
+      const photoPath = kit?.photo_path?.trim();
+      if (!photoPath) {
+        return NextResponse.json({ ok: false, error: "Фото артиста не загружено." }, { status: 404 });
+      }
+      const { data, error } = await guard.supabase.storage.from(STORAGE_BUCKET_PRESS_PHOTOS).download(photoPath);
+      if (error || !data) {
+        throw new Error(error?.message ?? "Не удалось скачать фото.");
+      }
+      const ext = photoPath.split(".").pop() ?? "jpg";
+      return new NextResponse(await data.arrayBuffer(), {
+        headers: {
+          "Content-Type": data.type || "application/octet-stream",
+          "Content-Disposition": contentDispositionAttachment(
+            buildPressPhotoFilename(row.artist_name as string | null, getReleaseDisplayTitle(row as ReleaseRecord), ext)
+          ),
           "Cache-Control": "no-store"
         }
       });

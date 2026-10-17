@@ -7,6 +7,8 @@ import { deleteAllReleaseFiles } from "@/lib/release-audio-cleanup.server";
 import { invalidateMyReleasesCache } from "@/lib/server/release-list-cache";
 import { getReleaseReferral, type ReleaseReferral } from "@/lib/server/referrals";
 import type { ReleaseRecord, ReleaseTrackRow } from "@/repositories/releases.repo";
+import { loadPressKit } from "@/lib/server/press-kit";
+import type { PressKit } from "@/lib/press-kit";
 
 export const dynamic = "force-dynamic";
 
@@ -57,21 +59,26 @@ async function handleGetAdminRelease(
     return NextResponse.json({ ok: false, error: "Не удалось загрузить треки." }, { status: 500 });
   }
 
-  const referral = await getReleaseReferral(guard.supabase, {
-    id: releaseId,
-    telegram_id: (release as ReleaseRecord).telegram_id
-  });
+  const [referral, pressKit] = await Promise.all([
+    getReleaseReferral(guard.supabase, {
+      id: releaseId,
+      telegram_id: (release as ReleaseRecord).telegram_id
+    }),
+    loadPressKit(guard.supabase, releaseId)
+  ]);
 
   const body: {
     ok: true;
     release: ReleaseRecord;
     tracks: ReleaseTrackRow[];
     referral: ReleaseReferral | null;
+    pressKit: PressKit | null;
   } = {
     ok: true,
     release: release as ReleaseRecord,
     tracks: (tracks ?? []) as ReleaseTrackRow[],
-    referral
+    referral,
+    pressKit
   };
 
   return NextResponse.json(body);
