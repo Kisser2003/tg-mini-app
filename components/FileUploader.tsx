@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useCallback, useState, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import { ErrorBoundary } from "react-error-boundary";
 import { Check, ImagePlus, Music2 } from "lucide-react";
@@ -12,7 +12,6 @@ import { AppOrb } from "@/components/AppOrb";
 /** WebGL-мозаика (three.js) грузится только когда пользователь выбрал обложку. */
 const CoverMosaic = dynamic(() => import("@/components/CoverMosaic"), { ssr: false });
 
-const MOSAIC_MS = 2600;
 const MOSAIC_THUMB_PX = 512;
 
 /** Миниатюра для WebGL; null — если canvas недоступен или включено «меньше движения». */
@@ -81,7 +80,6 @@ export function FileUploader({
   const [isUploading, setIsUploading] = useState(false);
   const successFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [mosaicSrc, setMosaicSrc] = useState<string | null>(null);
-  const mosaicTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Blob URL created by this component for `initialFile` (cover); revoked on replace/unmount. */
   const ownedBlobUrlRef = useRef<string | null>(null);
 
@@ -134,25 +132,17 @@ export function FileUploader({
 
   useEffect(() => {
     return () => {
-      if (mosaicTimerRef.current != null) clearTimeout(mosaicTimerRef.current);
-    };
-  }, []);
-
-  useEffect(() => {
-    return () => {
       revokeIfBlobUrl(mosaicSrc);
     };
   }, [mosaicSrc]);
 
+  // Таймер мозаики живёт в CoverMosaic: он стартует, когда компонент смонтирован, а не раньше.
+  const clearMosaic = useCallback(() => setMosaicSrc(null), []);
+
   const playMosaic = async (img: HTMLImageElement) => {
     const thumb = await makeMosaicThumb(img);
     if (!thumb) return;
-    if (mosaicTimerRef.current != null) clearTimeout(mosaicTimerRef.current);
     setMosaicSrc(thumb);
-    mosaicTimerRef.current = setTimeout(() => {
-      mosaicTimerRef.current = null;
-      setMosaicSrc(null);
-    }, MOSAIC_MS);
   };
 
   const scheduleSuccessFlash = () => {
@@ -312,8 +302,8 @@ export function FileUploader({
               <img src={previewUrl} alt="Предпросмотр обложки" className="absolute inset-0 h-full w-full object-cover" />
               {mosaicSrc ? (
                 <div className="pointer-events-none absolute inset-0 z-10" aria-hidden>
-                  <ErrorBoundary fallback={null}>
-                    <CoverMosaic src={mosaicSrc} />
+                  <ErrorBoundary fallback={null} onError={clearMosaic}>
+                    <CoverMosaic key={mosaicSrc} src={mosaicSrc} onDone={clearMosaic} />
                   </ErrorBoundary>
                 </div>
               ) : null}

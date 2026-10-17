@@ -8,7 +8,7 @@ import { SPRING_UI } from "@/lib/motion-spring";
 import { normalizeUpc } from "@/lib/admin-release-publish";
 import { DSP_REVIEW_DAYS_TEXT } from "@/lib/release-next-step";
 import { describePayment, isPaymentConfirmed } from "@/lib/release-payment";
-import { AppOrb } from "@/components/AppOrb";
+import { BusyLabel } from "@/components/BusyLabel";
 
 export type ApproveModalMode = "accept" | "link";
 
@@ -90,20 +90,13 @@ export function AdminApproveSmartLinkModal({
     onSubmitLink(releaseId, link, upc);
   };
 
-  const primaryLabel = busy
-    ? (
-        <>
-          <AppOrb state="composing" size={20} />
-          Сохраняем…
-        </>
-      )
-    : isLinkMode
-      ? "Отправить"
-      : unpaidWarning
-        ? "Всё равно принять"
-        : link
-          ? "Принять со ссылкой"
-          : "Принять";
+  const primaryLabel = isLinkMode
+    ? "Отправить"
+    : unpaidWarning
+      ? "Всё равно принять"
+      : link
+        ? "Принять со ссылкой"
+        : "Принять";
 
   // Портал: у обёртки страницы есть transform, и `fixed` внутри неё оказывается под нижней навигацией.
   if (!mounted) return null;
@@ -208,7 +201,7 @@ export function AdminApproveSmartLinkModal({
                 Отмена
               </button>
               <button type="button" disabled={busy} onClick={submit} className="omf-btn-primary w-full disabled:opacity-50">
-                {primaryLabel}
+                <BusyLabel busy={busy} busyText="Сохраняем…">{primaryLabel}</BusyLabel>
               </button>
             </div>
           </motion.div>

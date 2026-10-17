@@ -30,7 +30,7 @@ import { SWR_LIST_OPTIONS } from "@/lib/swr-config";
 import { withRequestTimeout } from "@/lib/withRequestTimeout";
 import { useIsTelegramMiniApp } from "@/lib/hooks/useIsTelegramMiniApp";
 import { cn } from "@/lib/utils";
-import { AppOrb } from "@/components/AppOrb";
+import { RefreshIcon } from "@/components/RefreshIcon";
 
 type ModerationQueueRow = {
   release: ReleaseRecord;
@@ -384,7 +384,7 @@ export default function AdminPage() {
               aria-label="Обновить очередь"
               className="omf-focus flex h-10 w-10 items-center justify-center rounded-full text-omf-graphite transition-colors hover:bg-omf-surface hover:text-omf-ink disabled:opacity-50"
             >
-              {isValidating ? <AppOrb state="searching" size={20} label="Обновляем" /> : <RefreshCcw className="h-[18px] w-[18px]" aria-hidden />}
+              <RefreshIcon icon={RefreshCcw} spinning={isValidating} />
             </button>
           </div>
         </div>

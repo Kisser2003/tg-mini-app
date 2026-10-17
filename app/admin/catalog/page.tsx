@@ -25,7 +25,7 @@ import { SWR_LIST_OPTIONS } from "@/lib/swr-config";
 import { getTelegramUserId, initTelegramWebApp } from "@/lib/telegram";
 import { cn } from "@/lib/utils";
 import { withRequestTimeout } from "@/lib/withRequestTimeout";
-import { AppOrb } from "@/components/AppOrb";
+import { RefreshIcon } from "@/components/RefreshIcon";
 
 type CatalogTab = "tracks" | "artists";
 
@@ -117,7 +117,7 @@ export default function AdminCatalogPage() {
           aria-label="Обновить каталог"
           className="omf-focus flex h-10 w-10 items-center justify-center rounded-full text-omf-graphite transition-colors hover:bg-omf-surface hover:text-omf-ink disabled:opacity-50"
         >
-          {isValidating ? <AppOrb state="searching" size={20} label="Обновляем" /> : <RefreshCcw className="h-[18px] w-[18px]" aria-hidden />}
+          <RefreshIcon icon={RefreshCcw} spinning={isValidating} />
         </button>
       </div>
 

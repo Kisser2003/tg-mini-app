@@ -19,7 +19,7 @@ import { withRequestTimeout } from "@/lib/withRequestTimeout";
 import { countHistoryByStatus, filterHistory, type HistoryStatusFilter } from "@/lib/admin-history-filter";
 import { hapticMap } from "@/lib/haptic-map";
 import { cn } from "@/lib/utils";
-import { AppOrb } from "@/components/AppOrb";
+import { RefreshIcon } from "@/components/RefreshIcon";
 
 type HistoryRow = {
   release: ReleaseRecord;
@@ -150,7 +150,7 @@ export default function AdminModerationHistoryPage() {
           aria-label="Обновить историю"
           className="omf-focus flex h-10 w-10 items-center justify-center rounded-full text-omf-graphite transition-colors hover:bg-omf-surface hover:text-omf-ink disabled:opacity-50"
         >
-          {isValidating ? <AppOrb state="searching" size={20} label="Обновляем" /> : <RefreshCcw className="h-[18px] w-[18px]" aria-hidden />}
+          <RefreshIcon icon={RefreshCcw} spinning={isValidating} />
         </button>
       </div>
 

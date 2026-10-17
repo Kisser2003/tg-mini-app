@@ -5,7 +5,7 @@ import type { CSSProperties } from "react";
 import type { CanonicalReleaseStatus } from "@/lib/release-status";
 import { cn } from "@/lib/utils";
 
-type StickerStyle = { label: string; background: string; color: string; border?: string; className?: string };
+type StickerStyle = { label: string; background?: string; color: string; border?: string; className?: string };
 
 /** Наклейка на конверте: короткая надпись, читается с расстояния вытянутой руки. */
 const STICKERS: Record<CanonicalReleaseStatus, StickerStyle | null> = {
@@ -26,7 +26,7 @@ const STICKERS: Record<CanonicalReleaseStatus, StickerStyle | null> = {
     color: "var(--omf-yellow-ink)",
     className: "omf-sticker--pulse"
   },
-  ready: { label: "принят", background: "var(--omf-green)", color: "#fff", className: "omf-sticker--holo" },
+  ready: { label: "принят", color: "#fff", className: "omf-sticker--holo" },
   failed: { label: "отклонён", background: "var(--omf-red)", color: "#fff" },
   unknown: null
 };
@@ -142,8 +142,7 @@ export function ReleaseSleeve({
           className={cn("omf-sticker", sticker.className)}
           style={
             {
-              // у голографической наклейки фон рисует CSS-класс, inline его бы перебил
-              background: sticker.className === "omf-sticker--holo" ? undefined : sticker.background,
+              background: sticker.background,
               color: sticker.color,
               border: sticker.border,
               "--omf-sticker-tilt": `${tilt}deg`,
