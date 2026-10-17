@@ -3,10 +3,16 @@
 import { getAdminApiAuthHeaders } from "@/lib/admin";
 import type { ReleaseRecord, ReleaseTrackRow } from "@/repositories/releases.repo";
 import type { ReleaseReferral } from "@/lib/server/referrals";
+import type { PressKit } from "@/lib/press-kit";
 
 export async function fetchAdminReleaseDetail(
   releaseId: string
-): Promise<{ release: ReleaseRecord; tracks: ReleaseTrackRow[]; referral: ReleaseReferral | null }> {
+): Promise<{
+  release: ReleaseRecord;
+  tracks: ReleaseTrackRow[];
+  referral: ReleaseReferral | null;
+  pressKit: PressKit | null;
+}> {
   const authHeaders = await getAdminApiAuthHeaders();
   const res = await fetch(`/api/admin/releases/${encodeURIComponent(releaseId)}`, {
     method: "GET",
@@ -38,10 +44,16 @@ export async function fetchAdminReleaseDetail(
     release?: ReleaseRecord;
     tracks?: ReleaseTrackRow[];
     referral?: ReleaseReferral | null;
+    pressKit?: PressKit | null;
   };
   if (parsed.ok !== true || !parsed.release || !Array.isArray(parsed.tracks)) {
     throw new Error("Некорректный ответ сервера.");
   }
 
-  return { release: parsed.release, tracks: parsed.tracks, referral: parsed.referral ?? null };
+  return {
+    release: parsed.release,
+    tracks: parsed.tracks,
+    referral: parsed.referral ?? null,
+    pressKit: parsed.pressKit ?? null
+  };
 }

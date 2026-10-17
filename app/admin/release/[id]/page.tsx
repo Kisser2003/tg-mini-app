@@ -13,6 +13,8 @@ import { AdminReleaseDownloads } from "@/components/admin/AdminReleaseDownloads"
 import { AdminReleaseMetadataCard } from "@/components/admin/AdminReleaseMetadataCard";
 import { AdminPaymentPanel } from "@/components/admin/AdminPaymentPanel";
 import { AdminDeleteReleaseSheet } from "@/components/admin/AdminDeleteReleaseSheet";
+import { AdminPressKitPanel } from "@/components/admin/AdminPressKitPanel";
+import { isPitchingOpen, type PressKit } from "@/lib/press-kit";
 import { ReleaseSleeve } from "@/components/ReleaseSleeve";
 import { AdminApproveSmartLinkModal, type ApproveModalMode } from "@/components/AdminApproveSmartLinkModal";
 import { AdminRejectModal } from "@/components/AdminRejectModal";
@@ -72,6 +74,7 @@ export default function AdminReleaseDetailPage() {
   const [userId, setUserId] = useState<number | null>(null);
   const [release, setRelease] = useState<ReleaseRecord | null>(null);
   const [referral, setReferral] = useState<ReleaseReferral | null>(null);
+  const [pressKit, setPressKit] = useState<PressKit | null>(null);
   const [tracks, setTracks] = useState<ReleaseTrackRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -107,9 +110,10 @@ export default function AdminReleaseDetailPage() {
     setMetaOpen(false);
     setDeleteOpen(false);
     try {
-      const { release: row, tracks: tr, referral: ref } = await fetchAdminReleaseDetail(releaseId);
+      const { release: row, tracks: tr, referral: ref, pressKit: kit } = await fetchAdminReleaseDetail(releaseId);
       setRelease(row);
       setReferral(ref);
+      setPressKit(kit);
       setTracks(tr);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Не удалось загрузить релиз.";
@@ -466,6 +470,14 @@ export default function AdminReleaseDetailPage() {
               <AdminReleaseMetadataCard release={release} tracks={tracks} />
             </div>
           </section>
+
+          {isPitchingOpen(release.status, release.smart_link) ? (
+            <AdminPressKitPanel
+              releaseId={release.id}
+              kit={pressKit}
+              hasArtwork={Boolean(release.artwork_url?.trim())}
+            />
+          ) : null}
 
           <section className="mt-2 border-t border-omf-line pt-4" aria-labelledby="admin-files">
             <h2 id="admin-files" className="mb-2 text-[13px] text-omf-graphite">

@@ -11,6 +11,7 @@ import {
   FileText,
   Clock3,
   Link2,
+  Megaphone,
   ChevronDown
 } from "lucide-react";
 import { useLogout } from "@/lib/hooks/useWebAuth";
@@ -175,6 +176,16 @@ export function Sidebar() {
             >
               <Link2 className="h-[18px] w-[18px]" aria-hidden />
               Ссылки на релизы
+            </Link>
+          ) : null}
+          {marketingOpen ? (
+            <Link
+              href="/pitching"
+              aria-current={pathname === "/pitching" ? "page" : undefined}
+              className={itemClass(pathname === "/pitching")}
+            >
+              <Megaphone className="h-[18px] w-[18px]" aria-hidden />
+              Питчинг
             </Link>
           ) : null}
         </div>

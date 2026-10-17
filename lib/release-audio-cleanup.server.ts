@@ -11,6 +11,7 @@ import {
   STORAGE_BUCKET_AUDIO_LEGACY,
   STORAGE_BUCKET_RELEASE_TRACKS
 } from "@/lib/storage-buckets";
+import { removePressPhotos } from "@/lib/server/press-kit";
 
 function isBlobUrl(value: string): boolean {
   try {
@@ -107,6 +108,9 @@ export async function deleteAllReleaseFiles(
       const { error } = await admin.storage.from(STORAGE_BUCKET_AUDIO_LEGACY).remove([legacyKey]);
       if (error) console.error("[release-files] legacy audio remove:", error.message);
     }
+
+    // Строка press-kit ушла каскадом, фото артиста лежит отдельно.
+    await removePressPhotos(admin, releaseId);
   } catch (e) {
     console.error("[release-files] failed:", e instanceof Error ? e.message : e);
   }

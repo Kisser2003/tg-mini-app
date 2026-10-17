@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import type { LucideIcon } from "lucide-react";
-import { Disc3, Shield, CircleHelp, Link2 } from "lucide-react";
+import { Disc3, Shield, CircleHelp, Link2, Megaphone } from "lucide-react";
 import { isAdminUi, isAdminUiByWebSession } from "@/lib/admin";
 import { hapticMap } from "@/lib/haptic-map";
 import { useHideOnScrollDown } from "@/lib/hooks/useHideOnScrollDown";
@@ -43,6 +43,7 @@ const BottomNavInner = memo(function BottomNavInner() {
     () => [
       { path: "/library", icon: Disc3, label: "Релизы" },
       { path: "/multi-links", icon: Link2, label: "Ссылки" },
+      { path: "/pitching", icon: Megaphone, label: "Питчинг" },
       { path: "/requirements", icon: CircleHelp, label: "Помощь" },
       ...(showAdminTab ? [{ path: "/admin", icon: Shield, label: "Модерация" }] : [])
     ],
