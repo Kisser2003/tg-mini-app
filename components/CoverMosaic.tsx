@@ -3,7 +3,9 @@
 import { useEffect } from "react";
 import { ImageGeneration } from "img-fx";
 
-const MOSAIC_MS = 2600;
+// Пиксельная фаза держится фиксированные 3 с, даже если обложка уже готова. Переход картинки ~2.6 с
+// (pixDuration пресета) укладывается в эти 3 с, поэтому отсчёт не обрывает проявление.
+const MOSAIC_MS = 3000;
 
 type Props = {
   /** Уменьшенная копия обложки: в WebGL не отправляем исходник 3000×3000. */
@@ -28,8 +30,8 @@ export default function CoverMosaic({ src, onDone }: Props) {
       cardBg="#22262f"
       images={[src]}
       autoReveal
-      revealDelayRange={[0.3, 0.5]}
-      revealHoldMs={250}
+      revealDelayRange={[0.3, 0.3]}
+      revealHoldMs={0}
     >
       <div className="h-full w-full rounded-sleeve" />
     </ImageGeneration>
