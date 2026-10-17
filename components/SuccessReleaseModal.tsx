@@ -27,7 +27,7 @@ export function SuccessReleaseModal({ summary, notifiesInTelegram, onGoHome, onU
         title={title}
         artist={summary.artistName}
         coverUrl={summary.coverUrl ?? null}
-        status="processing"
+        status={null}
         size="hero"
       />
     </div>
